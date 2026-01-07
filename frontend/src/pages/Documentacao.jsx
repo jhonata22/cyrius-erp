@@ -1,0 +1,559 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { 
+  ArrowLeft, Save, Building2, Wifi, Lock, Monitor, 
+  Server, TrendingUp, Phone, Mail, User, Globe, Shield, Search, BookOpen, X 
+} from 'lucide-react';
+
+export default function Documentacao() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  
+  // --- ESTADOS DE DADOS ---
+  const [listaClientes, setListaClientes] = useState([]);
+  const [busca, setBusca] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // --- ESTADOS DO CLIENTE ATUAL ---
+  const [cliente, setCliente] = useState(null);
+  const [ativos, setAtivos] = useState([]);
+  const [activeTab, setActiveTab] = useState('geral');
+  
+  // --- ESTADOS LÓGICOS (NOVO) ---
+  const [docId, setDocId] = useState(null); // Para saber se edita ou cria documentação
+  const [modalAberto, setModalAberto] = useState(null); // 'contato', 'provedor', 'email', 'ativo'
+  const [formTemp, setFormTemp] = useState({}); // Dados temporários do modal
+
+  // Estado para os textos longos (Editáveis)
+  const [textos, setTextos] = useState({
+    configuracao_mikrotik: '',
+    topologia_rede: '',
+    estrutura_servidores: '',
+    rotina_backup: '',
+    pontos_fracos_melhorias: ''
+  });
+
+  useEffect(() => {
+    carregarDados();
+  }, [id]);
+
+  const carregarDados = async () => {
+    setLoading(true);
+    try {
+      if (!id) {
+        // MODO SELEÇÃO
+        const res = await axios.get('http://localhost:8000/api/clientes/');
+        setListaClientes(res.data);
+      } else {
+        // MODO DETALHE
+        const [resCliente, resAtivos] = await Promise.all([
+          axios.get(`http://localhost:8000/api/clientes/${id}/`),
+          axios.get('http://localhost:8000/api/ativos/')
+        ]);
+        
+        const dadosCliente = resCliente.data;
+        setCliente(dadosCliente);
+        setAtivos(resAtivos.data.filter(a => a.cliente === parseInt(id)));
+
+        // Popula os textos se existirem
+        if (dadosCliente.documentacao_tecnica) {
+          setDocId(dadosCliente.documentacao_tecnica.id);
+          setTextos({
+            configuracao_mikrotik: dadosCliente.documentacao_tecnica.configuracao_mikrotik || '',
+            topologia_rede: dadosCliente.documentacao_tecnica.topologia_rede || '',
+            estrutura_servidores: dadosCliente.documentacao_tecnica.estrutura_servidores || '',
+            rotina_backup: dadosCliente.documentacao_tecnica.rotina_backup || '',
+            pontos_fracos_melhorias: dadosCliente.documentacao_tecnica.pontos_fracos_melhorias || ''
+          });
+        } else {
+          setDocId(null);
+          setTextos({ configuracao_mikrotik: '', topologia_rede: '', estrutura_servidores: '', rotina_backup: '', pontos_fracos_melhorias: '' });
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- FUNÇÕES LÓGICAS (Salvar e Modals) ---
+
+  const handleSalvarTextos = async () => {
+    try {
+      // GARANTE QUE O ID SEJA NÚMERO
+      const payload = { ...textos, cliente: parseInt(id) };
+      
+      if (docId) {
+        await axios.patch(`http://localhost:8000/api/documentacao/${docId}/`, payload);
+      } else {
+        await axios.post('http://localhost:8000/api/documentacao/', payload);
+      }
+      alert("Textos atualizados com sucesso!");
+      carregarDados();
+    } catch (error) {
+      alert("Erro ao salvar textos.");
+      console.error(error);
+    }
+  };
+
+const handleSalvarModal = async (e) => {
+    e.preventDefault();
+    try {
+      // GARANTE QUE O ID SEJA NÚMERO
+      const payload = { ...formTemp, cliente: parseInt(id) };
+      
+      let url = '';
+      if (modalAberto === 'contato') url = 'http://localhost:8000/api/contatos/';
+      if (modalAberto === 'provedor') url = 'http://localhost:8000/api/provedores/';
+      if (modalAberto === 'email') url = 'http://localhost:8000/api/emails/';
+      if (modalAberto === 'ativo') url = 'http://localhost:8000/api/ativos/';
+
+      await axios.post(url, payload);
+      alert("Item adicionado!");
+      setModalAberto(null);
+      setFormTemp({});
+      carregarDados();
+    } catch (error) {
+      console.error(error); // Veja o erro no console se falhar
+      alert("Erro ao adicionar item. Verifique os campos obrigatórios.");
+    }
+  };
+
+
+  // --- MODO 1: SELEÇÃO DE CLIENTE ---
+  if (!id) {
+    const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
+
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-800">Documentação Técnica</h1>
+          <p className="text-gray-500 text-sm">Selecione um cliente para visualizar ou editar o dossiê técnico.</p>
+        </div>
+
+        <div className="relative mb-6">
+          <input type="text" placeholder="Buscar cliente..." className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-light/50 shadow-sm"
+            value={busca} onChange={e => setBusca(e.target.value)}
+          />
+          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+
+        {loading ? <p className="text-center py-10 text-gray-500">Carregando carteira...</p> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtrados.map(cli => (
+              <div key={cli.id} onClick={() => navigate(`/documentacao/${cli.id}`)} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group hover:border-primary-light">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-primary-dark group-hover:text-white transition-colors">
+                    <Building2 size={24} />
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${cli.tipo_cliente === 'CONTRATO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {cli.tipo_cliente}
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark">{cli.razao_social}</h3>
+                <p className="text-sm text-gray-500 mt-1 truncate">{cli.endereco}</p>
+                <div className="mt-4 pt-4 border-t border-gray-50 flex items-center text-xs text-gray-400 font-medium">
+                  <BookOpen size={14} className="mr-1" /> Acessar Documentação
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- MODO 2: VISUALIZAÇÃO DA DOCUMENTAÇÃO ---
+  
+  if (loading) return <div className="p-8 text-center text-gray-500">Carregando dossiê técnico...</div>;
+  if (!cliente) return <div className="p-8 text-center text-red-500">Cliente não encontrado.</div>;
+
+  const contatos = cliente.contatos || [];
+  const provedores = cliente.provedores || [];
+  const emails = cliente.contas_email || [];
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'geral':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Building2 size={20} className="text-primary-dark" /> Dados Cadastrais
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-bold">Razão Social</p>
+                  <p className="text-gray-800">{cliente.razao_social}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-bold">CNPJ / CPF</p>
+                  <p className="text-gray-800 font-mono">{cliente.cnpj || cliente.cpf}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <p className="text-xs text-gray-500 uppercase font-bold">Endereço</p>
+                  <p className="text-gray-800">{cliente.endereco}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                  <User size={20} className="text-primary-dark" /> Gestores e Contatos
+                </h3>
+                {/* BOTÃO ATIVADO */}
+                <button onClick={() => setModalAberto('contato')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">
+                  + Adicionar
+                </button>
+              </div>
+              
+              {contatos.length === 0 ? <p className="text-gray-400 text-sm">Nenhum contato cadastrado.</p> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {contatos.map(c => (
+                    <div key={c.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="font-bold text-gray-800">{c.nome}</p>
+                      <p className="text-xs text-primary-dark font-bold uppercase mb-2">{c.cargo}</p>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        {c.telefone && <p className="flex items-center gap-2"><Phone size={14} /> {c.telefone}</p>}
+                        {c.email && <p className="flex items-center gap-2"><Mail size={14} /> {c.email}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'rede':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Globe size={20} className="text-blue-600" /> Links de Internet
+                </h3>
+                {/* BOTÃO ATIVADO */}
+                <button onClick={() => setModalAberto('provedor')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Provedor</button>
+              </div>
+              {provedores.length === 0 ? <p className="text-gray-400 text-sm">Sem registro de internet.</p> : (
+                <div className="grid gap-4">
+                  {provedores.map(p => (
+                    <div key={p.id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                      <div>
+                        <p className="font-bold text-gray-800">{p.nome_operadora} - {p.plano_contratado}</p>
+                        <p className="text-xs text-gray-500">IP Fixo: {p.ip_fixo || 'Dinâmico'}</p>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2 md:mt-0 text-right">
+                        <p><strong>Suporte:</strong> {p.telefone_suporte}</p>
+                        <p className="text-xs font-mono bg-white px-2 py-1 rounded border mt-1">PPPoE: {p.usuario_pppoe} / ***</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <Wifi size={20} className="text-orange-600" /> Mikrotik / Firewall
+                </h3>
+                {/* TEXTAREA LIGADO AO ESTADO */}
+                <textarea 
+                  className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
+                  placeholder="Scripts, Regras de NAT, VPNs..."
+                  value={textos.configuracao_mikrotik}
+                  onChange={e => setTextos({...textos, configuracao_mikrotik: e.target.value})}
+                />
+              </div>
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <Shield size={20} className="text-green-600" /> Topologia de Rede
+                </h3>
+                {/* TEXTAREA LIGADO AO ESTADO */}
+                <textarea 
+                  className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
+                  placeholder="Cascateamento de Switchs, VLANs, Mapa físico..."
+                  value={textos.topologia_rede}
+                  onChange={e => setTextos({...textos, topologia_rede: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+               {/* BOTÃO SALVAR ATIVADO */}
+               <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Alterações de Texto</button>
+            </div>
+          </div>
+        );
+
+      case 'senhas':
+        return (
+          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Mail size={20} className="text-purple-600" /> Contas de E-mail (Revenda)
+                </h3>
+                {/* BOTÃO ATIVADO */}
+                <button onClick={() => setModalAberto('email')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Nova Conta</button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-4 py-3">E-mail</th>
+                      <th className="px-4 py-3">Usuário</th>
+                      <th className="px-4 py-3">Senha</th>
+                      <th className="px-4 py-3">Provedor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emails.map(e => (
+                      <tr key={e.id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-800">{e.email}</td>
+                        <td className="px-4 py-3 text-gray-600">{e.nome_usuario}</td>
+                        <td className="px-4 py-3 font-mono bg-gray-100 rounded text-gray-600 w-32 text-center">{e.senha}</td>
+                        <td className="px-4 py-3 text-gray-500">{e.provedor}</td>
+                      </tr>
+                    ))}
+                    {emails.length === 0 && (
+                      <tr>
+                        <td colSpan="4" className="text-center py-6 text-gray-400">Nenhum email cadastrado.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        );
+
+      case 'inventario':
+        return (
+          <div className="space-y-6">
+             <div className="flex justify-between items-center">
+                <h3 className="font-bold text-gray-800">Ativos Registrados ({ativos.length})</h3>
+                {/* BOTÃO ATIVADO */}
+                <button onClick={() => setModalAberto('ativo')} className="bg-primary-dark text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-light flex gap-2 items-center">
+                  <Monitor size={16} /> Adicionar Ativo
+                </button>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {ativos.map(ativo => (
+                  <div key={ativo.id} className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className={`p-2 rounded-lg ${ativo.tipo === 'COMPUTADOR' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                         {ativo.tipo === 'COMPUTADOR' ? <Monitor size={20} /> : <Server size={20} />}
+                      </div>
+                      <span className="text-[10px] font-bold bg-gray-100 px-2 py-1 rounded uppercase text-gray-500">{ativo.tipo}</span>
+                    </div>
+                    <h4 className="font-bold text-gray-800">{ativo.nome}</h4>
+                    <p className="text-xs text-gray-500 mb-3">{ativo.marca_modelo}</p>
+                    
+                    <div className="space-y-1 bg-gray-50 p-2 rounded text-xs text-gray-600">
+                       {ativo.processador && <p><strong>CPU:</strong> {ativo.processador}</p>}
+                       {ativo.anydesk_id && <p className="text-red-600 font-bold">AnyDesk: {ativo.anydesk_id}</p>}
+                       {ativo.ip_local && <p><strong>IP:</strong> {ativo.ip_local}</p>}
+                       {ativo.usuario_local && <p>User: {ativo.usuario_local}</p>}
+                    </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+        );
+
+      case 'servidores':
+        return (
+           <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <Server size={20} className="text-indigo-600" /> Estrutura de Servidores
+                </h3>
+                <p className="text-xs text-gray-400 mb-2">Descreva o AD, DHCP, DNS, Virtualização, Funções...</p>
+                {/* TEXTAREA LIGADO AO ESTADO */}
+                <textarea 
+                  className="w-full h-48 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
+                  value={textos.estrutura_servidores}
+                  onChange={e => setTextos({...textos, estrutura_servidores: e.target.value})}
+                />
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <Save size={20} className="text-teal-600" /> Rotina de Backup
+                </h3>
+                <p className="text-xs text-gray-400 mb-2">Onde está o backup? Nuvem? HD Externo? Qual software?</p>
+                {/* TEXTAREA LIGADO AO ESTADO */}
+                <textarea 
+                  className="w-full h-32 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
+                  value={textos.rotina_backup}
+                  onChange={e => setTextos({...textos, rotina_backup: e.target.value})}
+                />
+              </div>
+              <div className="flex justify-end">
+                 {/* BOTÃO SALVAR ATIVADO */}
+                 <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Textos</button>
+              </div>
+           </div>
+        );
+
+      case 'consultoria':
+        return (
+          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm border-l-4 border-l-yellow-500">
+             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <TrendingUp size={20} className="text-yellow-600" /> Pontos de Atenção & Melhorias
+             </h3>
+             <p className="text-sm text-gray-600 mb-4">
+               Use este espaço para registrar equipamentos obsoletos, riscos de segurança e sugestões de upgrade para apresentar ao cliente.
+             </p>
+             {/* TEXTAREA LIGADO AO ESTADO */}
+             <textarea 
+                className="w-full h-64 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                placeholder="- Servidor principal sem garantia&#10;- Switch cascateado causando lentidão&#10;- Falta de backup na nuvem"
+                value={textos.pontos_fracos_melhorias}
+                onChange={e => setTextos({...textos, pontos_fracos_melhorias: e.target.value})}
+              />
+              <div className="flex justify-end mt-4">
+                 {/* BOTÃO SALVAR ATIVADO */}
+                 <button onClick={handleSalvarTextos} className="bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-yellow-700"><Save size={16}/> Salvar Análise</button>
+              </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto pb-10">
+      <button onClick={() => setListaClientes(listaClientes)} className="flex items-center text-gray-500 hover:text-primary-dark mb-6 text-sm font-medium transition-colors">
+         {/* Botão de voltar invisível se não for necessário */}
+      </button>
+
+      {/* CABEÇALHO DO CLIENTE */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-primary-dark">
+            <Building2 size={32} />
+            </div>
+            <div>
+            <h1 className="text-2xl font-bold text-gray-800">{cliente.razao_social}</h1>
+            <p className="text-gray-500 text-sm flex items-center gap-2">
+                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{cliente.tipo_cliente}</span>
+                <span>• Contrato R$ {cliente.valor_contrato_mensal}</span>
+            </p>
+            </div>
+        </div>
+        
+        <button 
+            onClick={() => { setCliente(null); navigate('/documentacao'); }}
+            className="text-sm text-primary-dark hover:underline flex items-center gap-1"
+        >
+            <ArrowLeft size={16} /> Trocar Cliente
+        </button>
+      </div>
+
+      {/* NAVEGAÇÃO POR ABAS */}
+      <div className="flex overflow-x-auto gap-2 border-b border-gray-200 mb-6 pb-1">
+        {[
+          { id: 'geral', label: 'Visão Geral', icon: Building2 },
+          { id: 'rede', label: 'Rede & Internet', icon: Globe },
+          { id: 'senhas', label: 'Senhas & Emails', icon: Lock },
+          { id: 'inventario', label: 'Inventário', icon: Monitor },
+          { id: 'servidores', label: 'Servidores & Backup', icon: Server },
+          { id: 'consultoria', label: 'Consultoria', icon: TrendingUp },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors whitespace-nowrap
+              ${activeTab === tab.id 
+                ? 'bg-white border-b-2 border-primary-dark text-primary-dark' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+          >
+            <tab.icon size={16} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* CONTEÚDO DA ABA ATIVA */}
+      {renderContent()}
+
+      {/* --- MODAL (INVISÍVEL ATÉ CLICAR) --- */}
+      {modalAberto && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg">Adicionar Item</h3>
+              <button onClick={() => {setModalAberto(null); setFormTemp({});}} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
+            </div>
+            
+            <form onSubmit={handleSalvarModal} className="space-y-3">
+              
+              {/* FORMULÁRIO DE CONTATO */}
+              {modalAberto === 'contato' && (
+                <>
+                  <input required placeholder="Nome Completo" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                  <input required placeholder="Cargo (Ex: Gestor)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
+                  <input placeholder="Telefone" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
+                  <input placeholder="Email" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, email: e.target.value})} />
+                </>
+              )}
+
+              {/* FORMULÁRIO DE PROVEDOR */}
+              {modalAberto === 'provedor' && (
+                <>
+                  <input required placeholder="Operadora (Ex: Vivo)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
+                  <input placeholder="Plano (Ex: 300MB)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
+                  <input placeholder="Telefone Suporte" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
+                  <input placeholder="IP Fixo (Opcional)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
+                  <input placeholder="Usuario PPPoE" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
+                  <input placeholder="Senha PPPoE" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
+                </>
+              )}
+
+              {/* FORMULÁRIO DE EMAIL */}
+              {modalAberto === 'email' && (
+                <>
+                  <input required type="email" placeholder="Endereço de Email" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, email: e.target.value})} />
+                  <input required placeholder="Senha" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} />
+                  <input placeholder="Nome do Usuário" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome_usuario: e.target.value})} />
+                  <input placeholder="Provedor (Locaweb, Google)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, provedor: e.target.value})} />
+                </>
+              )}
+
+              {/* FORMULÁRIO DE ATIVO (INVENTÁRIO) */}
+              {modalAberto === 'ativo' && (
+                <>
+                  <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                  <select className="w-full p-2 border rounded bg-white" onChange={e => setFormTemp({...formTemp, tipo: e.target.value})} defaultValue="">
+                    <option value="" disabled>Selecione o Tipo...</option>
+                    <option value="COMPUTADOR">Computador</option>
+                    <option value="SERVIDOR">Servidor</option>
+                    <option value="REDE">Equipamento de Rede</option>
+                    <option value="IMPRESSORA">Impressora</option>
+                  </select>
+                  <input placeholder="Marca / Modelo" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, marca_modelo: e.target.value})} />
+                  <input placeholder="AnyDesk ID" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, anydesk_id: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Usuário Local" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, usuario_local: e.target.value})} />
+                    <input placeholder="Senha Local" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha_local: e.target.value})} />
+                  </div>
+                </>
+              )}
+
+              <button type="submit" className="w-full py-2 bg-primary-dark text-white rounded hover:bg-primary-light font-bold">Salvar Item</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

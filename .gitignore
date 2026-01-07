@@ -1,0 +1,16 @@
+# Node (Frontend)
+frontend/node_modules/
+frontend/dist/
+.eslintcache
+
+# Python (Backend)
+backend/__pycache__/
+backend/*.pyc
+backend/db.sqlite3
+backend/.env
+
+# Docker & Sistema
+.DS_Store
+*.log
+
+.env
