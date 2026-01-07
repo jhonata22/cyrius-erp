@@ -148,18 +148,29 @@ class DocumentacaoTecnica(models.Model):
 # =====================================================
 # 4. TB_CHAMADO (Mantido)
 # =====================================================
+# ... (MANTENHA TODO O CÓDIGO ANTERIOR ATÉ A CLASSE CHAMADO)
+
+# =====================================================
+# 4. TB_CHAMADO (ATUALIZADO PARA VISITAS)
+# =====================================================
 class Chamado(models.Model):
     class Status(models.TextChoices):
         ABERTO = 'ABERTO', 'Aberto'
         EM_ANDAMENTO = 'EM_ANDAMENTO', 'Em Andamento'
         FINALIZADO = 'FINALIZADO', 'Finalizado'
         CANCELADO = 'CANCELADO', 'Cancelado'
+        AGENDADO = 'AGENDADO', 'Agendado (Visita)' # <--- NOVO STATUS
 
     class Prioridade(models.TextChoices):
         BAIXA = 'BAIXA', 'Baixa'
         MEDIA = 'MEDIA', 'Média'
         ALTA = 'ALTA', 'Alta'
         CRITICA = 'CRITICA', 'Crítica'
+    
+    class TipoAtendimento(models.TextChoices): # <--- NOVO ENUM
+        REMOTO = 'REMOTO', 'Acesso Remoto'
+        VISITA = 'VISITA', 'Visita Técnica'
+        LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, db_column='id_cliente')
     titulo = models.CharField(max_length=100)
@@ -169,6 +180,12 @@ class Chamado(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ABERTO)
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
     
+    # --- NOVOS CAMPOS ---
+    tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
+    data_agendamento = models.DateTimeField(null=True, blank=True) # Data da Visita
+    custo_transporte = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # Uber/Combustível
+    # --------------------
+
     protocolo = models.CharField(max_length=30, unique=True, blank=True)
     
     data_abertura = models.DateTimeField(default=timezone.now)
@@ -192,6 +209,8 @@ class Chamado(models.Model):
             sequencia = int(ultimo_chamado.protocolo[-3:]) + 1 if ultimo_chamado else 1
             self.protocolo = f"{hoje}{str(sequencia).zfill(3)}"
         super().save(*args, **kwargs)
+
+# ... (MANTENHA O RESTANTE DO CÓDIGO IGUAL: ChamadoTecnico, etc.)
 
 # =====================================================
 # 5. TB_CHAMADO_TECNICO (Mantido)
