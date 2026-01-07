@@ -29,8 +29,8 @@ export default function ChamadoDetalhes() {
 
   const carregarDados = async () => {
     try {
-      // 1. Busca o Chamado
-      const resChamado = await axios.get(`http://localhost:8000/api/chamados/${id}/`);
+      // CORREÇÃO: URL Relativa para o Nginx
+      const resChamado = await axios.get(`/api/chamados/${id}/`);
       const dados = resChamado.data;
       
       setChamado(dados);
@@ -39,23 +39,21 @@ export default function ChamadoDetalhes() {
       
       // Prepara campos de visita
       if (dados.data_agendamento) {
-        // Formata para o input datetime-local (YYYY-MM-DDTHH:MM)
         const date = new Date(dados.data_agendamento);
         date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
         setDataAgendamento(date.toISOString().slice(0, 16));
       }
       setCustoTransporte(dados.custo_transporte || 0);
 
-      // 2. Busca o Cliente vinculado
+      // CORREÇÃO: URL Relativa para Cliente
       if (dados.cliente) {
-        const resCliente = await axios.get(`http://localhost:8000/api/clientes/${dados.cliente}/`);
+        const resCliente = await axios.get(`/api/clientes/${dados.cliente}/`);
         setCliente(resCliente.data);
       }
 
-      // 3. Busca detalhes dos técnicos (se houver IDs)
+      // CORREÇÃO: URL Relativa para Equipe
       if (dados.tecnicos && dados.tecnicos.length > 0) {
-        // Truque para buscar vários IDs: Promise.all
-        const reqs = dados.tecnicos.map(tId => axios.get(`http://localhost:8000/api/equipe/${tId}/`));
+        const reqs = dados.tecnicos.map(tId => axios.get(`/api/equipe/${tId}/`));
         const resps = await Promise.all(reqs);
         setTecnicosDetalhados(resps.map(r => r.data));
       }
@@ -74,13 +72,13 @@ export default function ChamadoDetalhes() {
         status,
         prioridade,
         custo_transporte: parseFloat(custoTransporte),
-        // Se tiver data, manda, senão manda null
         data_agendamento: dataAgendamento ? dataAgendamento : null
       };
 
-      await axios.patch(`http://localhost:8000/api/chamados/${id}/`, payload);
+      // CORREÇÃO: PATCH com URL Relativa
+      await axios.patch(`/api/chamados/${id}/`, payload);
       alert("Atualizado com sucesso!");
-      carregarDados(); // Recarrega para confirmar
+      carregarDados(); 
     } catch (error) {
       console.error(error);
       alert("Erro ao atualizar chamado.");

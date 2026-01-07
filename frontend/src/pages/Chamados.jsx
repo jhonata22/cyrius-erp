@@ -32,16 +32,17 @@ export default function Chamados() {
   // 1. Carregar Tudo
   const carregarDados = async () => {
     try {
+      // CORREÇÃO: Removidos os IPs fixos para usar roteamento do Nginx (/api/)
       const [resChamados, resEquipe, resClientes] = await Promise.all([
-        axios.get('http://localhost:8000/api/chamados/'),
-        axios.get('http://localhost:8000/api/equipe/'),
-        axios.get('http://localhost:8000/api/clientes/')
+        axios.get('/api/chamados/'),
+        axios.get('/api/equipe/'),
+        axios.get('/api/clientes/')
       ]);
       setChamados(resChamados.data);
       setEquipe(resEquipe.data);
       setClientes(resClientes.data);
     } catch (error) {
-      console.error("Erro ao carregar:", error);
+      console.error("Erro ao carregar dados da central:", error);
     } finally {
       setLoading(false);
     }
@@ -81,7 +82,6 @@ export default function Chamados() {
       return;
     }
 
-    // Lógica para definir Status e Tipo baseado no Modo
     const isVisita = modalMode === 'VISITA';
 
     const payload = {
@@ -89,18 +89,16 @@ export default function Chamados() {
       titulo,
       descricao_detalhada: descricao,
       origem: origem,
-      
-      // Se for visita, Status é AGENDADO e Tipo é VISITA. Senão, ABERTO e REMOTO.
       status: isVisita ? 'AGENDADO' : 'ABERTO',
       tipo_atendimento: isVisita ? 'VISITA' : 'REMOTO',
       data_agendamento: isVisita ? dataAgendamento : null,
-      
       prioridade,
       tecnicos: tecnicosSelecionados 
     };
 
     try {
-      await axios.post('http://localhost:8000/api/chamados/', payload);
+      // CORREÇÃO: POST usando URL relativa
+      await axios.post('/api/chamados/', payload);
       alert(isVisita ? "Visita agendada com sucesso!" : "Chamado aberto com sucesso!");
       setIsModalOpen(false);
       carregarDados();
@@ -121,7 +119,7 @@ export default function Chamados() {
         'EM_ANDAMENTO': 'bg-blue-100 text-blue-700', 
         'FINALIZADO': 'bg-gray-100 text-gray-600', 
         'CANCELADO': 'bg-red-100 text-red-700',
-        'AGENDADO': 'bg-purple-100 text-purple-700' // Cor nova para Agendado
+        'AGENDADO': 'bg-purple-100 text-purple-700' 
     };
     return map[s] || 'bg-gray-100';
   };
@@ -135,11 +133,9 @@ export default function Chamados() {
           <p className="text-gray-500 text-sm mt-1">Gerencie chamados remotos e visitas técnicas.</p>
         </div>
         <div className="flex gap-3">
-           {/* BOTÃO VISITA TÉCNICA */}
           <button onClick={() => abrirModal('VISITA')} className="bg-white border border-primary-dark text-primary-dark hover:bg-gray-50 px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-all">
             <Calendar size={18} /> Agendar Visita
           </button>
-          {/* BOTÃO CHAMADO PADRÃO */}
           <button onClick={() => abrirModal('PADRAO')} className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg transition-all">
             <Plus size={18} /> Novo Chamado
           </button>
@@ -148,7 +144,7 @@ export default function Chamados() {
 
       {/* LISTA DE CHAMADOS */}
       <div className="grid gap-4">
-        {loading ? <p>Carregando...</p> : chamados.length === 0 ? (
+        {loading ? <p className="text-center py-10 text-gray-400 font-medium">Carregando centrais...</p> : chamados.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
             <p className="text-gray-500 mb-4">Nenhum atendimento encontrado.</p>
             <button onClick={() => abrirModal('PADRAO')} className="text-primary-dark font-bold hover:underline">Criar o Primeiro</button>
@@ -160,9 +156,7 @@ export default function Chamados() {
               onClick={() => navigate(`/chamados/${ticket.id}`)}
               className="cursor-pointer bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between gap-4 items-start md:items-center group"
             >
-              
               <div className="flex gap-4 items-start">
-                {/* Ícone muda se for Visita ou Remoto */}
                 <div className={`p-3 rounded-full mt-1 ${ticket.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                   {ticket.tipo_atendimento === 'VISITA' ? <Truck size={24} /> : <Briefcase size={24} />}
                 </div>
@@ -196,7 +190,6 @@ export default function Chamados() {
                       {ticket.status.replace('_', ' ')}
                     </span>
                     
-                    {/* Se for visita agendada, mostra a data do agendamento */}
                     {ticket.tipo_atendimento === 'VISITA' && ticket.data_agendamento ? (
                         <p className="text-xs text-purple-600 mt-1 flex items-center justify-end gap-1 font-bold">
                            <Calendar size={12} /> {new Date(ticket.data_agendamento).toLocaleString('pt-BR')}
@@ -213,7 +206,7 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL UNIFICADO (VISITA E CHAMADO) */}
+      {/* MODAL UNIFICADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -225,8 +218,6 @@ export default function Chamados() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              
-              {/* CAMPO ESPECÍFICO DE VISITA: DATA E HORA */}
               {modalMode === 'VISITA' && (
                   <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
                       <label className="block text-sm font-bold text-purple-900 mb-1">Data e Hora da Visita</label>
@@ -240,7 +231,6 @@ export default function Chamados() {
                   </div>
               )}
 
-              {/* CLIENTE */}
               <div>
                 <div className="flex justify-between">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Solicitante</label>
@@ -264,14 +254,12 @@ export default function Chamados() {
                 </div>
               </div>
 
-              {/* TÍTULO */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Título do Problema</label>
                 <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                   value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Servidor Parado / Instalação de Impressora" />
               </div>
 
-              {/* DESCRIÇÃO */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descrição Detalhada</label>
                 <textarea required rows="3" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50"
@@ -279,7 +267,6 @@ export default function Chamados() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* PRIORIDADE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prioridade</label>
                   <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
@@ -291,7 +278,6 @@ export default function Chamados() {
                   </select>
                 </div>
 
-                {/* ORIGEM */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Origem</label>
                   <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
@@ -303,7 +289,6 @@ export default function Chamados() {
                 </div>
               </div>
 
-              {/* SELEÇÃO DE TÉCNICOS (MÚLTIPLOS) */}
               <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Técnicos Designados ({tecnicosSelecionados.length})</label>
                   <div className="border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">

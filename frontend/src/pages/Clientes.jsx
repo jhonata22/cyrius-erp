@@ -18,9 +18,10 @@ export default function Clientes() {
   const [diaVencimento, setDiaVencimento] = useState(5);
 
   const carregarClientes = () => {
-    axios.get('http://localhost:8000/api/clientes/')
+    // CORREÇÃO: URL relativa para o Nginx rotear via porta 80
+    axios.get('/api/clientes/')
       .then(res => setClientes(res.data))
-      .catch(err => console.error(err));
+      .catch(err => console.error("Erro ao buscar clientes:", err));
   };
 
   useEffect(() => {
@@ -30,23 +31,24 @@ export default function Clientes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/clientes/', {
+      // CORREÇÃO: POST usando URL relativa
+      await axios.post('/api/clientes/', {
         razao_social: razaoSocial,
-        cnpj: cpfCnpj.length > 11 ? cpfCnpj : null, // Lógica simples para diferenciar
+        cnpj: cpfCnpj.length > 11 ? cpfCnpj : null,
         cpf: cpfCnpj.length <= 11 ? cpfCnpj : null,
         endereco,
         tipo_cliente: tipo,
         valor_contrato_mensal: parseFloat(valor),
         dia_vencimento: parseInt(diaVencimento)
       });
-      alert("Cliente cadastrado!");
+      alert("Cliente cadastrado com sucesso!");
       setIsModalOpen(false);
       carregarClientes();
       // Limpar form
       setRazaoSocial(''); setCpfCnpj(''); setEndereco(''); setValor('');
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar cliente.");
+      alert("Erro ao salvar cliente. Verifique os dados.");
     }
   };
 
@@ -60,7 +62,7 @@ export default function Clientes() {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Carteira de Clientes</h1>
-          <p className="text-gray-500 text-sm">Gerencie contratos e clientes avulsos.</p>
+          <p className="text-gray-500 text-sm">Gerencie contratos e clientes avulsos do cartório.</p>
         </div>
         
         <div className="flex gap-3 w-full md:w-auto">
@@ -84,7 +86,7 @@ export default function Clientes() {
         {clientesFiltrados.map(cliente => (
           <div 
             key={cliente.id} 
-            onClick={() => navigate(`/documentacao/${cliente.id}`)} // <--- CLIQUE VAI PARA DOCUMENTAÇÃO
+            onClick={() => navigate(`/documentacao/${cliente.id}`)}
             className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
             {/* Faixa lateral colorida baseada no tipo */}
@@ -101,7 +103,7 @@ export default function Clientes() {
 
             <div className="pl-2">
               <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark transition-colors">{cliente.razao_social}</h3>
-              <p className="text-gray-400 text-xs mt-1 font-mono">{cliente.cnpj || cliente.cpf || 'Sem Doc'}</p>
+              <p className="text-gray-400 text-xs mt-1 font-mono">{cliente.cnpj || cliente.cpf || 'Sem documento'}</p>
               
               <div className="mt-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -109,14 +111,14 @@ export default function Clientes() {
                 </div>
                 {cliente.tipo_cliente === 'CONTRATO' && (
                   <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Calendar size={16} /> <span>Vence dia {cliente.dia_vencimento}</span>
+                    <Calendar size={16} /> <span>Vencimento: dia {cliente.dia_vencimento}</span>
                   </div>
                 )}
               </div>
             </div>
 
             <div className="mt-4 pt-4 border-t border-gray-50 pl-2 flex justify-between items-center">
-               <span className="text-xs text-gray-400">Ver documentação</span>
+               <span className="text-xs text-gray-400">Acessar documentação técnica</span>
                <FileText size={18} className="text-gray-300 group-hover:text-primary-light" />
             </div>
           </div>
@@ -126,49 +128,49 @@ export default function Clientes() {
       {/* MODAL NOVO CLIENTE */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <h3 className="font-bold text-gray-800 text-lg mb-6">Novo Cliente</h3>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 overflow-y-auto max-h-[90vh]">
+            <h3 className="font-bold text-gray-800 text-lg mb-6">Cadastrar Novo Cliente</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Razão Social / Nome</label>
-                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
+                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                   value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">CPF / CNPJ</label>
-                   <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
+                   <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                      value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} placeholder="Apenas números" />
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                   <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cliente</label>
+                   <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-primary-light/50"
                      value={tipo} onChange={e => setTipo(e.target.value)}>
                      <option value="CONTRATO">Contrato Mensal</option>
-                     <option value="AVULSO">Avulso</option>
+                     <option value="AVULSO">Atendimento Avulso</option>
                    </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Endereço Completo</label>
-                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Endereço de Atendimento</label>
+                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                   value={endereco} onChange={e => setEndereco(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Valor Mensal (R$)</label>
-                   <input required type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Contrato (R$)</label>
+                   <input required type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                      value={valor} onChange={e => setValor(e.target.value)} />
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Dia Vencimento</label>
-                   <input required type="number" max="31" min="1" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
+                   <input required type="number" max="31" min="1" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
                      value={diaVencimento} onChange={e => setDiaVencimento(e.target.value)} />
                 </div>
               </div>
-              <div className="flex gap-3 justify-end mt-6">
+              <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b]">Salvar</button>
+                <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b] font-bold shadow-md">Salvar Cliente</button>
               </div>
             </form>
           </div>

@@ -12,7 +12,7 @@ export default function Dashboard() {
     finalizados: 0
   });
 
-  // Estado para o Resumo do Dia (Novo!)
+  // Estado para o Resumo do Dia
   const [resumoHoje, setResumoHoje] = useState({
     quantidade: 0,
     empresas: []
@@ -21,7 +21,8 @@ export default function Dashboard() {
   const [dadosGrafico, setDadosGrafico] = useState([]);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/api/chamados/')
+    // CORREÇÃO: URL relativa para o Nginx rotear internamente
+    axios.get('/api/chamados/')
       .then(response => {
         const chamados = response.data;
         
@@ -34,12 +35,10 @@ export default function Dashboard() {
         setEstatisticas({ total, abertos, emAndamento, finalizados });
 
         // 2. Cálculos do Dia (HOJE)
-        const dataHoje = new Date().toISOString().split('T')[0]; // Pega data formato YYYY-MM-DD
+        const dataHoje = new Date().toISOString().split('T')[0];
         
-        // Filtra chamados que começam com a data de hoje
         const chamadosDoDia = chamados.filter(c => c.data_abertura && c.data_abertura.startsWith(dataHoje));
         
-        // Extrai nomes das empresas sem repetir (Set)
         const empresasUnicas = [...new Set(chamadosDoDia.map(c => c.nome_cliente))];
 
         setResumoHoje({
@@ -88,7 +87,7 @@ export default function Dashboard() {
       {/* --- ÁREA PRINCIPAL --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* GRÁFICO (Ocupa 2 espaços) */}
+        {/* GRÁFICO */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-800 mb-6">Volume por Status</h3>
           <div className="h-80">
@@ -108,13 +107,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* CARD DO DIA (Ocupa 1 espaço - Lateral Direita) */}
-        <div className="bg-gradient-to-br from-primary-dark to-[#1a1b4b] rounded-xl p-6 text-white flex flex-col shadow-xl relative overflow-hidden">
-            {/* Decoração de fundo */}
+        {/* CARD DO DIA */}
+        <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-xl p-6 text-white flex flex-col shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-5 rounded-full blur-3xl -mr-10 -mt-10"></div>
             
             <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-2 text-primary-light">
+              <div className="flex items-center gap-2 mb-2 text-blue-400">
                 <Calendar size={20} />
                 <span className="text-sm font-bold uppercase tracking-wider">Resumo de Hoje</span>
               </div>
@@ -131,7 +129,7 @@ export default function Dashboard() {
                 </h4>
                 
                 {resumoHoje.empresas.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">Nenhuma atividade hoje.</p>
+                  <p className="text-sm text-gray-400 italic">Nenhuma atividade registrada hoje.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {resumoHoje.empresas.map((empresa, index) => (
