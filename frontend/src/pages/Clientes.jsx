@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada
+import api from '../services/api'; 
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, MapPin, Calendar, FileText, Building2, User } from 'lucide-react';
 
@@ -18,8 +19,8 @@ export default function Clientes() {
   const [diaVencimento, setDiaVencimento] = useState(5);
 
   const carregarClientes = () => {
-    // CORREÇÃO: URL relativa para o Nginx rotear via porta 80
-    axios.get('/api/clientes/')
+    // Simplificado: Usando a instância centralizada
+    api.get('/clientes/')
       .then(res => setClientes(res.data))
       .catch(err => console.error("Erro ao buscar clientes:", err));
   };
@@ -31,8 +32,8 @@ export default function Clientes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // CORREÇÃO: POST usando URL relativa
-      await axios.post('/api/clientes/', {
+      // Simplificado: O interceptor cuida do Header Authorization
+      await api.post('/clientes/', {
         razao_social: razaoSocial,
         cnpj: cpfCnpj.length > 11 ? cpfCnpj : null,
         cpf: cpfCnpj.length <= 11 ? cpfCnpj : null,
@@ -62,7 +63,7 @@ export default function Clientes() {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Carteira de Clientes</h1>
-          <p className="text-gray-500 text-sm">Gerencie contratos e clientes avulsos do cartório.</p>
+          <p className="text-gray-500 text-sm">Gerencie contratos e clientes avulsos.</p>
         </div>
         
         <div className="flex gap-3 w-full md:w-auto">
@@ -89,7 +90,6 @@ export default function Clientes() {
             onClick={() => navigate(`/documentacao/${cliente.id}`)}
             className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
-            {/* Faixa lateral colorida baseada no tipo */}
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
 
             <div className="flex justify-between items-start mb-4 pl-2">
@@ -125,7 +125,6 @@ export default function Clientes() {
         ))}
       </div>
 
-      {/* MODAL NOVO CLIENTE */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 overflow-y-auto max-h-[90vh]">

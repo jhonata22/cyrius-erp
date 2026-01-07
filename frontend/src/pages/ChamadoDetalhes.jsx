@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada em vez do axios padrão
+import api from '../services/api'; 
 import { 
   ArrowLeft, User, MapPin, Calendar, Clock, 
   AlertCircle, CheckCircle, Briefcase, Save, Truck, DollarSign, Users 
@@ -15,11 +16,8 @@ export default function ChamadoDetalhes() {
   const [tecnicosDetalhados, setTecnicosDetalhados] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Edição
   const [status, setStatus] = useState('');
   const [prioridade, setPrioridade] = useState('');
-  
-  // Novos Estados para Visita
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [custoTransporte, setCustoTransporte] = useState(0);
 
@@ -29,15 +27,14 @@ export default function ChamadoDetalhes() {
 
   const carregarDados = async () => {
     try {
-      // CORREÇÃO: URL Relativa para o Nginx
-      const resChamado = await axios.get(`/api/chamados/${id}/`);
+      // Simplificado: Usamos apenas o endpoint relativo
+      const resChamado = await api.get(`/chamados/${id}/`);
       const dados = resChamado.data;
       
       setChamado(dados);
       setStatus(dados.status);
       setPrioridade(dados.prioridade);
       
-      // Prepara campos de visita
       if (dados.data_agendamento) {
         const date = new Date(dados.data_agendamento);
         date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
@@ -45,21 +42,22 @@ export default function ChamadoDetalhes() {
       }
       setCustoTransporte(dados.custo_transporte || 0);
 
-      // CORREÇÃO: URL Relativa para Cliente
+      // Chamada simplificada para Clientes
       if (dados.cliente) {
-        const resCliente = await axios.get(`/api/clientes/${dados.cliente}/`);
+        const resCliente = await api.get(`/clientes/${dados.cliente}/`);
         setCliente(resCliente.data);
       }
 
-      // CORREÇÃO: URL Relativa para Equipe
+      // Mapeamento de técnicos usando a instância centralizada
       if (dados.tecnicos && dados.tecnicos.length > 0) {
-        const reqs = dados.tecnicos.map(tId => axios.get(`/api/equipe/${tId}/`));
+        const reqs = dados.tecnicos.map(tId => api.get(`/equipe/${tId}/`));
         const resps = await Promise.all(reqs);
         setTecnicosDetalhados(resps.map(r => r.data));
       }
 
     } catch (error) {
       console.error("Erro ao carregar detalhes:", error);
+      // O interceptor já cuida do erro 401, então aqui tratamos apenas o erro visual
       alert("Erro ao carregar dados do chamado.");
     } finally {
       setLoading(false);
@@ -75,8 +73,8 @@ export default function ChamadoDetalhes() {
         data_agendamento: dataAgendamento ? dataAgendamento : null
       };
 
-      // CORREÇÃO: PATCH com URL Relativa
-      await axios.patch(`/api/chamados/${id}/`, payload);
+      // Simplificado: O token JWT é inserido automaticamente pelo interceptor
+      await api.patch(`/chamados/${id}/`, payload);
       alert("Atualizado com sucesso!");
       carregarDados(); 
     } catch (error) {
@@ -92,12 +90,10 @@ export default function ChamadoDetalhes() {
 
   return (
     <div className="max-w-5xl mx-auto pb-10">
-      {/* Botão Voltar */}
       <button onClick={() => navigate('/chamados')} className="flex items-center text-gray-500 hover:text-primary-dark mb-6 text-sm font-medium transition-colors">
         <ArrowLeft size={18} className="mr-2" /> Voltar para Lista
       </button>
 
-      {/* CABEÇALHO */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -114,7 +110,6 @@ export default function ChamadoDetalhes() {
           <h1 className="text-2xl font-bold text-gray-800">{chamado.titulo}</h1>
         </div>
         
-        {/* Painel de Controle (Status e Save) */}
         <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200 shadow-sm">
           <select 
             value={status} 
@@ -138,11 +133,7 @@ export default function ChamadoDetalhes() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* COLUNA DA ESQUERDA: CLIENTE E TÉCNICOS */}
         <div className="lg:col-span-1 space-y-6">
-          
-          {/* CLIENTE */}
           {cliente && (
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -167,7 +158,6 @@ export default function ChamadoDetalhes() {
             </div>
           )}
 
-          {/* EQUIPE TÉCNICA */}
           <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Users size={14} /> Equipe Designada
@@ -190,10 +180,7 @@ export default function ChamadoDetalhes() {
           </div>
         </div>
 
-        {/* COLUNA DA DIREITA: DESCRIÇÃO, CUSTOS E DATA */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* SE FOR VISITA: CARD DE AGENDAMENTO E CUSTOS */}
           {isVisita && (
               <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 grid md:grid-cols-2 gap-6">
                   <div>
@@ -234,7 +221,6 @@ export default function ChamadoDetalhes() {
             </div>
           </div>
 
-          {/* Placeholder para Apontamentos Futuros */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 opacity-60 hover:opacity-100 transition-opacity">
               <div className="flex items-center gap-2 mb-4">
                 <Briefcase size={20} className="text-gray-400" />
@@ -245,7 +231,6 @@ export default function ChamadoDetalhes() {
               </p>
           </div>
         </div>
-
       </div>
     </div>
   );

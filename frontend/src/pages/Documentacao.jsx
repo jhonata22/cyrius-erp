@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada
+import api from '../services/api'; 
 import { 
   ArrowLeft, Save, Building2, Wifi, Lock, Monitor, 
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, Search, BookOpen, X 
@@ -10,22 +11,18 @@ export default function Documentacao() {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // --- ESTADOS DE DADOS ---
   const [listaClientes, setListaClientes] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DO CLIENTE ATUAL ---
   const [cliente, setCliente] = useState(null);
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
   
-  // --- ESTADOS LÓGICOS ---
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
   const [formTemp, setFormTemp] = useState({}); 
 
-  // Estado para os textos longos (Editáveis)
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
     topologia_rede: '',
@@ -42,21 +39,20 @@ export default function Documentacao() {
     setLoading(true);
     try {
       if (!id) {
-        // MODO SELEÇÃO: URL Relativa
-        const res = await axios.get('/api/clientes/');
+        // Simplificado: Busca lista de clientes
+        const res = await api.get('/clientes/');
         setListaClientes(res.data);
       } else {
-        // MODO DETALHE: URLs Relativas
+        // Simplificado: Busca detalhes do cliente e ativos
         const [resCliente, resAtivos] = await Promise.all([
-          axios.get(`/api/clientes/${id}/`),
-          axios.get('/api/ativos/')
+          api.get(`/clientes/${id}/`),
+          api.get('/ativos/')
         ]);
         
         const dadosCliente = resCliente.data;
         setCliente(dadosCliente);
         setAtivos(resAtivos.data.filter(a => a.cliente === parseInt(id)));
 
-        // Popula os textos se existirem
         if (dadosCliente.documentacao_tecnica) {
           setDocId(dadosCliente.documentacao_tecnica.id);
           setTextos({
@@ -78,16 +74,14 @@ export default function Documentacao() {
     }
   };
 
-  // --- FUNÇÕES LÓGICAS ---
-
   const handleSalvarTextos = async () => {
     try {
       const payload = { ...textos, cliente: parseInt(id) };
       
       if (docId) {
-        await axios.patch(`/api/documentacao/${docId}/`, payload);
+        await api.patch(`/documentacao/${docId}/`, payload);
       } else {
-        await axios.post('/api/documentacao/', payload);
+        await api.post('/documentacao/', payload);
       }
       alert("Textos técnicos atualizados!");
       carregarDados();
@@ -108,7 +102,13 @@ export default function Documentacao() {
       if (modalAberto === 'email') endpoint = '/api/emails/';
       if (modalAberto === 'ativo') endpoint = '/api/ativos/';
 
-      await axios.post(endpoint, payload);
+      // Note que aqui mantemos o /api/ nos condicionais de endpoint pois o 
+      // baseURL do nosso service api.js já cuida da parte inicial, 
+      // mas como seus endpoints começam com /api/, ajustamos para strings limpas:
+      
+      let endpointLimpo = endpoint.replace('/api', ''); // Garante compatibilidade com a baseURL
+
+      await api.post(endpointLimpo, payload);
       alert("Item adicionado com sucesso!");
       setModalAberto(null);
       setFormTemp({});

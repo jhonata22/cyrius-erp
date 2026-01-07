@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada
+import api from '../services/api'; 
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, ArrowRight } from 'lucide-react';
 
@@ -17,9 +18,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // CORREÇÃO: URL relativa para que o Nginx faça o Proxy Reverso
-      // Isso elimina o erro de CORS no navegador
-      const response = await axios.post('/api/token/', {
+      // Simplificado: Usamos a instância 'api' que já conhece a baseURL /api
+      const response = await api.post('/token/', {
         username,
         password
       });
@@ -28,8 +28,10 @@ export default function Login() {
       const token = response.data.access;
       localStorage.setItem('token', token);
       
-      // Configura o axios globalmente para as próximas chamadas
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      /** * NOTA: Não precisamos mais de axios.defaults.headers aqui! 
+       * O interceptor em services/api.js lerá o token do localStorage 
+       * automaticamente na próxima requisição que o app fizer.
+       */
 
       // Redireciona para a Home/Dashboard
       navigate('/');

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada
+import api from '../services/api'; 
 import { Plus, User, Briefcase, DollarSign, Trash2, Shield } from 'lucide-react';
 
 export default function Equipe() {
@@ -11,10 +12,9 @@ export default function Equipe() {
   const [cargo, setCargo] = useState('TECNICO'); 
   const [custoHora, setCustoHora] = useState('');
 
-  // Carregar dados da API
+  // Carregar dados da API usando a instância centralizada
   const carregarEquipe = () => {
-    // AJUSTE: URL relativa para roteamento via Nginx
-    axios.get('/api/equipe/')
+    api.get('/equipe/')
       .then(response => setFuncionarios(response.data))
       .catch(error => console.error("Erro ao carregar equipe:", error));
   };
@@ -33,8 +33,8 @@ export default function Equipe() {
       custo_hora: parseFloat(custoHora)
     };
 
-    // AJUSTE: POST usando URL relativa
-    axios.post('/api/equipe/', dados)
+    // Simplificado: O token e a baseURL já estão configurados no api.js
+    api.post('/equipe/', dados)
       .then(() => {
         setIsModalOpen(false);
         carregarEquipe();
@@ -48,11 +48,10 @@ export default function Equipe() {
       });
   };
 
-  // Excluir
+  // Excluir colaborador
   const excluirFuncionario = (id) => {
     if (window.confirm("Tem certeza que deseja remover este funcionário? Isso pode afetar chamados vinculados.")) {
-      // AJUSTE: DELETE usando URL relativa
-      axios.delete(`/api/equipe/${id}/`)
+      api.delete(`/equipe/${id}/`)
         .then(() => carregarEquipe())
         .catch(error => alert("Erro ao excluir colaborador."));
     }
@@ -79,7 +78,6 @@ export default function Equipe() {
         {funcionarios.map(func => (
           <div key={func.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative group">
             
-            {/* Botão de Excluir */}
             <button 
               onClick={() => excluirFuncionario(func.id)}
               className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -116,7 +114,6 @@ export default function Equipe() {
         ))}
       </div>
 
-      {/* MODAL DE CADASTRO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-100 animate-in fade-in zoom-in duration-200">

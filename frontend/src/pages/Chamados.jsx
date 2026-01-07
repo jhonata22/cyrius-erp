@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada
+import api from '../services/api'; 
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, Clock, AlertCircle, Briefcase, 
@@ -12,31 +13,28 @@ export default function Chamados() {
   const [clientes, setClientes] = useState([]); 
   const [loading, setLoading] = useState(true);
   
-  // Controle do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('PADRAO'); // 'PADRAO' ou 'VISITA'
+  const [modalMode, setModalMode] = useState('PADRAO'); 
   
   const navigate = useNavigate();
 
-  // Estados do Formulário
   const [clienteId, setClienteId] = useState('');
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [prioridade, setPrioridade] = useState('MEDIA');
   const [origem, setOrigem] = useState('TELEFONE');
   
-  // Novos Estados para Visita
   const [dataAgendamento, setDataAgendamento] = useState('');
-  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); // Array de IDs
+  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); 
 
-  // 1. Carregar Tudo
+  // 1. Carregar Tudo usando a instância centralizada
   const carregarDados = async () => {
     try {
-      // CORREÇÃO: Removidos os IPs fixos para usar roteamento do Nginx (/api/)
+      // Simplificado: Removidos IPs e caminhos completos
       const [resChamados, resEquipe, resClientes] = await Promise.all([
-        axios.get('/api/chamados/'),
-        axios.get('/api/equipe/'),
-        axios.get('/api/clientes/')
+        api.get('/chamados/'),
+        api.get('/equipe/'),
+        api.get('/clientes/')
       ]);
       setChamados(resChamados.data);
       setEquipe(resEquipe.data);
@@ -54,7 +52,6 @@ export default function Chamados() {
 
   const abrirModal = (modo) => {
     setModalMode(modo);
-    // Limpar form ao abrir
     setTitulo('');
     setDescricao('');
     setTecnicosSelecionados([]);
@@ -97,8 +94,8 @@ export default function Chamados() {
     };
 
     try {
-      // CORREÇÃO: POST usando URL relativa
-      await axios.post('/api/chamados/', payload);
+      // Simplificado: POST usando a instância api
+      await api.post('/chamados/', payload);
       alert(isVisita ? "Visita agendada com sucesso!" : "Chamado aberto com sucesso!");
       setIsModalOpen(false);
       carregarDados();
@@ -126,7 +123,6 @@ export default function Chamados() {
 
   return (
     <div>
-      {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Central de Atendimento</h1>
@@ -142,7 +138,6 @@ export default function Chamados() {
         </div>
       </div>
 
-      {/* LISTA DE CHAMADOS */}
       <div className="grid gap-4">
         {loading ? <p className="text-center py-10 text-gray-400 font-medium">Carregando centrais...</p> : chamados.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
@@ -206,7 +201,6 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL UNIFICADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">

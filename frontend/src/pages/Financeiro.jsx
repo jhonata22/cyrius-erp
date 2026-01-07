@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// Alterado: Importamos a nossa instância personalizada em vez do axios padrão
+import api from '../services/api'; 
 import { Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
 
 export default function Financeiro() {
@@ -16,8 +17,8 @@ export default function Financeiro() {
   const [clienteId, setClienteId] = useState(1); 
 
   const carregarFinanceiro = () => {
-    // AJUSTE: URL relativa para roteamento via Nginx na rede interna
-    axios.get('/api/financeiro/')
+    // Simplificado: Usamos a instância centralizada que aponta para a baseURL /api
+    api.get('/financeiro/')
       .then(response => {
         const dados = response.data;
         setLancamentos(dados);
@@ -26,7 +27,7 @@ export default function Financeiro() {
       })
       .catch(error => {
         console.error("Erro ao carregar dados financeiros:", error);
-        // Tratamento de permissão (RBAC)
+        // O interceptor lida com o 401 (Login), mas o 403 (Permissão) tratamos aqui
         if (error.response && error.response.status === 403) {
           setAcessoNegado(true);
         }
@@ -59,8 +60,8 @@ export default function Financeiro() {
       cliente: clienteId
     };
 
-    // AJUSTE: POST usando URL relativa
-    axios.post('/api/financeiro/', dados)
+    // Simplificado: O token JWT é inserido automaticamente pelo interceptor
+    api.post('/financeiro/', dados)
       .then(() => {
         setIsModalOpen(false);
         carregarFinanceiro();
@@ -70,7 +71,7 @@ export default function Financeiro() {
       })
       .catch(err => {
         console.error(err);
-        alert("Erro ao salvar. Verifique suas permissões de Gestor.");
+        alert("Erro ao salvar. Verifique se você possui permissão de Gestor.");
       });
   };
 
@@ -84,7 +85,7 @@ export default function Financeiro() {
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Acesso Restrito</h2>
         <p className="text-gray-500 max-w-md">
           Esta área contém dados sensíveis e é exclusiva para <strong>Gestores e Sócios</strong>. 
-          Seu perfil não possui as credenciais necessárias.
+          Seu perfil não possui as credenciais necessárias para visualizar o financeiro.
         </p>
       </div>
     );
@@ -105,7 +106,6 @@ export default function Financeiro() {
         </button>
       </div>
 
-      {/* --- CARDS DE RESUMO --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
@@ -144,7 +144,6 @@ export default function Financeiro() {
         </div>
       </div>
 
-      {/* --- LISTAGEM --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -184,7 +183,6 @@ export default function Financeiro() {
         )}
       </div>
 
-      {/* --- MODAL --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-100 animate-in fade-in zoom-in duration-200">
