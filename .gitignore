@@ -16,3 +16,6 @@ backend/.env
 .env
 # Backup do banco de dados
 .backup_cyrius_.sql
+
+# Arquivos staticos
+static_volume
