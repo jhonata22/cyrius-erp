@@ -9,3 +9,4 @@ gunicorn       # Servidor de produção (já deixamos pronto)
 pytest-django  # Para nossos testes TDD
 django-cors-headers
 djangorestframework-simplejwt
+Pillow

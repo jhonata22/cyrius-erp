@@ -55,6 +55,7 @@ function App() {
       <Route path="/documentacao" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
       <Route path="/documentacao/:id" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
       <Route path="/chamados/:id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
+      <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
 
       {/* Rota 404 - Redireciona para Dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
