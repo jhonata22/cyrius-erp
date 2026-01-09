@@ -14,3 +14,4 @@ backend/.env
 *.log
 
 .env
+backend/docs_estoque/*.pdf
