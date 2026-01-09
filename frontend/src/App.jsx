@@ -10,7 +10,7 @@ import ChamadoDetalhes from './pages/ChamadoDetalhes';
 // Páginas
 import Dashboard from './pages/Dashboard'
 import Chamados from './pages/Chamados'
-import Inventario from './pages/Inventario' // O arquivo chama Inventario
+import Inventario from './pages/Inventario'
 import Financeiro from './pages/Financeiro'
 import Equipe from './pages/Equipe'
 
@@ -28,7 +28,6 @@ const RotaProtegida = ({ children }) => {
 }
 
 function App() {
-  // Mantém o usuário logado se ele der F5 na página
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
@@ -43,11 +42,11 @@ function App() {
 
       {/* 2. Rotas PROTEGIDAS */}
       <Route path="/" element={<RotaProtegida><Dashboard /></RotaProtegida>} />
-      <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
       
-      {/* AQUI A MUDANÇA: Rota '/estoque' carrega a página Inventario */}
-      <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
+      {/* ROTA DE CHAMADOS ADICIONADA AQUI ABAIXO */}
+      <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
       
+      <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
       <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
       <Route path="/equipe" element={<RotaProtegida><Equipe /></RotaProtegida>} />
       <Route path="/clientes" element={<RotaProtegida><Clientes /></RotaProtegida>} />
