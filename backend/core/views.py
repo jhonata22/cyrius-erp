@@ -132,6 +132,23 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     serializer_class = MovimentacaoEstoqueSerializer
     permission_classes = [IsAuthenticated]
 
+class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
+    queryset = MovimentacaoEstoque.objects.all().order_by('-data_movimento')
+    serializer_class = MovimentacaoEstoqueSerializer
+
     def perform_create(self, serializer):
-        # Salva automaticamente quem fez a movimentação
-        serializer.save(usuario=self.request.user)
+        # Pega os IDs enviados
+        cliente_id = self.request.data.get('cliente')
+        fornecedor_id = self.request.data.get('fornecedor')
+
+        # Limpeza para evitar que string vazia quebre o banco
+        extra_kwargs = {'usuario': self.request.user}
+        
+        # Se o cliente vier como string vazia ou "null", setamos como None
+        if not cliente_id or cliente_id == "null" or cliente_id == "":
+            extra_kwargs['cliente'] = None
+            
+        if not fornecedor_id or fornecedor_id == "null" or fornecedor_id == "":
+            extra_kwargs['fornecedor'] = None
+
+        serializer.save(**extra_kwargs)
