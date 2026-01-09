@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
-    Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro
+    Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, Fornecedor, Produto, MovimentacaoEstoque
 )
 
 # --- 1. CLIENTE & SUB-TABELAS ---
@@ -97,3 +97,36 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     class Meta:
         model = LancamentoFinanceiro
         fields = '__all__'
+# =====================================================
+# INVENTÁRIO - NOVOS SERIALIZERS
+# =====================================================
+
+class FornecedorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Fornecedor
+        fields = '__all__'
+
+class ProdutoSerializer(serializers.ModelSerializer):
+    # Campo calculado (somente leitura) que vem do @property no Model
+    estoque_atual = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Produto
+        fields = '__all__'
+
+class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
+    nome_produto = serializers.CharField(source='produto.nome', read_only=True)
+    nome_usuario = serializers.CharField(source='usuario.username', read_only=True)
+    
+    class Meta:
+        model = MovimentacaoEstoque
+        fields = '__all__'
+    
+    def validate(self, data):
+        # Regra de Negócio: Não deixar sair se não tiver estoque
+        if data['tipo_movimento'] == 'SAIDA':
+            produto = data['produto']
+            qtd_saida = data['quantidade']
+            if produto.estoque_atual < qtd_saida:
+                raise serializers.ValidationError(f"Estoque insuficiente! Atual: {produto.estoque_atual}")
+        return data

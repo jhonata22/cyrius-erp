@@ -10,12 +10,11 @@ import ChamadoDetalhes from './pages/ChamadoDetalhes';
 // Páginas
 import Dashboard from './pages/Dashboard'
 import Chamados from './pages/Chamados'
-import Inventario from './pages/Inventario'
+import Inventario from './pages/Inventario' // O arquivo chama Inventario
 import Financeiro from './pages/Financeiro'
 import Equipe from './pages/Equipe'
 
 // --- COMPONENTE GUARDA-COSTAS (RotaProtegida) ---
-// Ele verifica se tem token. Se tiver, mostra o Layout (Menu). Se não, chuta pro Login.
 const RotaProtegida = ({ children }) => {
   const token = localStorage.getItem('token')
   
@@ -23,10 +22,8 @@ const RotaProtegida = ({ children }) => {
     return <Navigate to="/login" replace />
   }
 
-  // Garante que o token esteja no cabeçalho das requisições
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
   
-  // Aqui está o pulo do gato: O Layout só é renderizado se estiver logado
   return <Layout>{children}</Layout>
 }
 
@@ -41,21 +38,25 @@ function App() {
 
   return (
     <Routes>
-      {/* 1. Rota PÚBLICA (Login) - Note que NÃO tem o <Layout> em volta dela */}
+      {/* 1. Rota PÚBLICA */}
       <Route path="/login" element={<Login />} />
 
-      {/* 2. Rotas PROTEGIDAS - O <RotaProtegida> encarrega de colocar o Layout */}
+      {/* 2. Rotas PROTEGIDAS */}
       <Route path="/" element={<RotaProtegida><Dashboard /></RotaProtegida>} />
-      <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
       <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
+      
+      {/* AQUI A MUDANÇA: Rota '/estoque' carrega a página Inventario */}
+      <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
+      
       <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
       <Route path="/equipe" element={<RotaProtegida><Equipe /></RotaProtegida>} />
       <Route path="/clientes" element={<RotaProtegida><Clientes /></RotaProtegida>} />
-      <Route path="/documentacao" element={<RotaProtegida><Documentacao /></RotaProtegida>} /> {/* Geral */}
-      <Route path="/documentacao/:id" element={<RotaProtegida><Documentacao /></RotaProtegida>} /> {/* Específica */}
+      
+      <Route path="/documentacao" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
+      <Route path="/documentacao/:id" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
       <Route path="/chamados/:id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
 
-      {/* Rota 404 */}
+      {/* Rota 404 - Redireciona para Dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

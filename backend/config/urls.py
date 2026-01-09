@@ -4,6 +4,8 @@ URL configuration for config project.
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from django.conf import settings
+from django.conf.urls.static import static
 
 # 1. IMPORTS ATUALIZADOS (Incluindo as novas Views)
 from core.views import (
@@ -11,12 +13,12 @@ from core.views import (
     ChamadoViewSet, 
     EquipeViewSet, 
     FinanceiroViewSet,
-    # --- Novas Views Abaixo ---
     ContatoClienteViewSet, 
     ProvedorInternetViewSet, 
     ContaEmailViewSet, 
     DocumentacaoTecnicaViewSet, 
-    AtivoViewSet
+    AtivoViewSet, FornecedorViewSet, ProdutoViewSet, 
+    MovimentacaoEstoqueViewSet
 )
 
 from rest_framework_simplejwt.views import (
@@ -26,18 +28,18 @@ from rest_framework_simplejwt.views import (
 
 router = DefaultRouter()
 
-# --- ROTAS EXISTENTES ---
 router.register(r'clientes', ClienteViewSet)
 router.register(r'equipe', EquipeViewSet)
 router.register(r'chamados', ChamadoViewSet, basename='chamado')
 router.register(r'financeiro', FinanceiroViewSet)
-
-# --- NOVAS ROTAS (Essenciais para a Documentação funcionar) ---
 router.register(r'contatos', ContatoClienteViewSet)
 router.register(r'provedores', ProvedorInternetViewSet)
 router.register(r'emails', ContaEmailViewSet)
 router.register(r'documentacao', DocumentacaoTecnicaViewSet)
-router.register(r'ativos', AtivoViewSet) # <--- AQUI ESTÁ A CORREÇÃO DO ERRO 404
+router.register(r'fornecedores', FornecedorViewSet)
+router.register(r'produtos', ProdutoViewSet)
+router.register(r'estoque', MovimentacaoEstoqueViewSet)
+router.register(r'ativos', AtivoViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -49,3 +51,5 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

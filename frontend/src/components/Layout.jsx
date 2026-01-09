@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom'; // 1. Adicionado useNavigate
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Ticket, 
@@ -32,12 +32,11 @@ const SidebarItem = ({ icon: Icon, text, to }) => {
 };
 
 export default function Layout({ children }) {
-  const navigate = useNavigate(); // 3. Hook para navegação
+  const navigate = useNavigate();
 
-  // 4. Função Real de Logout
   const handleLogout = () => {
-    localStorage.removeItem('token'); // Apaga a chave
-    navigate('/login'); // Chuta para fora
+    localStorage.removeItem('token');
+    navigate('/login');
   };
 
   return (
@@ -56,12 +55,12 @@ export default function Layout({ children }) {
           <ul>
             <SidebarItem icon={LayoutDashboard} text="Dashboard" to="/" />
             <SidebarItem icon={Ticket} text="Chamados" to="/chamados" />
-            
-            {/* Mudei o ícone de Clientes para Briefcase para diferenciar da Equipe */}
             <SidebarItem icon={Briefcase} text="Clientes" to="/clientes" />
             <SidebarItem icon={BookOpen} text="Documentação" to="/documentacao" />
             
-            <SidebarItem icon={Package} text="Inventário" to="/inventario" />
+            {/* AQUI ESTÁ O AJUSTE: Link e Texto alinhados com o novo módulo */}
+            <SidebarItem icon={Package} text="Estoque" to="/inventario" />
+            
             <SidebarItem icon={DollarSign} text="Financeiro" to="/financeiro" />
             
             <div className="my-4 border-t border-white/10"></div>
@@ -72,7 +71,6 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          {/* Adicionei o onClick aqui */}
           <button 
             onClick={handleLogout}
             className="flex items-center w-full px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-red-500/10 rounded-lg transition-colors"

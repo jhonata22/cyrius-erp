@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
-
+from django.db.models import Sum
 # =====================================================
 # 1. TB_CLIENTE
 # =====================================================
@@ -146,11 +146,6 @@ class DocumentacaoTecnica(models.Model):
         db_table = 'TB_DOCUMENTACAO_TECNICA'
 
 # =====================================================
-# 4. TB_CHAMADO (Mantido)
-# =====================================================
-# ... (MANTENHA TODO O CÓDIGO ANTERIOR ATÉ A CLASSE CHAMADO)
-
-# =====================================================
 # 4. TB_CHAMADO (ATUALIZADO PARA VISITAS)
 # =====================================================
 class Chamado(models.Model):
@@ -159,7 +154,7 @@ class Chamado(models.Model):
         EM_ANDAMENTO = 'EM_ANDAMENTO', 'Em Andamento'
         FINALIZADO = 'FINALIZADO', 'Finalizado'
         CANCELADO = 'CANCELADO', 'Cancelado'
-        AGENDADO = 'AGENDADO', 'Agendado (Visita)' # <--- NOVO STATUS
+        AGENDADO = 'AGENDADO', 'Agendado (Visita)'
 
     class Prioridade(models.TextChoices):
         BAIXA = 'BAIXA', 'Baixa'
@@ -276,3 +271,97 @@ class LancamentoFinanceiro(models.Model):
 
     class Meta:
         db_table = 'TB_LANCAMENTO_FINANCEIRO'
+
+# =====================================================
+# 9. INVENTÁRIO - FORNECEDOR
+# =====================================================
+class Fornecedor(models.Model):
+    razao_social = models.CharField(max_length=100)
+    cnpj = models.CharField(max_length=18, null=True, blank=True)
+    contato_nome = models.CharField(max_length=100, blank=True)
+    telefone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    site = models.URLField(blank=True)
+
+    class Meta:
+        db_table = 'TB_FORNECEDOR'
+    
+    def __str__(self):
+        return self.razao_social
+
+# =====================================================
+# 10. INVENTÁRIO - PRODUTO
+# =====================================================
+class Produto(models.Model):
+    class Categoria(models.TextChoices):
+        HARDWARE = 'HARDWARE', 'Hardware (Peças)'
+        REDES = 'REDES', 'Redes (Cabos/Conectores)'
+        PERIFERICO = 'PERIFERICO', 'Periférico'
+        SOFTWARE = 'SOFTWARE', 'Software/Licença'
+        OUTROS = 'OUTROS', 'Outros'
+
+    nome = models.CharField(max_length=100) # Ex: SSD 240GB Kingston
+    descricao = models.TextField(blank=True)
+    categoria = models.CharField(max_length=20, choices=Categoria.choices)
+    
+    # Controle de Estoque
+    estoque_minimo = models.PositiveIntegerField(default=2, help_text="Avisar quando chegar neste nível")
+    controlar_serial = models.BooleanField(default=False, help_text="Exige Serial Number na saída?")
+    
+    # Preço Sugerido (Pode variar na venda, mas esse é o base)
+    preco_venda_sugerido = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'TB_PRODUTO'
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def estoque_atual(self):
+        # Calcula dinamicamente: Total Entradas - Total Saídas
+        entradas = self.movimentacoes.filter(tipo_movimento='ENTRADA').aggregate(total=Sum('quantidade'))['total'] or 0
+        saidas = self.movimentacoes.filter(tipo_movimento='SAIDA').aggregate(total=Sum('quantidade'))['total'] or 0
+        return entradas - saidas
+
+# =====================================================
+# 11. INVENTÁRIO - MOVIMENTAÇÃO (O Coração do Estoque)
+# =====================================================
+class MovimentacaoEstoque(models.Model):
+    TIPO_CHOICES = [
+        ('ENTRADA', 'Entrada'),
+        ('SAIDA', 'Saída'),
+    ]
+    
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='movimentacoes')
+    tipo_movimento = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    quantidade = models.IntegerField()
+    data_movimento = models.DateTimeField(auto_now_add=True)
+    preco_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # NOVOS CAMPOS:
+    fornecedor = models.ForeignKey(Fornecedor, on_delete=models.SET_NULL, null=True, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True)
+    numero_serial = models.CharField(max_length=100, null=True, blank=True)
+    arquivo = models.FileField(upload_to='docs_estoque/', null=True, blank=True)
+    
+    # CORREÇÃO DO ERRO 500:
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True) # <--- ADICIONADO
+
+    def save(self, *args, **kwargs):
+        # Lógica para evitar estoque negativo na saída
+        if self.tipo_movimento == 'SAIDA':
+            if self.pk is None:
+                entradas = self.produto.movimentacoes.filter(tipo_movimento='ENTRADA').aggregate(total=Sum('quantidade'))['total'] or 0
+                saidas = self.produto.movimentacoes.filter(tipo_movimento='SAIDA').aggregate(total=Sum('quantidade'))['total'] or 0
+                saldo = entradas - saidas
+                
+                if saldo < self.quantidade:
+                    raise ValueError(f'Estoque insuficiente. Saldo atual: {saldo}')
+        
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.tipo_movimento} - {self.produto.nome}"

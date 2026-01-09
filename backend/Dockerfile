@@ -8,6 +8,8 @@ ENV PYTHONUNBUFFERED 1
 # Define o diretório de trabalho dentro do container
 WORKDIR /app
 
+RUN mkdir -p /app/media/docs_estoque
+
 # Instala dependências do sistema necessárias para o Postgres
 RUN apt-get update && apt-get install -y \
     libpq-dev \

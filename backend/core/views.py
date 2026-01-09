@@ -3,13 +3,14 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction # Importante para segurança ao salvar
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
-    Equipe, Chamado, ChamadoTecnico, LancamentoFinanceiro, Ativo
+    Equipe, Chamado, ChamadoTecnico, LancamentoFinanceiro, Ativo, Fornecedor, Produto, MovimentacaoEstoque
 )
 from .serializers import (
     ClienteSerializer, ContatoClienteSerializer, ProvedorInternetSerializer,
     ContaEmailSerializer, DocumentacaoTecnicaSerializer,
     EquipeSerializer, ChamadoSerializer, ChamadoTecnicoSerializer,
-    LancamentoFinanceiroSerializer, AtivoSerializer
+    LancamentoFinanceiroSerializer, AtivoSerializer, FornecedorSerializer, ProdutoSerializer,
+    MovimentacaoEstoqueSerializer
 )
 from .permissions import IsGestor 
 
@@ -112,3 +113,25 @@ class FinanceiroViewSet(viewsets.ModelViewSet):
     queryset = LancamentoFinanceiro.objects.all().order_by('-data_vencimento')
     serializer_class = LancamentoFinanceiroSerializer
     permission_classes = [IsGestor]
+# =====================================================
+# 6. INVENTÁRIO
+# =====================================================
+
+class FornecedorViewSet(viewsets.ModelViewSet):
+    queryset = Fornecedor.objects.all()
+    serializer_class = FornecedorSerializer
+    permission_classes = [IsAuthenticated]
+
+class ProdutoViewSet(viewsets.ModelViewSet):
+    queryset = Produto.objects.all().order_by('nome')
+    serializer_class = ProdutoSerializer
+    permission_classes = [IsAuthenticated]
+
+class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
+    queryset = MovimentacaoEstoque.objects.all().order_by('-data_movimento')
+    serializer_class = MovimentacaoEstoqueSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        # Salva automaticamente quem fez a movimentação
+        serializer.save(usuario=self.request.user)
