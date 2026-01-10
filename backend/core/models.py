@@ -9,6 +9,7 @@ class Cliente(models.Model):
     class TipoCliente(models.TextChoices):
         CONTRATO = 'CONTRATO', 'Contrato'
         AVULSO = 'AVULSO', 'Avulso'
+        
 
     razao_social = models.CharField(max_length=100)
     cpf = models.CharField(max_length=11, null=True, blank=True)
@@ -17,6 +18,7 @@ class Cliente(models.Model):
     valor_contrato_mensal = models.DecimalField(max_digits=10, decimal_places=2)
     dia_vencimento = models.PositiveSmallIntegerField()
     tipo_cliente = models.CharField(max_length=20, choices=TipoCliente.choices)
+    ativo = models.BooleanField(default=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -252,23 +254,60 @@ class EquipamentoEntrada(models.Model):
 # 8. TB_LANCAMENTO_FINANCEIRO (Mantido)
 # =====================================================
 class LancamentoFinanceiro(models.Model):
+    # Mantivemos seus Choices originais para não quebrar o front
     class StatusFinanceiro(models.TextChoices):
         PENDENTE = 'PENDENTE', 'Pendente'
         PAGO = 'PAGO', 'Pago'
+        ATRASADO = 'ATRASADO', 'Atrasado' # Adicionei este pois usaremos na lógica
         CANCELADO = 'CANCELADO', 'Cancelado'
     
     class TipoLancamento(models.TextChoices):
         ENTRADA = 'ENTRADA', 'Entrada'
         SAIDA = 'SAIDA', 'Saída'
 
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, db_column='id_cliente')
+    # NOVO: Categorias para nossa inteligência financeira
+    class Categoria(models.TextChoices):
+        CONTRATO = 'CONTRATO', 'Mensalidade de Contrato'
+        VENDA = 'VENDA', 'Venda de Hardware'
+        SERVICO = 'SERVICO', 'Serviço Avulso'
+        CUSTO_TEC = 'CUSTO_TEC', 'Custo Operacional Técnico'
+        DESPESA = 'DESPESA', 'Despesa Administrativa'
+        COMPRA = 'COMPRA', 'Compra de Estoque'
+
+    # Relacionamentos
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, db_column='id_cliente', null=True, blank=True)
+    # NOVO: Vínculo com técnico para calcular custo de visita
+    tecnico = models.ForeignKey(Equipe, on_delete=models.SET_NULL, null=True, blank=True, related_name='custos_gerados')
+
+    # Dados Básicos
     descricao = models.CharField(max_length=150)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=StatusFinanceiro.choices)
+    
+    # Choices
+    status = models.CharField(max_length=20, choices=StatusFinanceiro.choices, default=StatusFinanceiro.PENDENTE)
     tipo_lancamento = models.CharField(max_length=20, choices=TipoLancamento.choices)
+    # NOVO: Categoria com valor padrão 'DESPESA' para não quebrar dados antigos
+    categoria = models.CharField(max_length=20, choices=Categoria.choices, default=Categoria.DESPESA)
+
+    # Datas
     data_vencimento = models.DateField()
+    # NOVO: Data do pagamento real
+    data_pagamento = models.DateField(null=True, blank=True)
+    
+    # Mantendo o nome original que o front usa
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        db_table = 'TB_LANCAMENTO_FINANCEIRO'
+        ordering = ['-data_vencimento']
+
+    def __str__(self):
+        return f"{self.descricao} - R$ {self.valor}"
+
+    # Propriedade útil para o Front/Back saber se está atrasado sem salvar no banco
+    @property
+    def is_atrasado(self):
+        return self.status == self.StatusFinanceiro.PENDENTE and self.data_vencimento < timezone.now().date()
     class Meta:
         db_table = 'TB_LANCAMENTO_FINANCEIRO'
 

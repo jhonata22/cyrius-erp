@@ -19,6 +19,13 @@ const financeiroService = {
   excluir: async (id) => {
     const response = await api.delete(`/financeiro/${id}/`);
     return response.data;
+  },
+
+  // --- NOVA FUNÇÃO ---
+  gerarFaturasMensais: async () => {
+    // Chama a view especial que criamos no Django
+    const response = await api.post('/financeiro/gerar-mensalidades/');
+    return response.data;
   }
 };
 

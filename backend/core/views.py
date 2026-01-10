@@ -1,5 +1,10 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
+from rest_framework.response import Response
+import datetime
+import calendar
+from django.utils import timezone
 from django.db import transaction # Importante para segurança ao salvar
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
@@ -109,10 +114,73 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 
 # --- 5. FINANCEIRO ---
 
-class FinanceiroViewSet(viewsets.ModelViewSet):
+class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     queryset = LancamentoFinanceiro.objects.all().order_by('-data_vencimento')
     serializer_class = LancamentoFinanceiroSerializer
     permission_classes = [IsGestor]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        tipo = self.request.query_params.get('tipo')
+        if tipo:
+            queryset = queryset.filter(tipo_lancamento=tipo)
+        return queryset
+
+    # AQUI ESTÁ A LÓGICA DE GERAR MENSALIDADES (Action)
+    @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
+    def gerar_mensalidades(self, request):
+        agora = timezone.now()
+        mes_atual = agora.month
+        ano_atual = agora.year
+        
+        clientes_ativos = Cliente.objects.filter(
+            ativo=True, 
+            tipo_cliente='CONTRATO', 
+            valor_contrato_mensal__gt=0
+        )
+        
+        gerados = 0
+        erros = []
+
+        for cliente in clientes_ativos:
+            ja_existe = LancamentoFinanceiro.objects.filter(
+                cliente=cliente,
+                categoria='CONTRATO',
+                data_vencimento__month=mes_atual,
+                data_vencimento__year=ano_atual
+            ).exists()
+
+            if not ja_existe:
+                try:
+                    try:
+                        dia_venc = cliente.dia_vencimento
+                        vencimento = datetime.date(ano_atual, mes_atual, dia_venc)
+                    except ValueError:
+                        import calendar
+                        ultimo_dia = calendar.monthrange(ano_atual, mes_atual)[1]
+                        vencimento = datetime.date(ano_atual, mes_atual, ultimo_dia)
+
+                    LancamentoFinanceiro.objects.create(
+                        descricao=f"Mensalidade Contrato - {mes_atual}/{ano_atual}",
+                        valor=cliente.valor_contrato_mensal,
+                        tipo_lancamento='ENTRADA',
+                        categoria='CONTRATO',
+                        status='PENDENTE',
+                        data_vencimento=vencimento,
+                        cliente=cliente
+                    )
+                    gerados += 1
+                except Exception as e:
+                    erros.append(f"Erro {cliente.razao_social}: {str(e)}")
+
+        return Response({
+            "mensagem": "Processamento concluído.",
+            "faturas_geradas": gerados,
+            "erros": erros
+        }, status=status.HTTP_200_OK)
+ 
+   
+    
 # =====================================================
 # 6. INVENTÁRIO
 # =====================================================
