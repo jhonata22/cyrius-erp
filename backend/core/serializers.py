@@ -94,9 +94,12 @@ class ChamadoTecnicoSerializer(serializers.ModelSerializer):
 # --- 5. FINANCEIRO ---
 
 class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
+    cliente_detalhes = ClienteSerializer(source='cliente', read_only=True)
+
     class Meta:
         model = LancamentoFinanceiro
         fields = '__all__'
+
 # =====================================================
 # INVENTÁRIO - NOVOS SERIALIZERS
 # =====================================================
@@ -118,8 +121,6 @@ class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
     nome_produto = serializers.CharField(source='produto.nome', read_only=True)
     nome_usuario = serializers.CharField(source='usuario.username', read_only=True)
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
-    nome_usuario = serializers.CharField(source='usuario.username', read_only=True)
-    
     class Meta:
         model = MovimentacaoEstoque
         fields = '__all__'
