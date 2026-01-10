@@ -2,6 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db.models import Sum, Q
+
 import datetime
 import calendar
 from django.utils import timezone
@@ -126,9 +128,37 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo_lancamento=tipo)
         return queryset
 
-    # AQUI ESTÁ A LÓGICA DE GERAR MENSALIDADES (Action)
+    # --- NOVA ACTION: ESTATÍSTICAS (KPIs) ---
+    @action(detail=False, methods=['get'], url_path='estatisticas')
+    def estatisticas(self, request):
+        hoje = timezone.now().date()
+        
+        # O banco de dados processa os valores filtrando por status PAGO para o saldo
+        # e PENDENTE + VENCIDO para a inadimplência
+        stats = LancamentoFinanceiro.objects.aggregate(
+            receita_real=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PAGO')),
+            despesa_real=Sum('valor', filter=Q(tipo_lancamento='SAIDA', status='PAGO')),
+            inadimplencia=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PENDENTE', data_vencimento__lt=hoje)),
+            vendas_hardware=Sum('valor', filter=Q(categoria='VENDA', status='PAGO')),
+            contratos_mes=Sum('valor', filter=Q(categoria='CONTRATO', status='PAGO'))
+        )
+
+        receita = stats['receita_real'] or 0
+        despesa = stats['despesa_real'] or 0
+        
+        return Response({
+            "receitaTotal": float(receita),
+            "despesaTotal": float(despesa),
+            "saldo": float(receita - despesa),
+            "inadimplencia": float(stats['inadimplencia'] or 0),
+            "vendasHardware": float(stats['vendas_hardware'] or 0),
+            "contratosAtivos": float(stats['contratos_mes'] or 0)
+        })
+
+    # --- LÓGICA DE GERAR MENSALIDADES (Mantida) ---
     @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
     def gerar_mensalidades(self, request):
+        # ... (seu código de gerar_mensalidades permanece igual aqui)
         agora = timezone.now()
         mes_atual = agora.month
         ano_atual = agora.year
@@ -177,8 +207,7 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             "mensagem": "Processamento concluído.",
             "faturas_geradas": gerados,
             "erros": erros
-        }, status=status.HTTP_200_OK)
- 
+        }, status=status.HTTP_200_OK) 
    
     
 # =====================================================
@@ -200,9 +229,19 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     serializer_class = MovimentacaoEstoqueSerializer
     permission_classes = [IsAuthenticated]
 
-class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
-    queryset = MovimentacaoEstoque.objects.all().order_by('-data_movimento')
-    serializer_class = MovimentacaoEstoqueSerializer
+    def perform_create(self, serializer):
+        cliente_id = self.request.data.get('cliente')
+        fornecedor_id = self.request.data.get('fornecedor')
+
+        extra_kwargs = {'usuario': self.request.user}
+
+        if not cliente_id or cliente_id in ["null", ""]:
+            extra_kwargs['cliente'] = None
+
+        if not fornecedor_id or fornecedor_id in ["null", ""]:
+            extra_kwargs['fornecedor'] = None
+
+        serializer.save(**extra_kwargs)
 
     def perform_create(self, serializer):
         # Pega os IDs enviados
