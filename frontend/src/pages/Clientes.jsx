@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+// REMOVIDO: import axios from 'axios';
 import { Plus, Search, MapPin, Calendar, FileText, Building2, User } from 'lucide-react';
+
+// IMPORTAÇÃO DO SERVIÇO
+import clienteService from '../services/clienteService';
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([]);
@@ -17,40 +20,53 @@ export default function Clientes() {
   const [valor, setValor] = useState('');
   const [diaVencimento, setDiaVencimento] = useState(5);
 
-  const carregarClientes = () => {
-    axios.get('http://localhost:8000/api/clientes/')
-      .then(res => setClientes(res.data))
-      .catch(err => console.error(err));
+  // --- REFATORADO: Função de Carregamento ---
+  const carregarClientes = async () => {
+    try {
+      const dados = await clienteService.listar();
+      setClientes(dados);
+    } catch (error) {
+      console.error("Erro ao carregar clientes:", error);
+    }
   };
 
   useEffect(() => {
     carregarClientes();
   }, []);
 
+  // --- REFATORADO: Função de Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/clientes/', {
+      const payload = {
         razao_social: razaoSocial,
-        cnpj: cpfCnpj.length > 11 ? cpfCnpj : null, // Lógica simples para diferenciar
+        cnpj: cpfCnpj.length > 11 ? cpfCnpj : null,
         cpf: cpfCnpj.length <= 11 ? cpfCnpj : null,
         endereco,
         tipo_cliente: tipo,
         valor_contrato_mensal: parseFloat(valor),
         dia_vencimento: parseInt(diaVencimento)
-      });
+      };
+
+      // Chamada limpa ao serviço
+      await clienteService.criar(payload);
+      
       alert("Cliente cadastrado!");
       setIsModalOpen(false);
       carregarClientes();
+      
       // Limpar form
-      setRazaoSocial(''); setCpfCnpj(''); setEndereco(''); setValor('');
+      setRazaoSocial(''); 
+      setCpfCnpj(''); 
+      setEndereco(''); 
+      setValor('');
     } catch (error) {
       console.error(error);
       alert("Erro ao salvar cliente.");
     }
   };
 
-  // Filtro de busca
+  // Filtro de busca (Mantido igual)
   const clientesFiltrados = clientes.filter(c => 
     c.razao_social.toLowerCase().includes(busca.toLowerCase())
   );
@@ -84,7 +100,7 @@ export default function Clientes() {
         {clientesFiltrados.map(cliente => (
           <div 
             key={cliente.id} 
-            onClick={() => navigate(`/documentacao/${cliente.id}`)} // <--- CLIQUE VAI PARA DOCUMENTAÇÃO
+            onClick={() => navigate(`/documentacao/${cliente.id}`)}
             className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
             {/* Faixa lateral colorida baseada no tipo */}

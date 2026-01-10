@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// REMOVIDO: import axios from 'axios';
 import { 
   Package, Plus, Search, Truck, ArrowUpCircle, ArrowDownCircle, 
   DollarSign, Edit, Trash2, X, User, Paperclip, FileText 
 } from 'lucide-react';
 
+// IMPORTAÇÃO DOS SERVIÇOS
+import estoqueService from '../services/estoqueService';
+import clienteService from '../services/clienteService';
+
 export default function Inventario() {
   const [activeTab, setActiveTab] = useState('PRODUTOS');
+  
+  // Estados de Dados
   const [produtos, setProdutos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
-  const [clientes, setClientes] = useState([]); // <--- NOVO: Lista de Clientes
+  const [clientes, setClientes] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -31,28 +37,30 @@ export default function Inventario() {
     quantidade: 1,
     preco_unitario: '',
     fornecedor_id: '',
-    cliente_id: '', // <--- NOVO
+    cliente_id: '', 
     numero_serial: '',
-    arquivo: null // <--- NOVO (Para o PDF)
+    arquivo: null
   });
 
   useEffect(() => {
     carregarDados();
   }, []);
 
+  // --- REFATORADO: Carregamento Centralizado ---
   const carregarDados = async () => {
     try {
-      // Agora buscamos CLIENTES também
-      const [resProd, resForn, resCli, resHist] = await Promise.all([
-        axios.get('http://localhost:8000/api/produtos/'),
-        axios.get('http://localhost:8000/api/fornecedores/'),
-        axios.get('http://localhost:8000/api/clientes/'),
-        axios.get('http://localhost:8000/api/estoque/')
+      // Busca paralela usando os serviços
+      const [listaProdutos, listaFornecedores, listaClientes, listaHistorico] = await Promise.all([
+        estoqueService.listarProdutos(),
+        estoqueService.listarFornecedores(),
+        clienteService.listar(),
+        estoqueService.listarHistorico()
       ]);
-      setProdutos(resProd.data);
-      setFornecedores(resForn.data);
-      setClientes(resCli.data);
-      setHistorico(resHist.data);
+
+      setProdutos(listaProdutos);
+      setFornecedores(listaFornecedores);
+      setClientes(listaClientes);
+      setHistorico(listaHistorico);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
     } finally {
@@ -64,8 +72,7 @@ export default function Inventario() {
   const produtosFiltrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
   const fornecedoresFiltrados = fornecedores.filter(f => f.razao_social.toLowerCase().includes(busca.toLowerCase()));
 
-  // --- AÇÕES ---
-
+  // --- AÇÕES DE PRODUTO ---
   const abrirModalNovoProduto = () => {
       setProdutoEmEdicao(null);
       setNovoProduto({ nome: '', categoria: 'HARDWARE', estoque_minimo: 2, preco_venda_sugerido: '' });
@@ -87,10 +94,10 @@ export default function Inventario() {
     e.preventDefault();
     try {
       if (produtoEmEdicao) {
-          await axios.put(`http://localhost:8000/api/produtos/${produtoEmEdicao}/`, novoProduto);
+          await estoqueService.atualizarProduto(produtoEmEdicao, novoProduto);
           alert("Produto atualizado!");
       } else {
-          await axios.post('http://localhost:8000/api/produtos/', novoProduto);
+          await estoqueService.criarProduto(novoProduto);
           alert("Produto criado!");
       }
       setModalProduto(false);
@@ -102,23 +109,24 @@ export default function Inventario() {
   const handleExcluirProduto = async (id, nome) => {
       if (window.confirm(`Excluir "${nome}"?`)) {
           try {
-              await axios.delete(`http://localhost:8000/api/produtos/${id}/`);
+              await estoqueService.excluirProduto(id);
               carregarDados();
           } catch (error) { alert("Erro ao excluir."); }
       }
   };
 
+  // --- AÇÕES DE FORNECEDOR ---
   const handleSalvarFornecedor = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/fornecedores/', novoFornecedor);
+      await estoqueService.criarFornecedor(novoFornecedor);
       setModalFornecedor(false);
       setNovoFornecedor({ razao_social: '', telefone: '' });
       carregarDados();
     } catch (error) { alert("Erro ao salvar fornecedor."); }
   };
 
-  // --- NOVA LÓGICA DE MOVIMENTAÇÃO (COM ARQUIVO E CLIENTE) ---
+  // --- AÇÕES DE MOVIMENTAÇÃO (REFATORADO) ---
   const handleSalvarMovimento = async (e) => {
     e.preventDefault();
     
@@ -130,12 +138,12 @@ export default function Inventario() {
        }
     }
 
-    // PREPARAÇÃO PARA ENVIO DE ARQUIVO (FormData)
+    // Montagem do FormData (UI Layer logic)
     const formData = new FormData();
     formData.append('produto', movimento.produto_id);
     formData.append('tipo_movimento', movimento.tipo);
     formData.append('quantidade', movimento.quantidade);
-    formData.append('preco_unitario', movimento.preco_unitario || 0); // Evita erro se vazio
+    formData.append('preco_unitario', movimento.preco_unitario || 0);
     formData.append('numero_serial', movimento.numero_serial);
 
     if (movimento.tipo === 'ENTRADA' && movimento.fornecedor_id) {
@@ -144,18 +152,16 @@ export default function Inventario() {
     if (movimento.tipo === 'SAIDA' && movimento.cliente_id) {
         formData.append('cliente', movimento.cliente_id);
     }
-    // Só anexa se o usuário selecionou um arquivo
     if (movimento.arquivo) {
         formData.append('arquivo', movimento.arquivo);
     }
 
     try {
-      // Importante: Não precisamos definir headers manuais, o axios + FormData lida com isso
-      await axios.post('http://localhost:8000/api/estoque/', formData);
+      // Chamada limpa ao serviço
+      await estoqueService.registrarMovimento(formData);
       
       alert("Movimentação registrada com sucesso!");
       setModalMovimento(false);
-      // Reseta o form
       setMovimento({ 
           tipo: 'ENTRADA', produto_id: '', quantidade: 1, 
           preco_unitario: '', fornecedor_id: '', cliente_id: '', 
@@ -243,7 +249,7 @@ export default function Inventario() {
         </>
       )}
 
-      {/* --- ABA 2: HISTÓRICO (Com Clientes e Download) --- */}
+      {/* --- ABA 2: HISTÓRICO --- */}
       {activeTab === 'HISTORICO' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
              <div className="overflow-x-auto">
@@ -271,7 +277,6 @@ export default function Inventario() {
                               </td>
                               <td className="p-4 font-bold text-gray-800">{hist.nome_produto}</td>
                               <td className="p-4 text-xs">
-                                  {/* Mostra Fornecedor na Entrada e Cliente na Saída */}
                                   {hist.tipo_movimento === 'ENTRADA' ? (
                                       <span className="flex items-center gap-1 text-gray-500"><Truck size={12}/> {hist.nome_fornecedor || '-'}</span>
                                   ) : (
@@ -296,23 +301,23 @@ export default function Inventario() {
 
       {/* --- ABA 3: FORNECEDORES --- */}
       {activeTab === 'FORNECEDORES' && (
-           <>
-           <div className="flex justify-end mb-4">
+            <>
+            <div className="flex justify-end mb-4">
                 <button onClick={() => setModalFornecedor(true)} className="text-primary-dark text-sm font-bold hover:underline flex items-center gap-1">
                     <Plus size={16} /> Novo Fornecedor
                 </button>
             </div>
-           <div className="grid gap-3 md:grid-cols-2">
-               {fornecedoresFiltrados.map(forn => (
-                   <div key={forn.id} className="bg-white p-5 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
-                       <div>
-                           <h3 className="font-bold text-gray-800">{forn.razao_social}</h3>
-                           <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Truck size={14} className="text-primary-light"/> {forn.telefone || 'Sem contato'}</p>
-                       </div>
-                   </div>
-               ))}
-           </div>
-           </>
+            <div className="grid gap-3 md:grid-cols-2">
+                {fornecedoresFiltrados.map(forn => (
+                    <div key={forn.id} className="bg-white p-5 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                        <div>
+                            <h3 className="font-bold text-gray-800">{forn.razao_social}</h3>
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Truck size={14} className="text-primary-light"/> {forn.telefone || 'Sem contato'}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            </>
       )}
 
       {/* --- MODAL PRODUTO --- */}
@@ -353,7 +358,7 @@ export default function Inventario() {
         </div>
       )}
 
-      {/* --- MODAL MOVIMENTAÇÃO (ATUALIZADO COM CLIENTE E ARQUIVO) --- */}
+      {/* --- MODAL MOVIMENTAÇÃO --- */}
       {modalMovimento && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
@@ -392,7 +397,6 @@ export default function Inventario() {
                         </div>
                     </div>
 
-                    {/* SE FOR ENTRADA -> MOSTRA FORNECEDOR */}
                     {movimento.tipo === 'ENTRADA' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
@@ -404,7 +408,6 @@ export default function Inventario() {
                         </div>
                     )}
 
-                    {/* SE FOR SAIDA -> MOSTRA CLIENTE */}
                     {movimento.tipo === 'SAIDA' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Destino (Cliente)</label>
@@ -416,7 +419,6 @@ export default function Inventario() {
                         </div>
                     )}
 
-                    {/* CAMPO DE ARQUIVO (PDF/IMAGEM) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                             <FileText size={14}/> Anexar Documento (PDF/Foto)

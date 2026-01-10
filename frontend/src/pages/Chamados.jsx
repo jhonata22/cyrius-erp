@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+// REMOVIDO: import axios from 'axios';
 import { 
-  Plus, Search, Clock, AlertCircle, Briefcase, 
-  User, Building2, Phone, Calendar, MapPin, Truck 
+  Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck 
 } from 'lucide-react';
+
+// IMPORTAÇÃO DOS SERVIÇOS
+import chamadoService from '../services/chamadoService';
+import equipeService from '../services/equipeService';
+import clienteService from '../services/clienteService';
 
 export default function Chamados() {
   const [chamados, setChamados] = useState([]);
@@ -29,19 +33,21 @@ export default function Chamados() {
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); // Array de IDs
 
-  // 1. Carregar Tudo
+  // --- REFATORADO: Carregamento com Serviços ---
   const carregarDados = async () => {
     try {
-      const [resChamados, resEquipe, resClientes] = await Promise.all([
-        axios.get('http://localhost:8000/api/chamados/'),
-        axios.get('http://localhost:8000/api/equipe/'),
-        axios.get('http://localhost:8000/api/clientes/')
+      // Promise.all continua sendo usado para performance
+      const [dadosChamados, dadosEquipe, dadosClientes] = await Promise.all([
+        chamadoService.listar(),
+        equipeService.listar(),
+        clienteService.listar()
       ]);
-      setChamados(resChamados.data);
-      setEquipe(resEquipe.data);
-      setClientes(resClientes.data);
+      
+      setChamados(dadosChamados);
+      setEquipe(dadosEquipe);
+      setClientes(dadosClientes);
     } catch (error) {
-      console.error("Erro ao carregar:", error);
+      console.error("Erro ao carregar dados:", error);
     } finally {
       setLoading(false);
     }
@@ -73,6 +79,7 @@ export default function Chamados() {
     });
   };
 
+  // --- REFATORADO: Submit com Serviço ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -81,7 +88,6 @@ export default function Chamados() {
       return;
     }
 
-    // Lógica para definir Status e Tipo baseado no Modo
     const isVisita = modalMode === 'VISITA';
 
     const payload = {
@@ -89,18 +95,17 @@ export default function Chamados() {
       titulo,
       descricao_detalhada: descricao,
       origem: origem,
-      
-      // Se for visita, Status é AGENDADO e Tipo é VISITA. Senão, ABERTO e REMOTO.
       status: isVisita ? 'AGENDADO' : 'ABERTO',
       tipo_atendimento: isVisita ? 'VISITA' : 'REMOTO',
       data_agendamento: isVisita ? dataAgendamento : null,
-      
       prioridade,
       tecnicos: tecnicosSelecionados 
     };
 
     try {
-      await axios.post('http://localhost:8000/api/chamados/', payload);
+      // Chamada limpa ao serviço
+      await chamadoService.criar(payload);
+      
       alert(isVisita ? "Visita agendada com sucesso!" : "Chamado aberto com sucesso!");
       setIsModalOpen(false);
       carregarDados();
@@ -110,6 +115,7 @@ export default function Chamados() {
     }
   };
 
+  // Funções Auxiliares de UI (Mantidas)
   const getPriorityColor = (p) => {
     const map = { 'BAIXA': 'bg-blue-100 text-blue-700', 'MEDIA': 'bg-yellow-100 text-yellow-700', 'ALTA': 'bg-orange-100 text-orange-700', 'CRITICA': 'bg-red-100 text-red-700' };
     return map[p] || 'bg-gray-100';
@@ -121,7 +127,7 @@ export default function Chamados() {
         'EM_ANDAMENTO': 'bg-blue-100 text-blue-700', 
         'FINALIZADO': 'bg-gray-100 text-gray-600', 
         'CANCELADO': 'bg-red-100 text-red-700',
-        'AGENDADO': 'bg-purple-100 text-purple-700' // Cor nova para Agendado
+        'AGENDADO': 'bg-purple-100 text-purple-700'
     };
     return map[s] || 'bg-gray-100';
   };
@@ -135,11 +141,9 @@ export default function Chamados() {
           <p className="text-gray-500 text-sm mt-1">Gerencie chamados remotos e visitas técnicas.</p>
         </div>
         <div className="flex gap-3">
-           {/* BOTÃO VISITA TÉCNICA */}
           <button onClick={() => abrirModal('VISITA')} className="bg-white border border-primary-dark text-primary-dark hover:bg-gray-50 px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-all">
             <Calendar size={18} /> Agendar Visita
           </button>
-          {/* BOTÃO CHAMADO PADRÃO */}
           <button onClick={() => abrirModal('PADRAO')} className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg transition-all">
             <Plus size={18} /> Novo Chamado
           </button>
@@ -162,7 +166,6 @@ export default function Chamados() {
             >
               
               <div className="flex gap-4 items-start">
-                {/* Ícone muda se for Visita ou Remoto */}
                 <div className={`p-3 rounded-full mt-1 ${ticket.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                   {ticket.tipo_atendimento === 'VISITA' ? <Truck size={24} /> : <Briefcase size={24} />}
                 </div>
@@ -196,7 +199,6 @@ export default function Chamados() {
                       {ticket.status.replace('_', ' ')}
                     </span>
                     
-                    {/* Se for visita agendada, mostra a data do agendamento */}
                     {ticket.tipo_atendimento === 'VISITA' && ticket.data_agendamento ? (
                         <p className="text-xs text-purple-600 mt-1 flex items-center justify-end gap-1 font-bold">
                            <Calendar size={12} /> {new Date(ticket.data_agendamento).toLocaleString('pt-BR')}
@@ -213,7 +215,7 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL UNIFICADO (VISITA E CHAMADO) */}
+      {/* MODAL UNIFICADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -226,7 +228,7 @@ export default function Chamados() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               
-              {/* CAMPO ESPECÍFICO DE VISITA: DATA E HORA */}
+              {/* CAMPO ESPECÍFICO DE VISITA */}
               {modalMode === 'VISITA' && (
                   <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
                       <label className="block text-sm font-bold text-purple-900 mb-1">Data e Hora da Visita</label>
@@ -303,7 +305,7 @@ export default function Chamados() {
                 </div>
               </div>
 
-              {/* SELEÇÃO DE TÉCNICOS (MÚLTIPLOS) */}
+              {/* SELEÇÃO DE TÉCNICOS */}
               <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Técnicos Designados ({tecnicosSelecionados.length})</label>
                   <div className="border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">

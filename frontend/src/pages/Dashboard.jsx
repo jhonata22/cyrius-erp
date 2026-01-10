@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, Calendar, Building2 } from 'lucide-react';
+// REMOVIDO: import axios from 'axios';
+import { Ticket, CheckCircle, Clock, AlertCircle, Calendar, Building2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+// IMPORTAÇÃO DO SERVIÇO
+import chamadoService from '../services/chamadoService';
+
 export default function Dashboard() {
-  // Estado para as estatísticas gerais
   const [estatisticas, setEstatisticas] = useState({
     total: 0,
     abertos: 0,
@@ -12,7 +14,6 @@ export default function Dashboard() {
     finalizados: 0
   });
 
-  // Estado para o Resumo do Dia (Novo!)
   const [resumoHoje, setResumoHoje] = useState({
     quantidade: 0,
     empresas: []
@@ -21,10 +22,9 @@ export default function Dashboard() {
   const [dadosGrafico, setDadosGrafico] = useState([]);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/api/chamados/')
-      .then(response => {
-        const chamados = response.data;
-        
+    // REFATORADO: Usando o serviço centralizado
+    chamadoService.listar()
+      .then(chamados => {
         // 1. Cálculos Gerais
         const total = chamados.length;
         const abertos = chamados.filter(c => c.status === 'ABERTO').length;
@@ -34,12 +34,8 @@ export default function Dashboard() {
         setEstatisticas({ total, abertos, emAndamento, finalizados });
 
         // 2. Cálculos do Dia (HOJE)
-        const dataHoje = new Date().toISOString().split('T')[0]; // Pega data formato YYYY-MM-DD
-        
-        // Filtra chamados que começam com a data de hoje
+        const dataHoje = new Date().toISOString().split('T')[0];
         const chamadosDoDia = chamados.filter(c => c.data_abertura && c.data_abertura.startsWith(dataHoje));
-        
-        // Extrai nomes das empresas sem repetir (Set)
         const empresasUnicas = [...new Set(chamadosDoDia.map(c => c.nome_cliente))];
 
         setResumoHoje({
@@ -57,7 +53,7 @@ export default function Dashboard() {
       .catch(error => console.error("Erro ao carregar dashboard:", error));
   }, []);
 
-  // Componente visual do Card
+  // Componente interno StatCard (Mantido)
   const StatCard = ({ title, value, icon: Icon, colorClass, bgClass }) => (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition-shadow">
       <div>
@@ -77,7 +73,6 @@ export default function Dashboard() {
         <p className="text-gray-500 text-sm mt-1">Acompanhe as métricas do suporte em tempo real.</p>
       </div>
 
-      {/* --- CARDS DE RESUMO --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard title="Total Geral" value={estatisticas.total} icon={Ticket} colorClass="text-purple-600" bgClass="bg-purple-50" />
         <StatCard title="Em Aberto" value={estatisticas.abertos} icon={AlertCircle} colorClass="text-orange-500" bgClass="bg-orange-50" />
@@ -85,10 +80,8 @@ export default function Dashboard() {
         <StatCard title="Finalizados" value={estatisticas.finalizados} icon={CheckCircle} colorClass="text-green-500" bgClass="bg-green-50" />
       </div>
 
-      {/* --- ÁREA PRINCIPAL --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* GRÁFICO (Ocupa 2 espaços) */}
+        {/* GRÁFICO */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-800 mb-6">Volume por Status</h3>
           <div className="h-80">
@@ -108,9 +101,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* CARD DO DIA (Ocupa 1 espaço - Lateral Direita) */}
+        {/* CARD DO DIA */}
         <div className="bg-gradient-to-br from-primary-dark to-[#1a1b4b] rounded-xl p-6 text-white flex flex-col shadow-xl relative overflow-hidden">
-            {/* Decoração de fundo */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-5 rounded-full blur-3xl -mr-10 -mt-10"></div>
             
             <div className="relative z-10">
@@ -144,7 +136,6 @@ export default function Dashboard() {
               </div>
             </div>
         </div>
-
       </div>
     </div>
   );

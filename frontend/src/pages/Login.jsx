@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+// REMOVIDO: import axios from 'axios';
 import { Lock, User, ArrowRight } from 'lucide-react';
+
+// IMPORTAÇÃO DO SERVIÇO
+import authService from '../services/authService';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -17,20 +20,18 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // 1. Pede o token ao Backend
-      const response = await axios.post('http://localhost:8000/api/token/', {
+      // 1. Chama o serviço de autenticação
+      const data = await authService.login({
         username,
         password
       });
 
       // 2. Salva o token no navegador
-      const token = response.data.access;
+      // O interceptor do api.js lerá isso automaticamente nas próximas chamadas
+      const token = data.access;
       localStorage.setItem('token', token);
       
-      // 3. Configura o axios globalmente
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      // 4. Entra no sistema
+      // 3. Entra no sistema
       navigate('/');
       
     } catch (err) {
@@ -47,7 +48,7 @@ export default function Login() {
       {/* LADO ESQUERDO (IMAGEM) */}
       <div className="hidden lg:flex w-1/2 bg-primary-dark items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-primary-dark/90 z-10"></div>
-        {/* Imagem de Fundo (Escritório) */}
+        {/* Imagem de Fundo */}
         <img 
           src="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop" 
           alt="Office" 

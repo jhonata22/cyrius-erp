@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// REMOVIDO: import axios from 'axios';
 import { Plus, User, Briefcase, DollarSign, Trash2, Shield } from 'lucide-react';
+
+// IMPORTAÇÃO DO SERVIÇO
+import equipeService from '../services/equipeService';
 
 export default function Equipe() {
   const [funcionarios, setFuncionarios] = useState([]);
@@ -11,19 +14,22 @@ export default function Equipe() {
   const [cargo, setCargo] = useState('TECNICO'); // Valor padrão
   const [custoHora, setCustoHora] = useState('');
 
-  // Carregar dados da API
-  const carregarEquipe = () => {
-    axios.get('http://localhost:8000/api/equipe/')
-      .then(response => setFuncionarios(response.data))
-      .catch(error => console.error("Erro ao carregar equipe:", error));
+  // REFATORADO: Carregar dados via Serviço
+  const carregarEquipe = async () => {
+    try {
+      const data = await equipeService.listar();
+      setFuncionarios(data);
+    } catch (error) {
+      console.error("Erro ao carregar equipe:", error);
+    }
   };
 
   useEffect(() => {
     carregarEquipe();
   }, []);
 
-  // Salvar Novo Funcionário
-  const handleSubmit = (e) => {
+  // REFATORADO: Salvar via Serviço
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     const dados = {
@@ -32,26 +38,33 @@ export default function Equipe() {
       custo_hora: parseFloat(custoHora)
     };
 
-    axios.post('http://localhost:8000/api/equipe/', dados)
-      .then(() => {
-        setIsModalOpen(false);
-        carregarEquipe();
-        setNome('');
-        setCustoHora('');
-        alert("Funcionário cadastrado com sucesso!");
-      })
-      .catch(error => {
-        console.error(error);
-        alert("Erro ao salvar. Verifique o console.");
-      });
+    try {
+      await equipeService.criar(dados);
+      
+      setIsModalOpen(false);
+      carregarEquipe();
+      
+      // Limpar form
+      setNome('');
+      setCustoHora('');
+      
+      alert("Funcionário cadastrado com sucesso!");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao salvar. Verifique se o usuário tem permissão de Gestor.");
+    }
   };
 
-  // Excluir
-  const excluirFuncionario = (id) => {
-    if (confirm("Tem certeza que deseja remover este funcionário?")) {
-      axios.delete(`http://localhost:8000/api/equipe/${id}/`)
-        .then(() => carregarEquipe())
-        .catch(error => alert("Erro ao excluir."));
+  // REFATORADO: Excluir via Serviço
+  const excluirFuncionario = async (id) => {
+    if (window.confirm("Tem certeza que deseja remover este funcionário?")) {
+      try {
+        await equipeService.excluir(id);
+        carregarEquipe();
+      } catch (error) {
+        console.error(error);
+        alert("Erro ao excluir. Verifique permissões.");
+      }
     }
   };
 
@@ -71,12 +84,12 @@ export default function Equipe() {
         </button>
       </div>
 
-      {/* GRID DE CARDS (Visual mais moderno que tabela para pessoas) */}
+      {/* GRID DE CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {funcionarios.map(func => (
           <div key={func.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative group">
             
-            {/* Botão de Excluir (Aparece ao passar o mouse) */}
+            {/* Botão de Excluir */}
             <button 
               onClick={() => excluirFuncionario(func.id)}
               className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"

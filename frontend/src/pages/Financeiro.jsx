@@ -1,35 +1,55 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, AlertTriangle, Building2 } from 'lucide-react';
+
+// IMPORTAÇÃO DOS SERVIÇOS
+import financeiroService from '../services/financeiroService';
+import clienteService from '../services/clienteService';
 
 export default function Financeiro() {
   const [lancamentos, setLancamentos] = useState([]);
+  const [clientes, setClientes] = useState([]); // Lista para o select
   const [resumo, setResumo] = useState({ entradas: 0, saidas: 0, saldo: 0 });
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [acessoNegado, setAcessoNegado] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Estados do Formulário
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
-  const [tipo, setTipo] = useState('ENTRADA'); // ENTRADA ou SAIDA
+  const [tipo, setTipo] = useState('ENTRADA');
   const [dataVencimento, setDataVencimento] = useState('');
-  const [clienteId, setClienteId] = useState(1); // Fixo por enquanto (Cliente Padrão)
+  const [clienteId, setClienteId] = useState('');
 
-  const carregarFinanceiro = () => {
-    axios.get('http://localhost:8000/api/financeiro/')
-      .then(response => {
-        const dados = response.data;
-        setLancamentos(dados);
-        calcularResumo(dados);
-        setAcessoNegado(false);
-      })
-      .catch(error => {
-        console.error("Erro:", error);
-        // Se for erro 403, significa que o usuário não tem permissão (é Técnico)
-        if (error.response && error.response.status === 403) {
-          setAcessoNegado(true);
-        }
-      });
+  // 1. Carregar Dados Iniciais
+  useEffect(() => {
+    carregarTudo();
+  }, []);
+
+  const carregarTudo = async () => {
+    try {
+      setLoading(true);
+      
+      // Busca lançamentos e clientes simultaneamente
+      const [dadosFinanceiros, dadosClientes] = await Promise.all([
+        financeiroService.listar(),
+        clienteService.listar()
+      ]);
+
+      setLancamentos(dadosFinanceiros);
+      setClientes(dadosClientes);
+      calcularResumo(dadosFinanceiros);
+      setAcessoNegado(false);
+
+    } catch (error) {
+      console.error("Erro ao carregar:", error);
+      // Se for erro 403 (Proibido), ativa a tela de bloqueio
+      if (error.response && error.response.status === 403) {
+        setAcessoNegado(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const calcularResumo = (dados) => {
@@ -43,29 +63,37 @@ export default function Financeiro() {
     setResumo({ entradas: ent, saidas: sai, saldo: ent - sai });
   };
 
-  useEffect(() => {
-    carregarFinanceiro();
-  }, []);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!clienteId) {
+      alert("Por favor, selecione um cliente.");
+      return;
+    }
+
     const dados = {
       descricao,
       valor: parseFloat(valor),
       tipo_lancamento: tipo,
-      status: 'PENDENTE', // Padrão
+      status: 'PENDENTE',
       data_vencimento: dataVencimento,
       cliente: clienteId
     };
 
-    axios.post('http://localhost:8000/api/financeiro/', dados)
-      .then(() => {
-        setIsModalOpen(false);
-        carregarFinanceiro();
-        setDescricao('');
-        setValor('');
-      })
-      .catch(err => alert("Erro ao salvar. Verifique se você é Gestor."));
+    try {
+      await financeiroService.criar(dados);
+      
+      // Limpar form e recarregar
+      setIsModalOpen(false);
+      setDescricao('');
+      setValor('');
+      setClienteId('');
+      carregarTudo();
+      
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao salvar. Verifique se você é Gestor.");
+    }
   };
 
   // --- TELA DE BLOQUEIO (Se for Técnico) ---
@@ -83,6 +111,8 @@ export default function Financeiro() {
       </div>
     );
   }
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Carregando financeiro...</div>;
 
   return (
     <div>
@@ -155,8 +185,17 @@ export default function Financeiro() {
           <tbody className="divide-y divide-gray-100">
             {lancamentos.map(lanc => (
               <tr key={lanc.id} className="hover:bg-gray-50">
-                <td className="p-4 font-medium text-gray-800">{lanc.descricao}</td>
-                <td className="p-4 text-gray-500 text-sm">{lanc.data_vencimento}</td>
+                <td className="p-4">
+                    <div className="font-medium text-gray-800">{lanc.descricao}</div>
+                    {lanc.nome_cliente && (
+                        <div className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                            <Building2 size={10}/> {lanc.nome_cliente}
+                        </div>
+                    )}
+                </td>
+                <td className="p-4 text-gray-500 text-sm">
+                    {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR')}
+                </td>
                 <td className="p-4">
                   <span className={`text-xs font-bold px-2 py-1 rounded-full 
                     ${lanc.tipo_lancamento === 'ENTRADA' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -191,6 +230,22 @@ export default function Financeiro() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50"
                   placeholder="Ex: Pagamento Internet"
                 />
+              </div>
+
+              {/* SELECT DE CLIENTES */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Vinculado</label>
+                <select 
+                    required 
+                    value={clienteId} 
+                    onChange={e => setClienteId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50 bg-white"
+                >
+                    <option value="">Selecione...</option>
+                    {clientes.map(cli => (
+                        <option key={cli.id} value={cli.id}>{cli.razao_social}</option>
+                    ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

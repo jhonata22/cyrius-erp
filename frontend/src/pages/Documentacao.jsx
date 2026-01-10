@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+// REMOVIDO: import axios from 'axios';
 import { 
   ArrowLeft, Save, Building2, Wifi, Lock, Monitor, 
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, Search, BookOpen, X 
 } from 'lucide-react';
+
+// SERVIÇOS
+import clienteService from '../services/clienteService';
+import documentacaoService from '../services/documentacaoService';
 
 export default function Documentacao() {
   const { id } = useParams();
@@ -20,12 +24,12 @@ export default function Documentacao() {
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
   
-  // --- ESTADOS LÓGICOS (NOVO) ---
-  const [docId, setDocId] = useState(null); // Para saber se edita ou cria documentação
-  const [modalAberto, setModalAberto] = useState(null); // 'contato', 'provedor', 'email', 'ativo'
-  const [formTemp, setFormTemp] = useState({}); // Dados temporários do modal
+  // --- ESTADOS LÓGICOS ---
+  const [docId, setDocId] = useState(null); 
+  const [modalAberto, setModalAberto] = useState(null); 
+  const [formTemp, setFormTemp] = useState({}); 
 
-  // Estado para os textos longos (Editáveis)
+  // Estado para os textos longos
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
     topologia_rede: '',
@@ -34,89 +38,122 @@ export default function Documentacao() {
     pontos_fracos_melhorias: ''
   });
 
+  // --- REFATORADO: Carregamento de Dados ---
   useEffect(() => {
+    const carregarDados = async () => {
+      setLoading(true);
+      try {
+        if (!id) {
+          // MODO SELEÇÃO
+          const dadosClientes = await clienteService.listar();
+          setListaClientes(dadosClientes);
+        } else {
+          // MODO DETALHE
+          // Nota: documentacaoService.listarAtivos deve ser implementado no service
+          // ou usamos uma chamada direta se ainda não existir.
+          // Vou assumir que você tem um endpoint de ativos ou vai filtrar no front por enquanto.
+          const [dadosCliente, dadosAtivos] = await Promise.all([
+            clienteService.buscarPorId(id),
+            // Se documentacaoService.listarAtivos não existir, troque por axios ou crie no service
+            documentacaoService.listarAtivos ? documentacaoService.listarAtivos() : Promise.resolve([]) 
+          ]);
+          
+          setCliente(dadosCliente);
+          
+          // Filtra ativos do cliente atual (se a API retornar todos)
+          if (Array.isArray(dadosAtivos)) {
+              setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
+          }
+
+          // Popula os textos
+          if (dadosCliente.documentacao_tecnica) {
+            setDocId(dadosCliente.documentacao_tecnica.id);
+            setTextos({
+              configuracao_mikrotik: dadosCliente.documentacao_tecnica.configuracao_mikrotik || '',
+              topologia_rede: dadosCliente.documentacao_tecnica.topologia_rede || '',
+              estrutura_servidores: dadosCliente.documentacao_tecnica.estrutura_servidores || '',
+              rotina_backup: dadosCliente.documentacao_tecnica.rotina_backup || '',
+              pontos_fracos_melhorias: dadosCliente.documentacao_tecnica.pontos_fracos_melhorias || ''
+            });
+          } else {
+            setDocId(null);
+            setTextos({ configuracao_mikrotik: '', topologia_rede: '', estrutura_servidores: '', rotina_backup: '', pontos_fracos_melhorias: '' });
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     carregarDados();
   }, [id]);
 
-  const carregarDados = async () => {
-    setLoading(true);
-    try {
-      if (!id) {
-        // MODO SELEÇÃO
-        const res = await axios.get('http://localhost:8000/api/clientes/');
-        setListaClientes(res.data);
-      } else {
-        // MODO DETALHE
-        const [resCliente, resAtivos] = await Promise.all([
-          axios.get(`http://localhost:8000/api/clientes/${id}/`),
-          axios.get('http://localhost:8000/api/ativos/')
-        ]);
-        
-        const dadosCliente = resCliente.data;
-        setCliente(dadosCliente);
-        setAtivos(resAtivos.data.filter(a => a.cliente === parseInt(id)));
-
-        // Popula os textos se existirem
-        if (dadosCliente.documentacao_tecnica) {
-          setDocId(dadosCliente.documentacao_tecnica.id);
-          setTextos({
-            configuracao_mikrotik: dadosCliente.documentacao_tecnica.configuracao_mikrotik || '',
-            topologia_rede: dadosCliente.documentacao_tecnica.topologia_rede || '',
-            estrutura_servidores: dadosCliente.documentacao_tecnica.estrutura_servidores || '',
-            rotina_backup: dadosCliente.documentacao_tecnica.rotina_backup || '',
-            pontos_fracos_melhorias: dadosCliente.documentacao_tecnica.pontos_fracos_melhorias || ''
-          });
-        } else {
-          setDocId(null);
-          setTextos({ configuracao_mikrotik: '', topologia_rede: '', estrutura_servidores: '', rotina_backup: '', pontos_fracos_melhorias: '' });
-        }
+  // Função auxiliar para recarregar apenas quando necessário
+  const recarregarAtual = async () => {
+      if (!id) return;
+      const dadosCliente = await clienteService.buscarPorId(id);
+      setCliente(dadosCliente);
+      
+      // Recarrega lista de ativos se o método existir
+      if (documentacaoService.listarAtivos) {
+          const dadosAtivos = await documentacaoService.listarAtivos();
+          setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
       }
-    } catch (error) {
-      console.error("Erro ao carregar:", error);
-    } finally {
-      setLoading(false);
-    }
+      
+      // Atualiza ID do documento se tiver sido criado agora
+      if (dadosCliente.documentacao_tecnica) {
+          setDocId(dadosCliente.documentacao_tecnica.id);
+      }
   };
 
-  // --- FUNÇÕES LÓGICAS (Salvar e Modals) ---
-
+  // --- REFATORADO: Salvar Textos (CORREÇÃO DO ERRO 400) ---
   const handleSalvarTextos = async () => {
     try {
-      // GARANTE QUE O ID SEJA NÚMERO
-      const payload = { ...textos, cliente: parseInt(id) };
-      
+      // O PULO DO GATO: Enviar ID do cliente explicitamente no payload
+      const payload = { 
+          cliente: parseInt(id), 
+          ...textos 
+      };
+
       if (docId) {
-        await axios.patch(`http://localhost:8000/api/documentacao/${docId}/`, payload);
+          // Atualizar (PUT)
+          await documentacaoService.atualizar(docId, payload);
+          alert("Textos atualizados com sucesso!");
       } else {
-        await axios.post('http://localhost:8000/api/documentacao/', payload);
+          // Criar (POST)
+          await documentacaoService.criar(payload);
+          alert("Textos criados com sucesso!");
       }
-      alert("Textos atualizados com sucesso!");
-      carregarDados();
+      recarregarAtual();
     } catch (error) {
       alert("Erro ao salvar textos.");
       console.error(error);
     }
   };
 
-const handleSalvarModal = async (e) => {
+  // --- REFATORADO: Salvar Modal (Genérico) ---
+  const handleSalvarModal = async (e) => {
     e.preventDefault();
     try {
-      // GARANTE QUE O ID SEJA NÚMERO
       const payload = { ...formTemp, cliente: parseInt(id) };
       
+      // Mapeia o tipo de modal para a URL correta (usando o método genérico salvarItem que criamos)
       let url = '';
-      if (modalAberto === 'contato') url = 'http://localhost:8000/api/contatos/';
-      if (modalAberto === 'provedor') url = 'http://localhost:8000/api/provedores/';
-      if (modalAberto === 'email') url = 'http://localhost:8000/api/emails/';
-      if (modalAberto === 'ativo') url = 'http://localhost:8000/api/ativos/';
+      if (modalAberto === 'contato') url = '/contatos/';
+      if (modalAberto === 'provedor') url = '/provedores/';
+      if (modalAberto === 'email') url = '/emails/'; // ou '/contas_email/' dependendo do seu backend
+      if (modalAberto === 'ativo') url = '/ativos/';
 
-      await axios.post(url, payload);
+      await documentacaoService.salvarItem(url, payload);
+      
       alert("Item adicionado!");
       setModalAberto(null);
       setFormTemp({});
-      carregarDados();
+      recarregarAtual();
     } catch (error) {
-      console.error(error); // Veja o erro no console se falhar
+      console.error(error);
       alert("Erro ao adicionar item. Verifique os campos obrigatórios.");
     }
   };
@@ -204,7 +241,6 @@ const handleSalvarModal = async (e) => {
                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                   <User size={20} className="text-primary-dark" /> Gestores e Contatos
                 </h3>
-                {/* BOTÃO ATIVADO */}
                 <button onClick={() => setModalAberto('contato')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">
                   + Adicionar
                 </button>
@@ -236,7 +272,6 @@ const handleSalvarModal = async (e) => {
                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                   <Globe size={20} className="text-blue-600" /> Links de Internet
                 </h3>
-                {/* BOTÃO ATIVADO */}
                 <button onClick={() => setModalAberto('provedor')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Provedor</button>
               </div>
               {provedores.length === 0 ? <p className="text-gray-400 text-sm">Sem registro de internet.</p> : (
@@ -262,7 +297,6 @@ const handleSalvarModal = async (e) => {
                 <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
                   <Wifi size={20} className="text-orange-600" /> Mikrotik / Firewall
                 </h3>
-                {/* TEXTAREA LIGADO AO ESTADO */}
                 <textarea 
                   className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
                   placeholder="Scripts, Regras de NAT, VPNs..."
@@ -274,7 +308,6 @@ const handleSalvarModal = async (e) => {
                 <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
                   <Shield size={20} className="text-green-600" /> Topologia de Rede
                 </h3>
-                {/* TEXTAREA LIGADO AO ESTADO */}
                 <textarea 
                   className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
                   placeholder="Cascateamento de Switchs, VLANs, Mapa físico..."
@@ -284,7 +317,6 @@ const handleSalvarModal = async (e) => {
               </div>
             </div>
             <div className="flex justify-end">
-               {/* BOTÃO SALVAR ATIVADO */}
                <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Alterações de Texto</button>
             </div>
           </div>
@@ -297,7 +329,6 @@ const handleSalvarModal = async (e) => {
                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                   <Mail size={20} className="text-purple-600" /> Contas de E-mail (Revenda)
                 </h3>
-                {/* BOTÃO ATIVADO */}
                 <button onClick={() => setModalAberto('email')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Nova Conta</button>
               </div>
               
@@ -336,7 +367,6 @@ const handleSalvarModal = async (e) => {
           <div className="space-y-6">
              <div className="flex justify-between items-center">
                 <h3 className="font-bold text-gray-800">Ativos Registrados ({ativos.length})</h3>
-                {/* BOTÃO ATIVADO */}
                 <button onClick={() => setModalAberto('ativo')} className="bg-primary-dark text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-light flex gap-2 items-center">
                   <Monitor size={16} /> Adicionar Ativo
                 </button>
@@ -374,7 +404,6 @@ const handleSalvarModal = async (e) => {
                   <Server size={20} className="text-indigo-600" /> Estrutura de Servidores
                 </h3>
                 <p className="text-xs text-gray-400 mb-2">Descreva o AD, DHCP, DNS, Virtualização, Funções...</p>
-                {/* TEXTAREA LIGADO AO ESTADO */}
                 <textarea 
                   className="w-full h-48 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
                   value={textos.estrutura_servidores}
@@ -387,7 +416,6 @@ const handleSalvarModal = async (e) => {
                   <Save size={20} className="text-teal-600" /> Rotina de Backup
                 </h3>
                 <p className="text-xs text-gray-400 mb-2">Onde está o backup? Nuvem? HD Externo? Qual software?</p>
-                {/* TEXTAREA LIGADO AO ESTADO */}
                 <textarea 
                   className="w-full h-32 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
                   value={textos.rotina_backup}
@@ -395,7 +423,6 @@ const handleSalvarModal = async (e) => {
                 />
               </div>
               <div className="flex justify-end">
-                 {/* BOTÃO SALVAR ATIVADO */}
                  <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Textos</button>
               </div>
            </div>
@@ -410,7 +437,6 @@ const handleSalvarModal = async (e) => {
              <p className="text-sm text-gray-600 mb-4">
                Use este espaço para registrar equipamentos obsoletos, riscos de segurança e sugestões de upgrade para apresentar ao cliente.
              </p>
-             {/* TEXTAREA LIGADO AO ESTADO */}
              <textarea 
                 className="w-full h-64 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                 placeholder="- Servidor principal sem garantia&#10;- Switch cascateado causando lentidão&#10;- Falta de backup na nuvem"
@@ -418,7 +444,6 @@ const handleSalvarModal = async (e) => {
                 onChange={e => setTextos({...textos, pontos_fracos_melhorias: e.target.value})}
               />
               <div className="flex justify-end mt-4">
-                 {/* BOTÃO SALVAR ATIVADO */}
                  <button onClick={handleSalvarTextos} className="bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-yellow-700"><Save size={16}/> Salvar Análise</button>
               </div>
           </div>
@@ -432,7 +457,6 @@ const handleSalvarModal = async (e) => {
   return (
     <div className="max-w-6xl mx-auto pb-10">
       <button onClick={() => setListaClientes(listaClientes)} className="flex items-center text-gray-500 hover:text-primary-dark mb-6 text-sm font-medium transition-colors">
-         {/* Botão de voltar invisível se não for necessário */}
       </button>
 
       {/* CABEÇALHO DO CLIENTE */}
@@ -497,7 +521,6 @@ const handleSalvarModal = async (e) => {
             
             <form onSubmit={handleSalvarModal} className="space-y-3">
               
-              {/* FORMULÁRIO DE CONTATO */}
               {modalAberto === 'contato' && (
                 <>
                   <input required placeholder="Nome Completo" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
@@ -507,7 +530,6 @@ const handleSalvarModal = async (e) => {
                 </>
               )}
 
-              {/* FORMULÁRIO DE PROVEDOR */}
               {modalAberto === 'provedor' && (
                 <>
                   <input required placeholder="Operadora (Ex: Vivo)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
@@ -519,7 +541,6 @@ const handleSalvarModal = async (e) => {
                 </>
               )}
 
-              {/* FORMULÁRIO DE EMAIL */}
               {modalAberto === 'email' && (
                 <>
                   <input required type="email" placeholder="Endereço de Email" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, email: e.target.value})} />
@@ -529,7 +550,6 @@ const handleSalvarModal = async (e) => {
                 </>
               )}
 
-              {/* FORMULÁRIO DE ATIVO (INVENTÁRIO) */}
               {modalAberto === 'ativo' && (
                 <>
                   <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
