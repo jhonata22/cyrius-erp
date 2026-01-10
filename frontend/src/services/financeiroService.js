@@ -1,6 +1,9 @@
 import api from './api';
 
 const financeiroService = {
+  // -----------------------------
+  // CRUD BÁSICO
+  // -----------------------------
   listar: async () => {
     const response = await api.get('/financeiro/');
     return response.data;
@@ -21,10 +24,38 @@ const financeiroService = {
     return response.data;
   },
 
-  // --- NOVA FUNÇÃO ---
+  // -----------------------------
+  // KPIs / DASHBOARD
+  // -----------------------------
+  estatisticasGerais: async () => {
+    const response = await api.get('/financeiro/estatisticas/');
+    return response.data;
+  },
+
+  estatisticasMensais: async (mes, ano) => {
+    const response = await api.get('/financeiro/estatisticas-mensais/', {
+      params: { mes, ano }
+    });
+    return response.data;
+  },
+
+  graficoMensal: async (ano) => {
+    const response = await api.get('/financeiro/grafico-mensal/', {
+      params: { ano }
+    });
+    return response.data;
+  },
+
+  // -----------------------------
+  // PROCESSOS FINANCEIROS
+  // -----------------------------
   gerarFaturasMensais: async () => {
-    // Chama a view especial que criamos no Django
     const response = await api.post('/financeiro/gerar-mensalidades/');
+    return response.data;
+  },
+
+  fecharMes: async (mes, ano) => {
+    const response = await api.post('/financeiro/fechar-mes/', { mes, ano });
     return response.data;
   }
 };

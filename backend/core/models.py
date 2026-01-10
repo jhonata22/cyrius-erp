@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.db.models import Sum
+from django.db.models import Count
 # =====================================================
 # 1. TB_CLIENTE
 # =====================================================
@@ -310,6 +311,25 @@ class LancamentoFinanceiro(models.Model):
         return self.status == self.StatusFinanceiro.PENDENTE and self.data_vencimento < timezone.now().date()
     class Meta:
         db_table = 'TB_LANCAMENTO_FINANCEIRO'
+
+class FechamentoFinanceiro(models.Model):
+    ano = models.PositiveIntegerField()
+    mes = models.PositiveSmallIntegerField()
+    fechado_em = models.DateTimeField(auto_now_add=True)
+    fechado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        unique_together = ('ano', 'mes')
+        ordering = ['-ano', '-mes']
+
+    def __str__(self):
+        return f"{self.mes:02d}/{self.ano}"
+
 
 # =====================================================
 # 9. INVENTÁRIO - FORNECEDOR

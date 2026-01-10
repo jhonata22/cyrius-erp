@@ -11,6 +11,7 @@ import {
 // SERVIÇOS
 import financeiroService from '../services/financeiroService';
 import clienteService from '../services/clienteService';
+import api from '../services/api'; // Certifique-se de importar a instância do axios
 
 export default function Financeiro() {
   const [activeTab, setActiveTab] = useState('DASHBOARD'); // DASHBOARD ou LISTA
@@ -19,7 +20,7 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(true);
   const [gerandoFaturas, setGerandoFaturas] = useState(false);
 
-  // Métricas do Dashboard
+  // Métricas do Dashboard (KPIs vindos agora do Backend)
   const [kpis, setKpis] = useState({
     receitaTotal: 0,
     despesaTotal: 0,
@@ -40,60 +41,46 @@ export default function Financeiro() {
     carregarDados();
   }, []);
 
-  const carregarDados = async () => {
+const carregarDados = async () => {
+  try {
+    setLoading(true);
+
+    const [dadosFin, dadosCli, stats] = await Promise.all([
+      financeiroService.listar(),
+      clienteService.listar(),
+      financeiroService.estatisticasGerais()
+    ]);
+
+    setLancamentos(dadosFin);
+    setClientes(dadosCli);
+    setKpis(stats);
+
+  } catch (error) {
+    console.error("Erro ao carregar financeiro:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // --- AÇÃO: CONFIRMAR PAGAMENTO (DAR BAIXA) ---
+  const handleConfirmarPagamento = async (lancamento) => {
+    if (!window.confirm(`Confirmar recebimento de R$ ${parseFloat(lancamento.valor).toFixed(2)}?`)) return;
+
     try {
-      setLoading(true);
-      const [dadosFin, dadosCli] = await Promise.all([
-        financeiroService.listar(),
-        clienteService.listar()
-      ]);
-      setLancamentos(dadosFin);
-      setClientes(dadosCli);
-      calcularKPIs(dadosFin);
+      const dadosAtualizados = {
+        ...lancamento,
+        status: 'PAGO',
+        data_pagamento: new Date().toISOString().split('T')[0],
+        cliente: lancamento.cliente?.id || lancamento.cliente 
+      };
+
+      await financeiroService.atualizar(lancamento.id, dadosAtualizados);
+      alert("Pagamento confirmado com sucesso!");
+      carregarDados(); 
     } catch (error) {
-      console.error("Erro ao carregar:", error);
-    } finally {
-      setLoading(false);
+      console.error(error);
+      alert("Erro ao confirmar pagamento.");
     }
-  };
-
-  // --- LÓGICA DE NEGÓCIO (CÁLCULOS NO FRONT PARA VISUALIZAÇÃO) ---
-  const calcularKPIs = (dados) => {
-    const hoje = new Date();
-    let rec = 0, desp = 0, inad = 0, hard = 0, contratos = 0;
-
-    dados.forEach(l => {
-      const valor = parseFloat(l.valor);
-      
-      // 1. Receitas e Despesas
-      if (l.tipo_lancamento === 'ENTRADA') rec += valor;
-      else desp += valor;
-
-      // 2. Inadimplência (Pendente e Vencido)
-      const vencimento = new Date(l.data_vencimento);
-      if (l.status === 'PENDENTE' && vencimento < hoje) {
-        inad += valor;
-      }
-
-      // 3. Vendas de Hardware
-      if (l.categoria === 'VENDA') {
-        hard += valor;
-      }
-      
-      // 4. Receita de Contratos
-      if (l.categoria === 'CONTRATO') {
-          contratos += valor;
-      }
-    });
-
-    setKpis({
-      receitaTotal: rec,
-      despesaTotal: desp,
-      saldo: rec - desp,
-      inadimplencia: inad,
-      vendasHardware: hard,
-      contratosAtivos: contratos
-    });
   };
 
   // --- AÇÃO: GERAR FATURAS AUTOMÁTICAS ---
@@ -124,11 +111,11 @@ export default function Financeiro() {
     }
   };
 
-  // Prepara dados para o Gráfico (Resumo por Categoria)
+  // Prepara dados para o Gráfico
   const dadosGrafico = [
-    { name: 'Contratos', valor: kpis.contratosAtivos, color: '#3B82F6' }, // Azul
-    { name: 'Hardware', valor: kpis.vendasHardware, color: '#10B981' },   // Verde
-    { name: 'Despesas', valor: kpis.despesaTotal, color: '#EF4444' },     // Vermelho
+    { name: 'Contratos', valor: kpis.contratosAtivos, color: '#3B82F6' },
+    { name: 'Hardware', valor: kpis.vendasHardware, color: '#10B981' },
+    { name: 'Despesas', valor: kpis.despesaTotal, color: '#EF4444' },
   ];
 
   if (loading) return <div className="p-8 text-center text-gray-500">Carregando inteligência financeira...</div>;
@@ -172,7 +159,6 @@ export default function Financeiro() {
 
       {activeTab === 'DASHBOARD' && (
         <div className="space-y-6">
-            {/* LINHA 1: BIG NUMBERS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-start">
@@ -191,7 +177,7 @@ export default function Financeiro() {
                 <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs text-gray-500 font-bold uppercase">Vendas Hardware (Mês)</p>
+                            <p className="text-xs text-gray-500 font-bold uppercase">Vendas Hardware</p>
                             <h3 className="text-2xl font-bold mt-1 text-blue-600">
                                 R$ {kpis.vendasHardware.toFixed(2)}
                             </h3>
@@ -209,7 +195,6 @@ export default function Financeiro() {
                             <h3 className="text-2xl font-bold mt-1 text-red-600">
                                 R$ {kpis.inadimplencia.toFixed(2)}
                             </h3>
-                            <p className="text-[10px] text-red-400 mt-1">Vencido e não pago</p>
                         </div>
                         <div className="p-2 rounded-lg bg-red-50 text-red-600">
                             <AlertTriangle size={20}/>
@@ -222,9 +207,8 @@ export default function Financeiro() {
                         <div>
                             <p className="text-xs text-gray-500 font-bold uppercase">Contratos Ativos</p>
                             <h3 className="text-2xl font-bold mt-1 text-indigo-600">
-                                R$ {kpis.contratosAtivos.toFixed(2)}
+                                {kpis.contratosAtivos}
                             </h3>
-                            <p className="text-[10px] text-gray-400 mt-1">Receita Recorrente</p>
                         </div>
                         <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
                             <Building2 size={20}/>
@@ -233,9 +217,7 @@ export default function Financeiro() {
                 </div>
             </div>
 
-            {/* LINHA 2: GRÁFICO E TABELA DE DEVEDORES */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* GRÁFICO */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-gray-800 mb-6">Comparativo Financeiro</h3>
                     <div className="h-72 w-full">
@@ -255,7 +237,6 @@ export default function Financeiro() {
                     </div>
                 </div>
 
-                {/* LISTA DE INADIMPLENTES */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                         <AlertTriangle size={18} className="text-red-500"/> Pendências Urgentes
@@ -264,21 +245,26 @@ export default function Financeiro() {
                         {lancamentos
                             .filter(l => l.status === 'PENDENTE' && new Date(l.data_vencimento) < new Date())
                             .map(l => (
-                                <div key={l.id} className="p-3 bg-red-50 rounded-lg border border-red-100">
+                                <div key={l.id} className="p-3 bg-red-50 rounded-lg border border-red-100 group">
                                     <div className="flex justify-between">
                                         <span className="font-bold text-gray-800 text-sm">{l.descricao}</span>
                                         <span className="font-bold text-red-600 text-sm">R$ {parseFloat(l.valor).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between mt-1 text-xs text-red-400">
-                                        <span>Venceu: {new Date(l.data_vencimento).toLocaleDateString()}</span>
-                                        <span className="font-bold uppercase">Atrasado</span>
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase mt-1">
+                                        {l.cliente_detalhes?.razao_social || 'Despesa Geral'}
+                                    </div>
+                                    <div className="flex justify-between mt-2 text-xs text-red-400">
+                                        <span>Venc: {new Date(l.data_vencimento).toLocaleDateString()}</span>
+                                        <button 
+                                          onClick={() => handleConfirmarPagamento(l)}
+                                          className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded font-bold hover:bg-red-700 transition-colors"
+                                        >
+                                          DAR BAIXA
+                                        </button>
                                     </div>
                                 </div>
                             ))
                         }
-                        {lancamentos.filter(l => l.status === 'PENDENTE' && new Date(l.data_vencimento) < new Date()).length === 0 && (
-                            <p className="text-center text-gray-400 text-sm py-8">Nenhuma pendência encontrada. 🎉</p>
-                        )}
                     </div>
                 </div>
             </div>
@@ -290,19 +276,21 @@ export default function Financeiro() {
              <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold border-b">
                     <tr>
-                        <th className="p-4">Descrição</th>
+                        <th className="p-4">Descrição / Cliente</th>
                         <th className="p-4">Categoria</th>
                         <th className="p-4">Vencimento</th>
                         <th className="p-4">Status</th>
-                        <th className="p-4 text-right">Valor</th>
+                        <th className="p-4 text-right">Valor / Ação</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {lancamentos.map(lanc => (
                         <tr key={lanc.id} className="hover:bg-gray-50">
-                            <td className="p-4 font-medium text-gray-800">
-                                {lanc.descricao}
-                                {lanc.cliente && <div className="text-xs text-gray-400 mt-0.5">{lanc.cliente.razao_social}</div>}
+                            <td className="p-4">
+                                <div className="font-medium text-gray-800">{lanc.descricao}</div>
+                                <div className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5 font-bold uppercase">
+                                  <Building2 size={10}/> {lanc.cliente_detalhes?.razao_social || 'Sem vínculo'}
+                                </div>
                             </td>
                             <td className="p-4">
                                 <span className="text-[10px] font-bold bg-gray-100 px-2 py-1 rounded text-gray-500 uppercase">
@@ -317,9 +305,19 @@ export default function Financeiro() {
                                     {lanc.status}
                                 </span>
                             </td>
-                            <td className={`p-4 text-right font-bold ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-green-600' : 'text-red-600'}`}>
-                                {lanc.tipo_lancamento === 'SAIDA' && '- '}
-                                R$ {parseFloat(lanc.valor).toFixed(2)}
+                            <td className="p-4 text-right">
+                                <div className={`font-bold ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {lanc.tipo_lancamento === 'SAIDA' && '- '}
+                                    R$ {parseFloat(lanc.valor).toFixed(2)}
+                                </div>
+                                {lanc.status === 'PENDENTE' && (
+                                  <button 
+                                    onClick={() => handleConfirmarPagamento(lanc)}
+                                    className="text-[10px] text-primary-dark font-bold hover:underline"
+                                  >
+                                    CONFIRMAR PGTO
+                                  </button>
+                                )}
                             </td>
                         </tr>
                     ))}
@@ -328,7 +326,6 @@ export default function Financeiro() {
         </div>
       )}
 
-      {/* MODAL SIMPLIFICADO PARA INSERÇÃO MANUAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
