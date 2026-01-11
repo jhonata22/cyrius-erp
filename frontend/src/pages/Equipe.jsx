@@ -47,7 +47,7 @@ export default function Equipe() {
       carregarEquipe();
       alert("Colaborador cadastrado com sucesso!");
     } catch (error) {
-      alert("Erro ao salvar. Verifique se o usuário já existe ou se você tem permissão de Gestor.");
+      alert("Erro ao salvar. Verifique se o usuário já existe.");
     }
   };
 
@@ -57,7 +57,7 @@ export default function Equipe() {
         await equipeService.excluir(id);
         carregarEquipe();
       } catch (error) {
-        alert("Erro ao excluir. O técnico pode ter atendimentos vinculados no histórico.");
+        alert("Erro ao excluir. O técnico pode ter atendimentos vinculados.");
       }
     }
   };
@@ -94,14 +94,32 @@ export default function Equipe() {
               </button>
 
               <div className="flex items-center gap-5 mb-8">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg
-                  ${func.cargo !== 'TECNICO' ? 'bg-[#7C69AF] shadow-purple-500/20' : 'bg-[#302464] shadow-slate-900/20'}`}>
-                  {func.nome.charAt(0).toUpperCase()}
+                {/* LÓGICA DE FOTO DO PERFIL */}
+                <div className="shrink-0">
+                    {func.foto ? (
+                        <img 
+                            src={func.foto} 
+                            alt={func.nome} 
+                            className="w-16 h-16 rounded-2xl object-cover shadow-lg border-2 border-white"
+                        />
+                    ) : (
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg
+                          ${(func.cargo === 'GESTOR' || func.cargo === 'SOCIO') ? 'bg-[#7C69AF] shadow-purple-500/20' : 'bg-[#302464] shadow-slate-900/20'}`}>
+                          {func.nome.charAt(0).toUpperCase()}
+                        </div>
+                    )}
                 </div>
+
                 <div>
-                  <h3 className="font-black text-slate-800 text-lg leading-tight group-hover:text-[#7C69AF] transition-colors">{func.nome}</h3>
+                  <h3 className="font-black text-slate-800 text-lg leading-tight group-hover:text-[#7C69AF] transition-colors line-clamp-1">{func.nome}</h3>
+                  
+                  {/* Badge de Cargo */}
                   <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase tracking-[0.15em] mt-1 inline-block border
-                    ${func.cargo !== 'TECNICO' ? 'bg-purple-50 text-[#7C69AF] border-purple-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                    ${(func.cargo === 'GESTOR' || func.cargo === 'SOCIO') 
+                        ? 'bg-purple-50 text-[#7C69AF] border-purple-100' 
+                        : func.cargo === 'ESTAGIARIO' 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                            : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
                     {func.cargo}
                   </span>
                 </div>
@@ -126,7 +144,7 @@ export default function Equipe() {
         </div>
       )}
 
-      {/* MODAL PADRONIZADO CYRIUS */}
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
@@ -158,6 +176,7 @@ export default function Equipe() {
                     className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700 cursor-pointer"
                   >
                     <option value="TECNICO">Técnico</option>
+                    <option value="ESTAGIARIO">Estagiário</option>
                     <option value="GESTOR">Gestor</option>
                     <option value="SOCIO">Sócio</option>
                   </select>
@@ -179,7 +198,7 @@ export default function Equipe() {
                 </div>
                 <p className="text-[10px] text-[#7C69AF] font-bold leading-relaxed">
                   SENHA TEMPORÁRIA: <span className="font-black underline decoration-2">Mudar@123456</span>. 
-                  O colaborador deverá redefinir a senha no primeiro acesso ao painel.
+                  O colaborador poderá alterar foto e senha no perfil.
                 </p>
               </div>
 

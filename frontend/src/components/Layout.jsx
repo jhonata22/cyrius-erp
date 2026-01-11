@@ -33,6 +33,8 @@ const SidebarItem = ({ icon: Icon, text, to, isExpanded }) => {
 export default function Layout({ children }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const userName = authService.getLoggedUser();
+  // Tenta pegar a foto salva (lógica que implementaremos no login futuramente)
+  const userPhoto = localStorage.getItem('user_photo'); 
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans">
@@ -83,15 +85,22 @@ export default function Layout({ children }) {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
                 <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-2.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm" />
             </div>
-            <div className="flex items-center gap-4">
+            
+            {/* ÁREA DO USUÁRIO COM LINK */}
+            <Link to="/perfil" className="flex items-center gap-4 hover:opacity-80 transition-opacity cursor-pointer">
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-800 leading-tight">{userName}</p>
-                    <p className="text-[10px] font-black text-[#7C69AF] uppercase tracking-widest">Painel Administrativo</p>
+                    <p className="text-[10px] font-black text-[#7C69AF] uppercase tracking-widest">Meu Perfil</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-sm shadow-xl shadow-purple-900/20 border-2 border-white">
-                    {userName.substring(0, 2).toUpperCase()}
+                
+                <div className="w-12 h-12 rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-sm shadow-xl shadow-purple-900/20 border-2 border-white overflow-hidden">
+                    {userPhoto ? (
+                      <img src={userPhoto} alt="Perfil" className="w-full h-full object-cover" />
+                    ) : (
+                      userName.substring(0, 2).toUpperCase()
+                    )}
                 </div>
-            </div>
+            </Link>
         </header>
         
         <main className="flex-1 overflow-y-auto bg-[#F8FAFC]">

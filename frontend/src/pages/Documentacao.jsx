@@ -14,7 +14,7 @@ import documentacaoService from '../services/documentacaoService';
 export default function Documentacao() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+   
   const [listaClientes, setListaClientes] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,7 @@ export default function Documentacao() {
   const [cliente, setCliente] = useState(null);
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
-  
+   
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
   const [formTemp, setFormTemp] = useState({}); 
@@ -84,7 +84,7 @@ export default function Documentacao() {
     }
   };
 
-  // --- FUNÇÃO PARA SALVAR NOVOS ITENS (CONTATO, EMAIL, PROVEDOR) ---
+  // --- FUNÇÃO PARA SALVAR NOVOS ITENS (CONTATO, EMAIL, PROVEDOR, ATIVO) ---
   const handleSalvarModal = async (e) => {
     e.preventDefault();
     try {
@@ -101,7 +101,8 @@ export default function Documentacao() {
       setFormTemp({});
       carregarDados();
     } catch (error) {
-      alert("Erro ao salvar. Verifique os campos.");
+      console.error(error);
+      alert("Erro ao salvar. Verifique os campos obrigatórios.");
     }
   };
 
@@ -116,7 +117,7 @@ export default function Documentacao() {
     }
   };
 
-  // MODO 1: SELEÇÃO
+  // MODO 1: SELEÇÃO DE CLIENTE
   if (!id) {
     const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
     return (
@@ -150,7 +151,7 @@ export default function Documentacao() {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
-      
+       
       {/* HEADER CLIENTE */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-5">
@@ -261,81 +262,75 @@ export default function Documentacao() {
             </div>
         )}
 
-        {/* ABA ATIVOS */}
-{activeTab === 'inventario' && (
-    <div className="space-y-6">
-        {/* Sub-header da aba com contador */}
-        <div className="flex justify-between items-center mb-4 px-2">
-            <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
-                <Monitor size={16} className="text-[#7C69AF]"/> Parque Tecnológico ({ativos.length})
-            </h3>
-            <button 
-                onClick={() => setModalAberto('ativo')}
-                className="bg-[#302464] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#7C69AF] transition-all active:scale-95"
-            >
-                + Adicionar Dispositivo
-            </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {ativos.map(a => (
-                <div 
-                    key={a.id} 
-                    onClick={() => navigate(`/ativos/${a.id}`)} // NAVEGAÇÃO PARA DETALHES
-                    className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
-                >
-                    {/* Header do Card */}
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-slate-50 text-[#7C69AF] rounded-xl group-hover:bg-[#302464] group-hover:text-white transition-all shadow-inner">
-                            <Monitor size={20}/>
-                        </div>
-                        <span className="text-[8px] font-black bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-widest text-slate-400 border border-slate-50">
-                            {a.tipo}
-                        </span>
-                    </div>
-
-                    {/* Identificação */}
-                    <h4 className="font-black text-slate-800 leading-tight line-clamp-1 group-hover:text-[#7C69AF] transition-colors">
-                        {a.nome}
-                    </h4>
-                    <p className="text-[10px] font-bold text-[#A696D1] mt-1 truncate uppercase tracking-tighter">
-                        {a.marca_modelo || 'Modelo não informado'}
-                    </p>
-
-                    {/* Rodapé do Card com Acesso Rápido */}
-                    <div className="mt-5 pt-4 border-t border-slate-50 space-y-2">
-                        <div className="flex justify-between items-center text-[9px] font-black uppercase">
-                            <span className="text-slate-300 tracking-widest">AnyDesk</span>
-                            <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-50">
-                                {a.anydesk_id || '--- --- ---'}
-                            </span>
-                        </div>
-                        
-                        {/* Indicador de Clique */}
-                        <div className="flex justify-end pt-1">
-                            <span className="text-[8px] font-black text-slate-200 group-hover:text-[#7C69AF] uppercase tracking-widest flex items-center gap-1 transition-colors">
-                                Ver Ficha <ChevronRight size={10} />
-                            </span>
-                        </div>
-                    </div>
-                    
-                    {/* Efeito Visual de Fundo */}
-                    <div className="absolute -right-4 -bottom-4 text-slate-50 opacity-0 group-hover:opacity-100 transition-all duration-500">
-                        <Monitor size={80} />
-                    </div>
+        {/* ABA ATIVOS (INVENTÁRIO) */}
+        {activeTab === 'inventario' && (
+            <div className="space-y-6">
+                {/* Sub-header da aba com contador */}
+                <div className="flex justify-between items-center mb-4 px-2">
+                    <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                        <Monitor size={16} className="text-[#7C69AF]"/> Parque Tecnológico ({ativos.length})
+                    </h3>
+                    <button 
+                        onClick={() => setModalAberto('ativo')}
+                        className="bg-[#302464] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#7C69AF] transition-all active:scale-95"
+                    >
+                        + Adicionar Dispositivo
+                    </button>
                 </div>
-            ))}
 
-            {/* Empty State: Caso não existam ativos */}
-            {ativos.length === 0 && (
-                <div className="col-span-full py-16 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300">
-                    <Monitor size={48} className="mb-4 opacity-20" />
-                    <p className="font-black text-[10px] uppercase tracking-[0.2em]">Nenhum ativo registrado neste cliente</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {ativos.map(a => (
+                        <div 
+                            key={a.id} 
+                            onClick={() => navigate(`/ativos/${a.id}`)} // LINK PARA ATIVO DETALHES
+                            className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
+                        >
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-slate-50 text-[#7C69AF] rounded-xl group-hover:bg-[#302464] group-hover:text-white transition-all shadow-inner">
+                                    <Monitor size={20}/>
+                                </div>
+                                <span className="text-[8px] font-black bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-widest text-slate-400 border border-slate-50">
+                                    {a.tipo}
+                                </span>
+                            </div>
+
+                            <h4 className="font-black text-slate-800 leading-tight line-clamp-1 group-hover:text-[#7C69AF] transition-colors">
+                                {a.nome}
+                            </h4>
+                            <p className="text-[10px] font-bold text-[#A696D1] mt-1 truncate uppercase tracking-tighter">
+                                {a.marca_modelo || 'Modelo não informado'}
+                            </p>
+
+                            <div className="mt-5 pt-4 border-t border-slate-50 space-y-2">
+                                <div className="flex justify-between items-center text-[9px] font-black uppercase">
+                                    <span className="text-slate-300 tracking-widest">AnyDesk</span>
+                                    <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-50">
+                                        {a.anydesk_id || '---'}
+                                    </span>
+                                </div>
+                                
+                                <div className="flex justify-end pt-1">
+                                    <span className="text-[8px] font-black text-slate-200 group-hover:text-[#7C69AF] uppercase tracking-widest flex items-center gap-1 transition-colors">
+                                        Ver Ficha <ChevronRight size={10} />
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="absolute -right-4 -bottom-4 text-slate-50 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                                <Monitor size={80} />
+                            </div>
+                        </div>
+                    ))}
+
+                    {ativos.length === 0 && (
+                        <div className="col-span-full py-16 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300">
+                            <Monitor size={48} className="mb-4 opacity-20" />
+                            <p className="font-black text-[10px] uppercase tracking-[0.2em]">Nenhum ativo registrado</p>
+                        </div>
+                    )}
                 </div>
-            )}
-        </div>
-    </div>
-)}
+            </div>
+        )}
 
         {/* ABA SERVIDORES */}
         {activeTab === 'servidores' && (
@@ -360,14 +355,19 @@ export default function Documentacao() {
       {/* MODAL */}
       {modalAberto && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative border border-white/20">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative border border-white/20 max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <button onClick={() => { setModalAberto(null); setFormTemp({}); }} className="absolute top-8 right-8 text-slate-400 hover:text-red-500"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">Novo Registro</h3>
                 <form onSubmit={handleSalvarModal} className="space-y-4">
+                    
+                    {/* FORMULÁRIO DE PROVEDOR (CORREÇÃO ITEM 2: IP FIXO ADICIONADO) */}
                     {modalAberto === 'provedor' && (
                         <>
                             <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
                             <input placeholder="Plano" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
+                            {/* CAMPO IP FIXO ADICIONADO */}
+                            <input placeholder="IP Fixo (Opcional)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono text-slate-600" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
+                            
                             <div className="grid grid-cols-2 gap-2">
                                 <input placeholder="Admin / PPPoE" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
                                 <input placeholder="Senha Link" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
@@ -375,13 +375,57 @@ export default function Documentacao() {
                             <input placeholder="Telefone Suporte" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
                         </>
                     )}
+
+                    {/* FORMULÁRIO DE EMAIL */}
                     {modalAberto === 'email' && (
                         <><input required type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, email: e.target.value})} /><input required placeholder="Senha" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} /></>
                     )}
+
+                    {/* FORMULÁRIO DE CONTATO (CORREÇÃO ITEM 1: TELEFONE ADICIONADO) */}
                     {modalAberto === 'contato' && (
-                        <><input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} /><input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} /></>
+                        <>
+                            <input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                            <input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
+                            {/* CAMPO TELEFONE ADICIONADO */}
+                            <input placeholder="Telefone / Celular" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
+                        </>
                     )}
-                    <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4">Confirmar</button>
+
+                    {/* FORMULÁRIO DE ATIVO/DISPOSITIVO (CORREÇÃO ITEM 3: FORMULÁRIO CRIADO) */}
+                    {modalAberto === 'ativo' && (
+                        <>
+                            <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                            
+                            <select 
+                                required 
+                                className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-600 outline-none"
+                                onChange={e => setFormTemp({...formTemp, tipo: e.target.value})}
+                                defaultValue=""
+                            >
+                                <option value="" disabled>Selecione o Tipo...</option>
+                                <option value="COMPUTADOR">Computador</option>
+                                <option value="SERVIDOR">Servidor</option>
+                                <option value="REDE">Rede / Switch / Roteador</option>
+                                <option value="IMPRESSORA">Impressora</option>
+                                <option value="MONITOR">Monitor</option>
+                                <option value="PERIFERICO">Periférico</option>
+                            </select>
+
+                            <input placeholder="Marca / Modelo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, marca_modelo: e.target.value})} />
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="IP Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono" onChange={e => setFormTemp({...formTemp, ip_local: e.target.value})} />
+                                <input placeholder="AnyDesk ID" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-red-500" onChange={e => setFormTemp({...formTemp, anydesk_id: e.target.value})} />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="Usuário Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, usuario_local: e.target.value})} />
+                                <input placeholder="Senha Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, senha_local: e.target.value})} />
+                            </div>
+                        </>
+                    )}
+
+                    <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-[#7C69AF] transition-all">Confirmar</button>
                 </form>
             </div>
         </div>

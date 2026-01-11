@@ -76,6 +76,7 @@ class Equipe(models.Model):
 
     usuario = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
     nome = models.CharField(max_length=100)
+    foto = models.ImageField(upload_to='fotos_equipe/', null=True, blank=True)
     cargo = models.CharField(
         max_length=50, 
         choices=Cargo.choices, 
@@ -137,6 +138,8 @@ class DocumentacaoTecnica(TimeStampedModel):
 # =====================================================
 # 4. CHAMADOS
 # =====================================================
+# ... (imports anteriores mantidos)
+
 class Chamado(TimeStampedModel):
     class Status(models.TextChoices):
         ABERTO = 'ABERTO', 'Aberto'
@@ -156,31 +159,58 @@ class Chamado(TimeStampedModel):
         VISITA = 'VISITA', 'Visita Técnica'
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
-    # Blindagem: Não permite apagar cliente com histórico de chamados
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT)
     titulo = models.CharField(max_length=100)
     descricao_detalhada = models.TextField(max_length=500)
+    origem = models.CharField(max_length=50, default='TELEFONE')
+    
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ABERTO)
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
     tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
+    
     data_agendamento = models.DateTimeField(null=True, blank=True)
+    
+    # Custos (com default 0 para evitar erro de cálculo)
+    custo_ida = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    custo_volta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    custo_transporte = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     protocolo = models.CharField(max_length=30, unique=True, blank=True)
+    
     data_abertura = models.DateTimeField(default=timezone.now)
     data_fechamento = models.DateTimeField(null=True, blank=True)
+    
     tecnicos = models.ManyToManyField(Equipe, through='ChamadoTecnico')
 
     class Meta: 
         db_table = 'TB_CHAMADO'
         ordering = ['-created_at']
 
-    def __str__(self): return self.protocolo
+    def __str__(self):
+        return self.protocolo or f"ID {self.pk}"
 
     def save(self, *args, **kwargs):
+        # 1. Tratamento seguro de custos (evita erro se for None)
+        ida = float(self.custo_ida or 0)
+        volta = float(self.custo_volta or 0)
+        self.custo_transporte = ida + volta
+
+        # 2. Geração de Protocolo
         if not self.protocolo:
             hoje = timezone.now().strftime('%Y%m%d')
-            ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('protocolo').last()
-            sequencia = int(ultimo.protocolo[-3:]) + 1 if ultimo else 1
+            # Pega o último protocolo que começa com a data de hoje
+            ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('-protocolo').first()
+            
+            sequencia = 1
+            if ultimo and ultimo.protocolo:
+                try:
+                    # Extrai os últimos 3 dígitos: 20250101[001]
+                    sequencia = int(ultimo.protocolo[-3:]) + 1
+                except ValueError:
+                    sequencia = 1
+            
             self.protocolo = f"{hoje}{str(sequencia).zfill(3)}"
+
         super().save(*args, **kwargs)
 
 class ChamadoTecnico(models.Model):

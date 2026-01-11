@@ -8,6 +8,9 @@ import ChamadoDetalhes from './pages/ChamadoDetalhes';
 import FornecedorDetalhes from './pages/FornecedorDetalhes';
 import AtivoDetalhes from './pages/AtivoDetalhes';
 import Configuracoes from './pages/Configuracoes';
+import Perfil from './pages/Perfil'; // <--- 1. IMPORTADO AQUI
+
+// Páginas
 import Dashboard from './pages/Dashboard'
 import Chamados from './pages/Chamados'
 import Inventario from './pages/Inventario'
@@ -49,7 +52,9 @@ function App() {
       <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
       <Route path="/equipe" element={<RotaProtegida><Equipe /></RotaProtegida>} />
       
-      {/* Rota de Configurações (Agora com Menu!) */}
+      {/* 2. ROTA DE PERFIL ADICIONADA */}
+      <Route path="/perfil" element={<RotaProtegida><Perfil /></RotaProtegida>} />
+      
       <Route path="/config" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
 
       {/* Rota 404 - Redireciona para Dashboard */}

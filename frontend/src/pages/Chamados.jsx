@@ -8,7 +8,7 @@ import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 import clienteService from '../services/clienteService';
 
-// Constantes de Estilização com a nova paleta Cyrius
+// MAPAS VISUAIS
 const PRIORIDADE_MAP = {
   BAIXA: 'bg-blue-50 text-blue-600 border-blue-100',
   MEDIA: 'bg-indigo-50 text-[#7C69AF] border-indigo-100',
@@ -27,14 +27,18 @@ const STATUS_MAP = {
 export default function Chamados() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  
+  // Dados
   const [chamados, setChamados] = useState([]);
   const [equipe, setEquipe] = useState([]);
   const [clientes, setClientes] = useState([]);
+  
+  // UI
   const [busca, setBusca] = useState('');
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('REMOTO'); 
   
+  // Formulário
   const [formData, setFormData] = useState({
     cliente: '',
     titulo: '',
@@ -42,8 +46,15 @@ export default function Chamados() {
     prioridade: 'MEDIA',
     origem: 'TELEFONE',
     data_agendamento: '',
+    custo_ida: '',   
+    custo_volta: '', 
     tecnicos: []
   });
+
+  // Cálculo visual em tempo real
+  const custoEstimado = useMemo(() => {
+    return (parseFloat(formData.custo_ida || 0) + parseFloat(formData.custo_volta || 0));
+  }, [formData.custo_ida, formData.custo_volta]);
 
   const carregarDados = async () => {
     try {
@@ -68,7 +79,7 @@ export default function Chamados() {
   const chamadosFiltrados = useMemo(() => {
     return chamados.filter(c => 
       c.titulo.toLowerCase().includes(busca.toLowerCase()) || 
-      c.protocolo.includes(busca) ||
+      c.protocolo?.includes(busca) ||
       (c.nome_cliente && c.nome_cliente.toLowerCase().includes(busca.toLowerCase()))
     );
   }, [busca, chamados]);
@@ -77,7 +88,8 @@ export default function Chamados() {
     setModalMode(mode);
     setFormData({
       cliente: '', titulo: '', descricao_detalhada: '',
-      prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', tecnicos: []
+      prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', 
+      custo_ida: '', custo_volta: '', tecnicos: []
     });
     setIsModalOpen(true);
   };
@@ -98,20 +110,38 @@ export default function Chamados() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validação Básica
     if (!formData.cliente) return alert("Selecione um cliente.");
     if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
     try {
+      // SANITIZAÇÃO DOS DADOS (O SEGREDO PARA EVITAR ERRO 400)
       const payload = {
-        ...formData,
+        cliente: formData.cliente,
+        titulo: formData.titulo,
+        descricao_detalhada: formData.descricao_detalhada,
+        prioridade: formData.prioridade,
+        origem: formData.origem,
+        tecnicos: formData.tecnicos,
+        
+        status: modalMode === 'VISITA' ? 'AGENDADO' : 'ABERTO',
         tipo_atendimento: modalMode,
-        status: modalMode === 'VISITA' ? 'AGENDADO' : 'ABERTO'
+        
+        // Se estiver vazio, manda null ou 0. Django odeia string vazia em data/número.
+        data_agendamento: formData.data_agendamento ? new Date(formData.data_agendamento).toISOString() : null,
+        custo_ida: formData.custo_ida ? parseFloat(formData.custo_ida) : 0,
+        custo_volta: formData.custo_volta ? parseFloat(formData.custo_volta) : 0
       };
+
       await chamadoService.criar(payload);
+      
       setIsModalOpen(false);
       carregarDados();
+      alert("Chamado criado com sucesso!");
     } catch (err) {
-      alert("Erro ao salvar chamado.");
+      console.error("Erro no envio:", err.response?.data);
+      alert("Erro ao salvar. Verifique se todos os campos obrigatórios estão preenchidos.");
     }
   };
 
@@ -180,7 +210,7 @@ export default function Chamados() {
                     </span>
                     <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
                       {item.tipo_atendimento === 'VISITA' ? (
-                         <><Calendar size={13} className="text-[#A696D1]" /> {new Date(item.data_agendamento).toLocaleString('pt-BR')}</>
+                         <><Calendar size={13} className="text-[#A696D1]" /> {item.data_agendamento ? new Date(item.data_agendamento).toLocaleString('pt-BR') : 'Data Pendente'}</>
                       ) : (
                          <><Clock size={13} className="text-[#A696D1]" /> {new Date(item.created_at).toLocaleDateString('pt-BR')}</>
                       )}
@@ -210,16 +240,42 @@ export default function Chamados() {
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {modalMode === 'VISITA' && (
-                <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 flex items-center gap-4 animate-in slide-in-from-top-2">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-[#302464] uppercase tracking-widest block mb-2">Data e Hora do Agendamento</label>
-                    <input 
-                      type="datetime-local" name="data_agendamento" required
-                      value={formData.data_agendamento} onChange={handleInputChange}
-                      className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464]"
-                    />
+                <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 animate-in slide-in-from-top-2">
+                  <div className="flex gap-4 items-center mb-6">
+                     <AlertTriangle className="text-[#A696D1]" size={24} />
+                     <h3 className="font-black text-[#302464] text-sm uppercase tracking-widest">Dados do Deslocamento</h3>
                   </div>
-                  <AlertTriangle className="text-[#A696D1] hidden sm:block" size={32} />
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                     <div className="sm:col-span-3">
+                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Data da Visita</label>
+                        <input 
+                          type="datetime-local" name="data_agendamento" required
+                          value={formData.data_agendamento} onChange={handleInputChange}
+                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464]"
+                        />
+                     </div>
+                     <div>
+                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Uber/Táxi Ida (R$)</label>
+                        <input 
+                          type="number" name="custo_ida" step="0.01" placeholder="0.00"
+                          value={formData.custo_ida} onChange={handleInputChange}
+                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                        />
+                     </div>
+                     <div>
+                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Uber/Táxi Volta (R$)</label>
+                        <input 
+                          type="number" name="custo_volta" step="0.01" placeholder="0.00"
+                          value={formData.custo_volta} onChange={handleInputChange}
+                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                        />
+                     </div>
+                     <div className="bg-[#302464] rounded-2xl flex flex-col items-center justify-center text-white">
+                        <p className="text-[8px] font-black uppercase tracking-widest opacity-50">Total R$</p>
+                        <p className="text-lg font-black">{custoEstimado.toFixed(2)}</p>
+                     </div>
+                  </div>
                 </div>
               )}
 

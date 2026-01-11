@@ -48,7 +48,9 @@ class EquipeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Equipe
-        fields = ['id', 'nome', 'cargo', 'custo_hora', 'username']
+        fields = ['id', 'nome', 'cargo', 'custo_hora', 'username', 'foto']
+        read_only_fields = ['usuario']
+        
 
     def create(self, validated_data):
         # Importação local para evitar erros de importação circular
@@ -72,7 +74,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chamado
         fields = '__all__'
-        read_only_fields = ['protocolo', 'created_at', 'updated_at']
+        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos']
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
     """ O SERIALIZER QUE ESTAVA FALTANDO """
