@@ -1,191 +1,248 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-// REMOVIDO: import axios from 'axios';
-import { Plus, Search, MapPin, Calendar, FileText, Building2, User } from 'lucide-react';
+import { 
+  Plus, Search, MapPin, Calendar, FileText, Building2, 
+  User, ChevronRight, DollarSign, X, Info, Filter 
+} from 'lucide-react';
 
-// IMPORTAÇÃO DO SERVIÇO
 import clienteService from '../services/clienteService';
 
 export default function Clientes() {
+  const navigate = useNavigate();
   const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const navigate = useNavigate();
 
-  // Estados do Formulário
-  const [razaoSocial, setRazaoSocial] = useState('');
-  const [cpfCnpj, setCpfCnpj] = useState('');
-  const [endereco, setEndereco] = useState('');
-  const [tipo, setTipo] = useState('CONTRATO');
-  const [valor, setValor] = useState('');
-  const [diaVencimento, setDiaVencimento] = useState(5);
+  // Estado único para o formulário
+  const [formData, setFormData] = useState({
+    razao_social: '',
+    cpf_cnpj: '',
+    endereco: '',
+    tipo_cliente: 'CONTRATO',
+    valor_contrato_mensal: '',
+    dia_vencimento: 5
+  });
 
-  // --- REFATORADO: Função de Carregamento ---
   const carregarClientes = async () => {
     try {
+      setLoading(true);
       const dados = await clienteService.listar();
       setClientes(dados);
     } catch (error) {
       console.error("Erro ao carregar clientes:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    carregarClientes();
-  }, []);
+  useEffect(() => { carregarClientes(); }, []);
 
-  // --- REFATORADO: Função de Submit ---
+  // Filtro performático
+  const clientesFiltrados = useMemo(() => {
+    return clientes.filter(c => 
+      c.razao_social.toLowerCase().includes(busca.toLowerCase()) ||
+      (c.cnpj && c.cnpj.includes(busca)) ||
+      (c.cpf && c.cpf.includes(busca))
+    );
+  }, [busca, clientes]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const payload = {
-        razao_social: razaoSocial,
-        cnpj: cpfCnpj.length > 11 ? cpfCnpj : null,
-        cpf: cpfCnpj.length <= 11 ? cpfCnpj : null,
-        endereco,
-        tipo_cliente: tipo,
-        valor_contrato_mensal: parseFloat(valor),
-        dia_vencimento: parseInt(diaVencimento)
+        ...formData,
+        cnpj: formData.cpf_cnpj.length > 11 ? formData.cpf_cnpj : null,
+        cpf: formData.cpf_cnpj.length <= 11 ? formData.cpf_cnpj : null,
+        valor_contrato_mensal: parseFloat(formData.valor_contrato_mensal || 0),
+        dia_vencimento: parseInt(formData.dia_vencimento)
       };
 
-      // Chamada limpa ao serviço
       await clienteService.criar(payload);
       
-      alert("Cliente cadastrado!");
       setIsModalOpen(false);
+      setFormData({ razao_social: '', cpf_cnpj: '', endereco: '', tipo_cliente: 'CONTRATO', valor_contrato_mensal: '', dia_vencimento: 5 });
       carregarClientes();
-      
-      // Limpar form
-      setRazaoSocial(''); 
-      setCpfCnpj(''); 
-      setEndereco(''); 
-      setValor('');
+      alert("Cliente cadastrado com sucesso!");
     } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar cliente.");
+      alert("Erro ao salvar cliente. Verifique os dados.");
     }
   };
 
-  // Filtro de busca (Mantido igual)
-  const clientesFiltrados = clientes.filter(c => 
-    c.razao_social.toLowerCase().includes(busca.toLowerCase())
-  );
-
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+    <div className="animate-in fade-in duration-500">
+      {/* HEADER */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Carteira de Clientes</h1>
-          <p className="text-gray-500 text-sm">Gerencie contratos e clientes avulsos.</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Clientes</h1>
+          <div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
         </div>
         
-        <div className="flex gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-80 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
             <input 
-              type="text" 
-              placeholder="Buscar cliente..." 
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50"
+              type="text" placeholder="Buscar por nome ou documento..." 
+              value={busca} onChange={e => setBusca(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm"
             />
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg transition-all">
-            <Plus size={18} /> <span className="hidden md:inline">Novo Cliente</span>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-3 rounded-2xl flex items-center gap-2 font-black shadow-xl shadow-purple-900/10 transition-all active:scale-95 text-sm"
+          >
+            <Plus size={20} /> Novo Cliente
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {clientesFiltrados.map(cliente => (
-          <div 
-            key={cliente.id} 
-            onClick={() => navigate(`/documentacao/${cliente.id}`)}
-            className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
-          >
-            {/* Faixa lateral colorida baseada no tipo */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-
-            <div className="flex justify-between items-start mb-4 pl-2">
-              <div className={`p-3 rounded-lg ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
-                {cliente.tipo_cliente === 'CONTRATO' ? <Building2 size={24} /> : <User size={24} />}
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+      {/* LISTA DE CLIENTES */}
+      {loading ? (
+        <div className="py-20 text-center text-[#7C69AF] animate-pulse font-black uppercase tracking-widest text-[10px]">Sincronizando Carteira Cyrius...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {clientesFiltrados.map(cliente => (
+            <div 
+              key={cliente.id} 
+              onClick={() => navigate(`/documentacao/${cliente.id}`)}
+              className="group bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
+            >
+              {/* Badge de Tipo */}
+              <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest
+                ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}>
                 {cliente.tipo_cliente}
-              </span>
-            </div>
+              </div>
 
-            <div className="pl-2">
-              <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark transition-colors">{cliente.razao_social}</h3>
-              <p className="text-gray-400 text-xs mt-1 font-mono">{cliente.cnpj || cliente.cpf || 'Sem Doc'}</p>
-              
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <MapPin size={16} /> <span className="truncate">{cliente.endereco}</span>
+              <div className="flex items-center gap-4 mb-6">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner
+                  ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'}`}>
+                  {cliente.razao_social.charAt(0).toUpperCase()}
                 </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg group-hover:text-[#7C69AF] transition-colors leading-tight">
+                    {cliente.razao_social}
+                  </h3>
+                  <p className="text-[10px] font-mono text-slate-400 mt-1 uppercase font-bold">
+                    {cliente.cnpj || cliente.cpf || 'Sem documento'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 text-xs text-slate-500 font-bold">
+                  <MapPin size={14} className="text-[#A696D1] shrink-0" />
+                  <span className="line-clamp-1">{cliente.endereco}</span>
+                </div>
+                
                 {cliente.tipo_cliente === 'CONTRATO' && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Calendar size={16} /> <span>Vence dia {cliente.dia_vencimento}</span>
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                       <Calendar size={12} className="text-[#7C69AF]" /> Vence Dia {cliente.dia_vencimento}
+                    </div>
+                    <div className="text-sm font-black text-emerald-600">
+                       R$ {cliente.valor_contrato_mensal}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-50 pl-2 flex justify-between items-center">
-               <span className="text-xs text-gray-400">Ver documentação</span>
-               <FileText size={18} className="text-gray-300 group-hover:text-primary-light" />
+              <div className="mt-6 pt-4 border-t border-slate-50 flex justify-between items-center text-slate-300 group-hover:text-[#7C69AF] transition-colors">
+                 <span className="text-[10px] font-black uppercase tracking-widest">Ficha Técnica</span>
+                 <ChevronRight size={18} />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* MODAL NOVO CLIENTE */}
+      {/* MODAL DE CADASTRO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <h3 className="font-bold text-gray-800 text-lg mb-6">Novo Cliente</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Razão Social / Nome</label>
-                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                  value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} />
+        <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[95vh] overflow-y-auto relative border border-white/20">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464] transition-colors">
+              <X size={24} />
+            </button>
+
+            <h3 className="font-black text-[#302464] text-2xl mb-8 flex items-center gap-3">
+              <Building2 className="text-[#7C69AF]" /> Novo Cliente
+            </h3>
+
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social / Nome Completo</label>
+                <input 
+                  name="razao_social" required type="text" value={formData.razao_social} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-[#302464]"
+                  placeholder="Ex: ACME Corporation LTDA"
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">CPF / CNPJ</label>
-                   <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                     value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} placeholder="Apenas números" />
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CPF ou CNPJ</label>
+                <input 
+                  name="cpf_cnpj" required type="text" value={formData.cpf_cnpj} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold"
+                  placeholder="Apenas números"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Cliente</label>
+                <select 
+                  name="tipo_cliente" value={formData.tipo_cliente} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 cursor-pointer"
+                >
+                  <option value="CONTRATO">CONTRATO MENSAL</option>
+                  <option value="AVULSO">CLIENTE AVULSO</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Atendimento</label>
+                <div className="relative group">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
+                  <input 
+                    name="endereco" required type="text" value={formData.endereco} onChange={handleInputChange}
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-medium"
+                    placeholder="Rua, Número, Bairro, Cidade - UF"
+                  />
                 </div>
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                   <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
-                     value={tipo} onChange={e => setTipo(e.target.value)}>
-                     <option value="CONTRATO">Contrato Mensal</option>
-                     <option value="AVULSO">Avulso</option>
-                   </select>
+              </div>
+
+              {formData.tipo_cliente === 'CONTRATO' && (
+                <div className="md:col-span-2 grid grid-cols-2 gap-6 p-6 bg-emerald-50 rounded-[2rem] border border-emerald-100 animate-in slide-in-from-top-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest ml-1">Valor Mensalidade (R$)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-300" size={18} />
+                      <input 
+                        name="valor_contrato_mensal" type="number" step="0.01" value={formData.valor_contrato_mensal} onChange={handleInputChange}
+                        className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-emerald-200 font-black text-emerald-700"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest ml-1">Melhor Dia Vencimento</label>
+                    <input 
+                      name="dia_vencimento" type="number" max="31" min="1" value={formData.dia_vencimento} onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-emerald-200 font-black text-emerald-700"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Endereço Completo</label>
-                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                  value={endereco} onChange={e => setEndereco(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Valor Mensal (R$)</label>
-                   <input required type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                     value={valor} onChange={e => setValor(e.target.value)} />
-                </div>
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Dia Vencimento</label>
-                   <input required type="number" max="31" min="1" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                     value={diaVencimento} onChange={e => setDiaVencimento(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex gap-3 justify-end mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b]">Salvar</button>
-              </div>
+              )}
+
+              <button 
+                type="submit" 
+                className="md:col-span-2 w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black text-lg shadow-2xl shadow-purple-900/20 active:scale-95 mt-4 transition-all"
+              >
+                Salvar Cadastro
+              </button>
             </form>
           </div>
         </div>

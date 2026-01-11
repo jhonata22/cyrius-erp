@@ -1,7 +1,7 @@
 import api from './api';
 
 const estoqueService = {
-  // --- PRODUTOS ---
+  // PRODUTOS
   listarProdutos: async () => {
     const response = await api.get('/produtos/');
     return response.data;
@@ -15,11 +15,10 @@ const estoqueService = {
     return response.data;
   },
   excluirProduto: async (id) => {
-    const response = await api.delete(`/produtos/${id}/`);
-    return response.data;
+    await api.delete(`/produtos/${id}/`);
   },
 
-  // --- FORNECEDORES ---
+  // FORNECEDORES
   listarFornecedores: async () => {
     const response = await api.get('/fornecedores/');
     return response.data;
@@ -29,18 +28,22 @@ const estoqueService = {
     return response.data;
   },
 
-  // --- MOVIMENTAÇÃO (ESTOQUE) ---
+  // MOVIMENTAÇÃO
   listarHistorico: async () => {
     const response = await api.get('/estoque/');
     return response.data;
   },
-  
-  // Suporte a Upload de Arquivo (FormData)
   registrarMovimento: async (formData) => {
-    // O Axios detecta FormData automaticamente e configura os headers corretos
+    // O Django receberá via multipart/form-data por causa do arquivo
     const response = await api.post('/estoque/', formData);
     return response.data;
+  },
+
+  buscarFornecedorPorId: async (id) => {
+    const response = await api.get(`/fornecedores/${id}/`);
+    return response.data;
   }
+
 };
 
 export default estoqueService;

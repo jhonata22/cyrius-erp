@@ -1,338 +1,295 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-// REMOVIDO: import axios from 'axios';
 import { 
-  Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck 
+  Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, AlertTriangle, ChevronRight, Search, Info 
 } from 'lucide-react';
 
-// IMPORTAÇÃO DOS SERVIÇOS
 import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 import clienteService from '../services/clienteService';
 
+// Constantes de Estilização com a nova paleta Cyrius
+const PRIORIDADE_MAP = {
+  BAIXA: 'bg-blue-50 text-blue-600 border-blue-100',
+  MEDIA: 'bg-indigo-50 text-[#7C69AF] border-indigo-100',
+  ALTA: 'bg-purple-50 text-[#302464] border-purple-200',
+  CRITICA: 'bg-red-50 text-red-600 border-red-100',
+};
+
+const STATUS_MAP = {
+  ABERTO: 'bg-emerald-50 text-emerald-600',
+  EM_ANDAMENTO: 'bg-blue-50 text-blue-600',
+  FINALIZADO: 'bg-slate-100 text-slate-500',
+  CANCELADO: 'bg-red-50 text-red-600',
+  AGENDADO: 'bg-purple-50 text-[#7C69AF]',
+};
+
 export default function Chamados() {
-  const [chamados, setChamados] = useState([]);
-  const [equipe, setEquipe] = useState([]); 
-  const [clientes, setClientes] = useState([]); 
-  const [loading, setLoading] = useState(true);
-  
-  // Controle do Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('PADRAO'); // 'PADRAO' ou 'VISITA'
-  
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [chamados, setChamados] = useState([]);
+  const [equipe, setEquipe] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [busca, setBusca] = useState('');
 
-  // Estados do Formulário
-  const [clienteId, setClienteId] = useState('');
-  const [titulo, setTitulo] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [prioridade, setPrioridade] = useState('MEDIA');
-  const [origem, setOrigem] = useState('TELEFONE');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('REMOTO'); 
   
-  // Novos Estados para Visita
-  const [dataAgendamento, setDataAgendamento] = useState('');
-  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); // Array de IDs
+  const [formData, setFormData] = useState({
+    cliente: '',
+    titulo: '',
+    descricao_detalhada: '',
+    prioridade: 'MEDIA',
+    origem: 'TELEFONE',
+    data_agendamento: '',
+    tecnicos: []
+  });
 
-  // --- REFATORADO: Carregamento com Serviços ---
   const carregarDados = async () => {
     try {
-      // Promise.all continua sendo usado para performance
-      const [dadosChamados, dadosEquipe, dadosClientes] = await Promise.all([
+      setLoading(true);
+      const [c, e, cli] = await Promise.all([
         chamadoService.listar(),
         equipeService.listar(),
         clienteService.listar()
       ]);
-      
-      setChamados(dadosChamados);
-      setEquipe(dadosEquipe);
-      setClientes(dadosClientes);
-    } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      setChamados(c);
+      setEquipe(e);
+      setClientes(cli);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
+  useEffect(() => { carregarDados(); }, []);
 
-  const abrirModal = (modo) => {
-    setModalMode(modo);
-    // Limpar form ao abrir
-    setTitulo('');
-    setDescricao('');
-    setTecnicosSelecionados([]);
-    setClienteId('');
-    setOrigem('TELEFONE');
-    setDataAgendamento('');
+  const chamadosFiltrados = useMemo(() => {
+    return chamados.filter(c => 
+      c.titulo.toLowerCase().includes(busca.toLowerCase()) || 
+      c.protocolo.includes(busca) ||
+      (c.nome_cliente && c.nome_cliente.toLowerCase().includes(busca.toLowerCase()))
+    );
+  }, [busca, chamados]);
+
+  const handleOpenModal = (mode) => {
+    setModalMode(mode);
+    setFormData({
+      cliente: '', titulo: '', descricao_detalhada: '',
+      prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', tecnicos: []
+    });
     setIsModalOpen(true);
   };
 
-  const toggleTecnico = (id) => {
-    setTecnicosSelecionados(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(t => t !== id);
-      } else {
-        return [...prev, id];
-      }
-    });
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- REFATORADO: Submit com Serviço ---
+  const toggleTecnico = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      tecnicos: prev.tecnicos.includes(id) 
+        ? prev.tecnicos.filter(t => t !== id) 
+        : [...prev.tecnicos, id]
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!clienteId) {
-      alert("Por favor, selecione um cliente.");
-      return;
-    }
-
-    const isVisita = modalMode === 'VISITA';
-
-    const payload = {
-      cliente: clienteId,
-      titulo,
-      descricao_detalhada: descricao,
-      origem: origem,
-      status: isVisita ? 'AGENDADO' : 'ABERTO',
-      tipo_atendimento: isVisita ? 'VISITA' : 'REMOTO',
-      data_agendamento: isVisita ? dataAgendamento : null,
-      prioridade,
-      tecnicos: tecnicosSelecionados 
-    };
+    if (!formData.cliente) return alert("Selecione um cliente.");
+    if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
     try {
-      // Chamada limpa ao serviço
+      const payload = {
+        ...formData,
+        tipo_atendimento: modalMode,
+        status: modalMode === 'VISITA' ? 'AGENDADO' : 'ABERTO'
+      };
       await chamadoService.criar(payload);
-      
-      alert(isVisita ? "Visita agendada com sucesso!" : "Chamado aberto com sucesso!");
       setIsModalOpen(false);
       carregarDados();
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar. Verifique se preencheu a Data em caso de visita.");
+    } catch (err) {
+      alert("Erro ao salvar chamado.");
     }
-  };
-
-  // Funções Auxiliares de UI (Mantidas)
-  const getPriorityColor = (p) => {
-    const map = { 'BAIXA': 'bg-blue-100 text-blue-700', 'MEDIA': 'bg-yellow-100 text-yellow-700', 'ALTA': 'bg-orange-100 text-orange-700', 'CRITICA': 'bg-red-100 text-red-700' };
-    return map[p] || 'bg-gray-100';
-  };
-
-  const getStatusColor = (s) => {
-    const map = { 
-        'ABERTO': 'bg-green-100 text-green-700', 
-        'EM_ANDAMENTO': 'bg-blue-100 text-blue-700', 
-        'FINALIZADO': 'bg-gray-100 text-gray-600', 
-        'CANCELADO': 'bg-red-100 text-red-700',
-        'AGENDADO': 'bg-purple-100 text-purple-700'
-    };
-    return map[s] || 'bg-gray-100';
   };
 
   return (
-    <div>
-      {/* CABEÇALHO */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="animate-in fade-in duration-500">
+      {/* HEADER */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Central de Atendimento</h1>
-          <p className="text-gray-500 text-sm mt-1">Gerencie chamados remotos e visitas técnicas.</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Atendimentos</h1>
+          <div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => abrirModal('VISITA')} className="bg-white border border-primary-dark text-primary-dark hover:bg-gray-50 px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-all">
+        
+        <div className="flex flex-wrap gap-3">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
+            <input 
+              type="text" placeholder="Buscar..." 
+              value={busca} onChange={e => setBusca(e.target.value)}
+              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 text-sm w-64 transition-all"
+            />
+          </div>
+          <button onClick={() => handleOpenModal('VISITA')} className="bg-white border-2 border-[#302464] text-[#302464] hover:bg-slate-50 px-6 py-2.5 rounded-2xl flex items-center gap-2 text-sm font-black transition-all active:scale-95">
             <Calendar size={18} /> Agendar Visita
           </button>
-          <button onClick={() => abrirModal('PADRAO')} className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg transition-all">
+          <button onClick={() => handleOpenModal('REMOTO')} className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-2.5 rounded-2xl flex items-center gap-2 text-sm font-black shadow-xl shadow-purple-900/20 transition-all active:scale-95">
             <Plus size={18} /> Novo Chamado
           </button>
         </div>
       </div>
 
-      {/* LISTA DE CHAMADOS */}
-      <div className="grid gap-4">
-        {loading ? <p>Carregando...</p> : chamados.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-            <p className="text-gray-500 mb-4">Nenhum atendimento encontrado.</p>
-            <button onClick={() => abrirModal('PADRAO')} className="text-primary-dark font-bold hover:underline">Criar o Primeiro</button>
+      {/* LISTA */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="py-20 text-center text-[#7C69AF] animate-pulse font-black uppercase tracking-widest text-[10px]">Sincronizando Cyrius...</div>
+        ) : chamadosFiltrados.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200">
+             <Info size={40} className="mx-auto text-slate-200 mb-4" />
+             <p className="text-slate-400 font-bold">Nenhum atendimento ativo no momento.</p>
           </div>
         ) : (
-          chamados.map((ticket) => (
+          chamadosFiltrados.map((item) => (
             <div 
-              key={ticket.id} 
-              onClick={() => navigate(`/chamados/${ticket.id}`)}
-              className="cursor-pointer bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between gap-4 items-start md:items-center group"
+              key={item.id} 
+              onClick={() => navigate(`/chamados/${item.id}`)}
+              className="group bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col md:flex-row items-center justify-between gap-6"
             >
-              
-              <div className="flex gap-4 items-start">
-                <div className={`p-3 rounded-full mt-1 ${ticket.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                  {ticket.tipo_atendimento === 'VISITA' ? <Truck size={24} /> : <Briefcase size={24} />}
+              <div className="flex items-center gap-6 flex-1">
+                <div className={`p-4 rounded-2xl shadow-inner ${item.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-[#7C69AF]' : 'bg-slate-50 text-[#302464]'}`}>
+                  {item.tipo_atendimento === 'VISITA' ? <Truck size={28} /> : <Briefcase size={28} />}
                 </div>
                 
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs font-bold text-gray-400">#{ticket.protocolo}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${getPriorityColor(ticket.prioridade)}`}>
-                      {ticket.prioridade}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-[10px] font-black text-slate-300 tracking-tighter">#{item.protocolo}</span>
+                    <span className={`text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest ${PRIORIDADE_MAP[item.prioridade]}`}>
+                      {item.prioridade}
                     </span>
-                    {ticket.tipo_atendimento === 'VISITA' && (
-                        <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full uppercase font-bold flex items-center gap-1">
-                            <MapPin size={10} /> Visita
-                        </span>
-                    )}
+                    <span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${STATUS_MAP[item.status]}`}>
+                      {item.status.replace('_', ' ')}
+                    </span>
                   </div>
-                  <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark transition-colors">{ticket.titulo}</h3>
-                  <p className="text-gray-500 text-sm mt-1 line-clamp-1">{ticket.descricao_detalhada}</p>
-                  
-                  {ticket.nome_cliente && (
-                      <p className="text-xs text-gray-500 font-semibold mt-2 flex items-center gap-1">
-                         <Building2 size={12} /> {ticket.nome_cliente}
-                      </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 border-gray-100">
-                <div className="text-right mr-4">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${getStatusColor(ticket.status)}`}>
-                      {ticket.status.replace('_', ' ')}
+                  <h3 className="text-lg font-black text-slate-800 group-hover:text-[#7C69AF] transition-colors">{item.titulo}</h3>
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide">
+                        <Building2 size={13} className="text-slate-300" /> {item.nome_cliente}
                     </span>
-                    
-                    {ticket.tipo_atendimento === 'VISITA' && ticket.data_agendamento ? (
-                        <p className="text-xs text-purple-600 mt-1 flex items-center justify-end gap-1 font-bold">
-                           <Calendar size={12} /> {new Date(ticket.data_agendamento).toLocaleString('pt-BR')}
-                        </p>
-                    ) : (
-                        <p className="text-xs text-gray-400 mt-1 flex items-center justify-end gap-1">
-                           <Clock size={12} /> {new Date(ticket.created_at).toLocaleDateString('pt-BR')}
-                        </p>
-                    )}
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                      {item.tipo_atendimento === 'VISITA' ? (
+                         <><Calendar size={13} className="text-[#A696D1]" /> {new Date(item.data_agendamento).toLocaleString('pt-BR')}</>
+                      ) : (
+                         <><Clock size={13} className="text-[#A696D1]" /> {new Date(item.created_at).toLocaleDateString('pt-BR')}</>
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
+              <ChevronRight className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all" />
             </div>
           ))
         )}
       </div>
 
-      {/* MODAL UNIFICADO */}
+      {/* MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                  {modalMode === 'VISITA' ? <><Truck size={24} className="text-purple-600"/> Agendar Visita Técnica</> : <><Plus size={24} className="text-blue-600"/> Abrir Chamado Remoto</>}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500">✕</button>
-            </div>
+        <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto relative border border-white/20">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464] transition-colors">
+              <X size={24} />
+            </button>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <h2 className="text-2xl font-black text-[#302464] mb-8 flex items-center gap-3">
+              {modalMode === 'VISITA' ? <Truck className="text-[#7C69AF]" /> : <Plus className="text-[#7C69AF]" />}
+              {modalMode === 'VISITA' ? 'Agendar Visita Técnica' : 'Novo Chamado Remoto'}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* CAMPO ESPECÍFICO DE VISITA */}
               {modalMode === 'VISITA' && (
-                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
-                      <label className="block text-sm font-bold text-purple-900 mb-1">Data e Hora da Visita</label>
-                      <input 
-                        required 
-                        type="datetime-local" 
-                        className="w-full px-4 py-2 border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500/50 bg-white"
-                        value={dataAgendamento}
-                        onChange={e => setDataAgendamento(e.target.value)}
-                      />
+                <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 flex items-center gap-4 animate-in slide-in-from-top-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-[#302464] uppercase tracking-widest block mb-2">Data e Hora do Agendamento</label>
+                    <input 
+                      type="datetime-local" name="data_agendamento" required
+                      value={formData.data_agendamento} onChange={handleInputChange}
+                      className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464]"
+                    />
                   </div>
+                  <AlertTriangle className="text-[#A696D1] hidden sm:block" size={32} />
+                </div>
               )}
 
-              {/* CLIENTE */}
-              <div>
-                <div className="flex justify-between">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Solicitante</label>
-                    <button type="button" onClick={() => navigate('/clientes')} className="text-xs text-primary-dark hover:underline font-bold">
-                        + Novo Cliente Avulso
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
+                <select 
+                  name="cliente" required value={formData.cliente} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700"
+                >
+                  <option value="">Selecione...</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto do Chamado</label>
+                <input 
+                  name="titulo" required value={formData.titulo} onChange={handleInputChange}
+                  placeholder="Resumo..."
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold"
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+                <textarea 
+                  name="descricao_detalhada" required rows="3" value={formData.descricao_detalhada} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-medium"
+                  placeholder="Detalhes técnicos..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Urgência</label>
+                <select name="prioridade" value={formData.prioridade} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold">
+                  <option value="BAIXA">Baixa</option>
+                  <option value="MEDIA">Média</option>
+                  <option value="ALTA">Alta</option>
+                  <option value="CRITICA">Crítica</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Canal</label>
+                <select name="origem" value={formData.origem} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold">
+                  <option value="TELEFONE">Telefone</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="EMAIL">E-mail</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2 space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnicos Designados</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {equipe.map(tec => (
+                    <button 
+                      key={tec.id} type="button"
+                      onClick={() => toggleTecnico(tec.id)}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all 
+                        ${formData.tecnicos.includes(tec.id) ? 'bg-[#302464] border-[#302464] text-white' : 'bg-white border-slate-100 text-slate-400 hover:border-purple-200'}`}
+                    >
+                      {tec.nome}
                     </button>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Building2 size={18} /></span>
-                  <select 
-                    required 
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-primary-light/50"
-                    value={clienteId} 
-                    onChange={e => setClienteId(e.target.value)}
-                  >
-                    <option value="">Selecione um cliente...</option>
-                    {clientes.map(cli => (
-                      <option key={cli.id} value={cli.id}>{cli.razao_social}</option>
-                    ))}
-                  </select>
+                  ))}
                 </div>
               </div>
 
-              {/* TÍTULO */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Título do Problema</label>
-                <input required type="text" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" 
-                  value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Servidor Parado / Instalação de Impressora" />
-              </div>
-
-              {/* DESCRIÇÃO */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição Detalhada</label>
-                <textarea required rows="3" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50"
-                  value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Detalhes do que precisa ser feito..." />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* PRIORIDADE */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prioridade</label>
-                  <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
-                    value={prioridade} onChange={e => setPrioridade(e.target.value)}>
-                    <option value="BAIXA">Baixa</option>
-                    <option value="MEDIA">Média</option>
-                    <option value="ALTA">Alta</option>
-                    <option value="CRITICA">Crítica (Urgente)</option>
-                  </select>
-                </div>
-
-                {/* ORIGEM */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Origem</label>
-                  <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white"
-                      value={origem} onChange={e => setOrigem(e.target.value)}>
-                      <option value="TELEFONE">Telefone</option>
-                      <option value="WHATSAPP">WhatsApp</option>
-                      <option value="EMAIL">E-mail</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* SELEÇÃO DE TÉCNICOS */}
-              <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Técnicos Designados ({tecnicosSelecionados.length})</label>
-                  <div className="border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">
-                      {equipe.map(tec => (
-                          <div key={tec.id} className="flex items-center gap-2 mb-2 last:mb-0">
-                              <input 
-                                type="checkbox" 
-                                id={`tec-${tec.id}`} 
-                                checked={tecnicosSelecionados.includes(tec.id)}
-                                onChange={() => toggleTecnico(tec.id)}
-                                className="w-4 h-4 text-primary-dark rounded focus:ring-primary-light"
-                              />
-                              <label htmlFor={`tec-${tec.id}`} className="text-sm text-gray-700 cursor-pointer select-none flex-1">
-                                  {tec.nome} <span className="text-xs text-gray-400">({tec.cargo})</span>
-                              </label>
-                          </div>
-                      ))}
-                      {equipe.length === 0 && <p className="text-xs text-gray-400">Nenhuma equipe cadastrada.</p>}
-                  </div>
-              </div>
-
-              <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                <button type="submit" className={`px-6 py-2 text-white rounded-lg shadow-lg font-bold transition-all ${modalMode === 'VISITA' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-primary-dark hover:bg-[#1a1b4b]'}`}>
-                    {modalMode === 'VISITA' ? 'Confirmar Agendamento' : 'Abrir Chamado'}
-                </button>
-              </div>
+              <button type="submit" className="md:col-span-2 w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black text-lg shadow-2xl shadow-purple-900/20 active:scale-95 mt-4 transition-all">
+                {modalMode === 'VISITA' ? 'Confirmar Agendamento' : 'Abrir Atendimento'}
+              </button>
             </form>
           </div>
         </div>

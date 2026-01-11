@@ -1,443 +1,348 @@
-import { useState, useEffect } from 'react';
-// REMOVIDO: import axios from 'axios';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // IMPORTAÇÃO ESSENCIAL
 import { 
   Package, Plus, Search, Truck, ArrowUpCircle, ArrowDownCircle, 
-  DollarSign, Edit, Trash2, X, User, Paperclip, FileText 
+  DollarSign, Edit, Trash2, X, User, Paperclip, FileText, ChevronRight, AlertTriangle, Filter, Building2
 } from 'lucide-react';
-
-// IMPORTAÇÃO DOS SERVIÇOS
 import estoqueService from '../services/estoqueService';
 import clienteService from '../services/clienteService';
 
 export default function Inventario() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('PRODUTOS');
-  
-  // Estados de Dados
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+
   const [produtos, setProdutos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [historico, setHistorico] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busca, setBusca] = useState('');
 
-  // Modais
-  const [modalProduto, setModalProduto] = useState(false);
-  const [modalMovimento, setModalMovimento] = useState(false);
-  const [modalFornecedor, setModalFornecedor] = useState(false);
+  const [modalType, setModalType] = useState(null); 
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState({});
 
-  // States Formulários
-  const [produtoEmEdicao, setProdutoEmEdicao] = useState(null);
-  const [novoProduto, setNovoProduto] = useState({ nome: '', categoria: 'HARDWARE', estoque_minimo: 2, preco_venda_sugerido: '' });
-  const [novoFornecedor, setNovoFornecedor] = useState({ razao_social: '', telefone: '' });
-  
-  // State Movimentação
-  const [movimento, setMovimento] = useState({
-    tipo: 'ENTRADA',
-    produto_id: '',
-    quantidade: 1,
-    preco_unitario: '',
-    fornecedor_id: '',
-    cliente_id: '', 
-    numero_serial: '',
-    arquivo: null
-  });
-
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  // --- REFATORADO: Carregamento Centralizado ---
   const carregarDados = async () => {
     try {
-      // Busca paralela usando os serviços
-      const [listaProdutos, listaFornecedores, listaClientes, listaHistorico] = await Promise.all([
+      setLoading(true);
+      const [p, f, cli, h] = await Promise.all([
         estoqueService.listarProdutos(),
         estoqueService.listarFornecedores(),
         clienteService.listar(),
         estoqueService.listarHistorico()
       ]);
-
-      setProdutos(listaProdutos);
-      setFornecedores(listaFornecedores);
-      setClientes(listaClientes);
-      setHistorico(listaHistorico);
-    } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      setProdutos(p);
+      setFornecedores(f);
+      setClientes(cli);
+      setHistorico(h);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtros
-  const produtosFiltrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
-  const fornecedoresFiltrados = fornecedores.filter(f => f.razao_social.toLowerCase().includes(busca.toLowerCase()));
+  useEffect(() => { carregarDados(); }, []);
 
-  // --- AÇÕES DE PRODUTO ---
-  const abrirModalNovoProduto = () => {
-      setProdutoEmEdicao(null);
-      setNovoProduto({ nome: '', categoria: 'HARDWARE', estoque_minimo: 2, preco_venda_sugerido: '' });
-      setModalProduto(true);
-  };
+  const filteredData = useMemo(() => {
+    const b = busca.toLowerCase();
+    if (activeTab === 'PRODUTOS') return produtos.filter(p => p.nome.toLowerCase().includes(b));
+    if (activeTab === 'FORNECEDORES') return fornecedores.filter(f => f.razao_social.toLowerCase().includes(b));
+    
+    // Ordena o histórico: Recentes primeiro
+    return [...historico].sort((a, b) => new Date(b.data_movimento) - new Date(a.data_movimento));
+  }, [busca, activeTab, produtos, fornecedores, historico]);  
 
-  const abrirModalEditarProduto = (produto) => {
-      setProdutoEmEdicao(produto.id);
-      setNovoProduto({ 
-          nome: produto.nome, 
-          categoria: produto.categoria, 
-          estoque_minimo: produto.estoque_minimo, 
-          preco_venda_sugerido: produto.preco_venda_sugerido 
-      });
-      setModalProduto(true);
+  const openModal = (type, data = null) => {
+    setModalType(type);
+    if (type === 'PRODUTO') {
+      setEditId(data?.id || null);
+      setFormData(data || { nome: '', categoria: 'HARDWARE', estoque_minimo: 2, preco_venda_sugerido: '' });
+    } else if (type === 'MOVIMENTO') {
+      setFormData({ tipo_movimento: 'ENTRADA', produto: '', quantidade: 1, preco_unitario: '', fornecedor: '', cliente: '', numero_serial: '', arquivo: null });
+    } else if (type === 'FORNECEDOR') {
+      setFormData({ razao_social: '', telefone: '' });
+    }
   };
 
   const handleSalvarProduto = async (e) => {
     e.preventDefault();
     try {
-      if (produtoEmEdicao) {
-          await estoqueService.atualizarProduto(produtoEmEdicao, novoProduto);
-          alert("Produto atualizado!");
-      } else {
-          await estoqueService.criarProduto(novoProduto);
-          alert("Produto criado!");
-      }
-      setModalProduto(false);
-      setProdutoEmEdicao(null);
+      if (editId) await estoqueService.atualizarProduto(editId, formData);
+      else await estoqueService.criarProduto(formData);
+      setModalType(null);
       carregarDados();
     } catch (error) { alert("Erro ao salvar produto."); }
   };
 
-  const handleExcluirProduto = async (id, nome) => {
-      if (window.confirm(`Excluir "${nome}"?`)) {
-          try {
-              await estoqueService.excluirProduto(id);
-              carregarDados();
-          } catch (error) { alert("Erro ao excluir."); }
-      }
-  };
-
-  // --- AÇÕES DE FORNECEDOR ---
-  const handleSalvarFornecedor = async (e) => {
-    e.preventDefault();
-    try {
-      await estoqueService.criarFornecedor(novoFornecedor);
-      setModalFornecedor(false);
-      setNovoFornecedor({ razao_social: '', telefone: '' });
-      carregarDados();
-    } catch (error) { alert("Erro ao salvar fornecedor."); }
-  };
-
-  // --- AÇÕES DE MOVIMENTAÇÃO (REFATORADO) ---
   const handleSalvarMovimento = async (e) => {
     e.preventDefault();
     
-    // Validação de Estoque na Saída
-    if (movimento.tipo === 'SAIDA') {
-       const prod = produtos.find(p => p.id == movimento.produto_id);
-       if (prod && prod.estoque_atual < movimento.quantidade) {
-           return alert(`Estoque insuficiente! Saldo: ${prod.estoque_atual}`);
-       }
+    // Validação de segurança para Saída (Exige Cliente)
+    if (formData.tipo_movimento === 'SAIDA' && !formData.cliente) {
+        return alert("Erro: Selecione o cliente que está recebendo este produto.");
     }
 
-    // Montagem do FormData (UI Layer logic)
-    const formData = new FormData();
-    formData.append('produto', movimento.produto_id);
-    formData.append('tipo_movimento', movimento.tipo);
-    formData.append('quantidade', movimento.quantidade);
-    formData.append('preco_unitario', movimento.preco_unitario || 0);
-    formData.append('numero_serial', movimento.numero_serial);
-
-    if (movimento.tipo === 'ENTRADA' && movimento.fornecedor_id) {
-        formData.append('fornecedor', movimento.fornecedor_id);
-    }
-    if (movimento.tipo === 'SAIDA' && movimento.cliente_id) {
-        formData.append('cliente', movimento.cliente_id);
-    }
-    if (movimento.arquivo) {
-        formData.append('arquivo', movimento.arquivo);
-    }
+    const data = new FormData();
+    Object.keys(formData).forEach(key => {
+        if (formData[key]) data.append(key, formData[key]);
+    });
 
     try {
-      // Chamada limpa ao serviço
-      await estoqueService.registrarMovimento(formData);
-      
-      alert("Movimentação registrada com sucesso!");
-      setModalMovimento(false);
-      setMovimento({ 
-          tipo: 'ENTRADA', produto_id: '', quantidade: 1, 
-          preco_unitario: '', fornecedor_id: '', cliente_id: '', 
-          numero_serial: '', arquivo: null 
-      });
+      await estoqueService.registrarMovimento(data);
+      setModalType(null);
       carregarDados();
-    } catch (error) { 
-        console.error(error);
-        alert("Erro ao registrar. Verifique os dados."); 
+      alert("Lançamento realizado com sucesso!");
+    } catch (err) { 
+        console.error(err);
+        alert("Falha no registro. Verifique se há saldo suficiente para esta saída."); 
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Carregando estoque...</div>;
-
   return (
-    <div>
-      {/* CABEÇALHO */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+    <div className="animate-in fade-in duration-500">
+      {/* HEADER COMPACTO */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Controle de Estoque</h1>
-          <p className="text-gray-500 text-sm">Gerencie peças, compras e movimentações.</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Estoque</h1>
+          <p className="text-slate-500 text-sm font-medium">Controle de ativos e suprimentos.</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-            <button onClick={() => setModalMovimento(true)} className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg transition-all w-full md:w-auto justify-center">
-                <ArrowUpCircle size={18} /> Registrar Entrada/Saída
+        <button 
+          onClick={() => openModal('MOVIMENTO')}
+          className="bg-slate-900 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 font-bold shadow-lg transition-all active:scale-95 text-sm"
+        >
+          <ArrowUpCircle size={18} /> Lançar Movimento
+        </button>
+      </div>
+
+      {/* TABS E BUSCA */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        <div className="flex p-1 bg-slate-200/50 rounded-xl w-full md:w-auto">
+          {['PRODUTOS', 'HISTORICO', 'FORNECEDORES'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => { setActiveTab(tab); setBusca(''); }}
+              className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {tab}
             </button>
+          ))}
+        </div>
+        
+        <div className="relative w-full md:w-64 group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input 
+            type="text" placeholder="Pesquisar..." value={busca} onChange={e => setBusca(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-orange-500/5 text-sm"
+          />
         </div>
       </div>
 
-      {/* ABAS */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-6 border-b border-gray-100 pb-4">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-full md:w-auto">
-            {['PRODUTOS', 'HISTORICO', 'FORNECEDORES'].map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex-1 md:flex-none ${activeTab === tab ? 'bg-white text-primary-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    {tab === 'PRODUTOS' && '📦 Produtos'}
-                    {tab === 'HISTORICO' && '📜 Extrato'}
-                    {tab === 'FORNECEDORES' && '🚚 Fornecedores'}
-                </button>
-            ))}
-          </div>
-          {activeTab !== 'HISTORICO' && (
-              <div className="relative w-full md:w-64">
-                <input type="text" placeholder="Buscar..." value={busca} onChange={e => setBusca(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary-light/50" />
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-          )}
-      </div>
-
-      {/* --- ABA 1: PRODUTOS --- */}
-      {activeTab === 'PRODUTOS' && (
+      {loading ? (
+        <div className="py-20 text-center text-slate-300 font-bold uppercase tracking-widest text-[10px] animate-pulse">Sincronizando...</div>
+      ) : (
         <>
-            <div className="flex justify-end mb-4">
-                <button onClick={abrirModalNovoProduto} className="text-primary-dark text-sm font-bold hover:underline flex items-center gap-1">
-                    <Plus size={16} /> Novo Produto
-                </button>
+          {activeTab === 'PRODUTOS' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              <div onClick={() => openModal('PRODUTO')} className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-6 hover:border-orange-500 hover:bg-orange-50/30 cursor-pointer transition-all group min-h-[150px]">
+                <Plus className="text-slate-300 group-hover:text-orange-500" size={24} />
+                <span className="mt-2 font-black text-slate-400 group-hover:text-orange-600 uppercase tracking-widest text-[9px]">Novo Item</span>
+              </div>
+
+              {filteredData.map(prod => (
+                <div key={prod.id} className="group bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all relative">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className={`p-2.5 rounded-xl ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-600'}`}>
+                      <Package size={20} />
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>{prod.estoque_atual}</span>
+                      <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p>
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
+                  <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{prod.categoria}</span>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); openModal('PRODUTO', prod); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Excluir?")) estoqueService.excluirProduto(prod.id).then(carregarDados)}} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {produtosFiltrados.map(prod => (
-                    <div key={prod.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-500' : 'bg-blue-500'}`}></div>
-                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => abrirModalEditarProduto(prod)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
-                            <button onClick={() => handleExcluirProduto(prod.id, prod.nome)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
+          )}
+
+          {activeTab === 'HISTORICO' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-2 duration-300">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
+                  <tr>
+                    <th className="p-4 text-center">Tipo</th>
+                    <th className="p-4">Produto</th>
+                    <th className="p-4">Origem/Destino</th>
+                    <th className="p-4 text-center">Qtd</th>
+                    <th className="p-4 text-center">Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredData.map(hist => (
+                    <tr key={hist.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${hist.tipo_movimento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                          {hist.tipo_movimento}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-bold text-slate-700">{hist.nome_produto}</p>
+                        <p className="text-[9px] text-slate-400">{hist.numero_serial || 'Sem Serial'}</p>
+                      </td>
+                      <td className="p-4 text-slate-500 font-medium italic">
+                        {hist.nome_cliente || hist.nome_fornecedor || 'Interno / Reposição'}
+                      </td>
+                      <td className="p-4 text-center font-black text-slate-700">{hist.quantidade}</td>
+                      <td className="p-4 text-center text-slate-400 font-mono text-[10px]">
+                        {new Date(hist.data_movimento).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'FORNECEDORES' && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div onClick={() => openModal('FORNECEDOR')} className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex items-center justify-center hover:border-orange-500 cursor-pointer text-slate-400 font-bold text-xs uppercase tracking-widest gap-2 transition-all">
+                   <Plus size={16}/> Novo Fornecedor
+                </div>
+                {filteredData.map(forn => (
+                    <div 
+                        key={forn.id} 
+                        onClick={() => navigate(`/fornecedores/${forn.id}`)}
+                        className="group bg-white p-5 rounded-2xl border border-slate-100 flex items-center justify-between shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
+                    >
+                        <div className="relative z-10">
+                            <h3 className="font-black text-slate-800 text-sm group-hover:text-orange-500 transition-colors">{forn.razao_social}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1 font-bold flex items-center gap-1">
+                                <Truck size={12} className="text-orange-400"/> {forn.telefone || forn.contato_nome || 'Sem contato'}
+                            </p>
                         </div>
-                        <div className="flex justify-between items-start mb-4 pl-2">
-                            <div className="p-3 rounded-lg bg-gray-50 text-gray-600"><Package size={24} /></div>
-                            <div className="text-right">
-                                <span className={`text-2xl font-bold ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-blue-600'}`}>{prod.estoque_atual}</span>
-                                <p className="text-[10px] text-gray-400 uppercase font-bold">Saldo</p>
-                            </div>
-                        </div>
-                        <div className="pl-2">
-                            <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark transition-colors">{prod.nome}</h3>
-                            <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 inline-block mb-3">{prod.categoria}</span>
-                            <div className="space-y-2 border-t border-gray-50 pt-3">
-                                <div className="flex justify-between items-center text-sm text-gray-500">
-                                    <span className="flex items-center gap-2"><DollarSign size={14} /> Sugerido:</span>
-                                    <span className="font-bold text-gray-700">R$ {prod.preco_venda_sugerido}</span>
-                                </div>
-                            </div>
-                        </div>
+                        <ChevronRight className="text-slate-200 group-hover:text-orange-500 transition-all" size={20} />
+                        <Truck className="absolute -right-2 -bottom-2 text-slate-50 opacity-0 group-hover:opacity-100 transition-opacity" size={60} />
                     </div>
                 ))}
             </div>
+          )}
         </>
       )}
 
-      {/* --- ABA 2: HISTÓRICO --- */}
-      {activeTab === 'HISTORICO' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-600">
-                  <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-400 border-b border-gray-200">
-                      <tr>
-                          <th className="p-4">Data</th>
-                          <th className="p-4">Tipo</th>
-                          <th className="p-4">Produto</th>
-                          <th className="p-4">Destino / Origem</th>
-                          <th className="p-4 text-center">Qtd</th>
-                          <th className="p-4 text-center">Anexo</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                      {historico.map(hist => (
-                          <tr key={hist.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="p-4 font-mono text-xs text-gray-500">
-                                  {new Date(hist.data_movimento).toLocaleDateString()}
-                              </td>
-                              <td className="p-4">
-                                  <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${hist.tipo_movimento === 'ENTRADA' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                      {hist.tipo_movimento}
-                                  </span>
-                              </td>
-                              <td className="p-4 font-bold text-gray-800">{hist.nome_produto}</td>
-                              <td className="p-4 text-xs">
-                                  {hist.tipo_movimento === 'ENTRADA' ? (
-                                      <span className="flex items-center gap-1 text-gray-500"><Truck size={12}/> {hist.nome_fornecedor || '-'}</span>
-                                  ) : (
-                                      <span className="flex items-center gap-1 text-blue-600 font-bold"><User size={12}/> {hist.nome_cliente || 'Avulso'}</span>
-                                  )}
-                              </td>
-                              <td className="p-4 text-center font-bold">{hist.quantidade}</td>
-                              <td className="p-4 text-center">
-                                  {hist.arquivo ? (
-                                      <a href={hist.arquivo} target="_blank" rel="noopener noreferrer" className="text-primary-dark hover:text-blue-600 inline-block p-1 bg-gray-100 rounded-full" title="Ver documento">
-                                          <Paperclip size={16} />
-                                      </a>
-                                  ) : <span className="text-gray-300">-</span>}
-                              </td>
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
-             </div>
-          </div>
-      )}
-
-      {/* --- ABA 3: FORNECEDORES --- */}
-      {activeTab === 'FORNECEDORES' && (
-            <>
-            <div className="flex justify-end mb-4">
-                <button onClick={() => setModalFornecedor(true)} className="text-primary-dark text-sm font-bold hover:underline flex items-center gap-1">
-                    <Plus size={16} /> Novo Fornecedor
-                </button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-                {fornecedoresFiltrados.map(forn => (
-                    <div key={forn.id} className="bg-white p-5 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
-                        <div>
-                            <h3 className="font-bold text-gray-800">{forn.razao_social}</h3>
-                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Truck size={14} className="text-primary-light"/> {forn.telefone || 'Sem contato'}</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
-            </>
-      )}
-
-      {/* --- MODAL PRODUTO --- */}
-      {modalProduto && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
-                <button onClick={() => setModalProduto(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                <h3 className="font-bold text-gray-800 text-lg mb-6">{produtoEmEdicao ? 'Editar Produto' : 'Novo Produto'}</h3>
-                <form onSubmit={handleSalvarProduto} className="space-y-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome</label><input required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" value={novoProduto.nome} onChange={e => setNovoProduto({...novoProduto, nome: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                        <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white" value={novoProduto.categoria} onChange={e => setNovoProduto({...novoProduto, categoria: e.target.value})}>
-                            <option value="HARDWARE">Hardware</option><option value="REDES">Redes</option><option value="PERIFERICO">Periféricos</option><option value="SOFTWARE">Software</option><option value="OUTROS">Outros</option>
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Minimo</label><input type="number" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" value={novoProduto.estoque_minimo} onChange={e => setNovoProduto({...novoProduto, estoque_minimo: e.target.value})} /></div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Preço Venda</label><input type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" value={novoProduto.preco_venda_sugerido} onChange={e => setNovoProduto({...novoProduto, preco_venda_sugerido: e.target.value})} /></div>
-                    </div>
-                    <div className="flex gap-3 justify-end mt-6"><button type="button" onClick={() => setModalProduto(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b]">Salvar</button></div>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {/* --- MODAL FORNECEDOR --- */}
-      {modalFornecedor && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
-                <button onClick={() => setModalFornecedor(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                <h3 className="font-bold text-gray-800 text-lg mb-6">Novo Fornecedor</h3>
-                <form onSubmit={handleSalvarFornecedor} className="space-y-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Razão Social</label><input required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" value={novoFornecedor.razao_social} onChange={e => setNovoFornecedor({...novoFornecedor, razao_social: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" value={novoFornecedor.telefone} onChange={e => setNovoFornecedor({...novoFornecedor, telefone: e.target.value})} /></div>
-                    <div className="flex gap-3 justify-end mt-6"><button type="button" onClick={() => setModalFornecedor(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b]">Salvar</button></div>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {/* --- MODAL MOVIMENTAÇÃO --- */}
-      {modalMovimento && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
-                <button onClick={() => setModalMovimento(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                
-                <h3 className="font-bold text-gray-800 text-lg mb-6 flex items-center gap-2">
-                    {movimento.tipo === 'ENTRADA' ? <ArrowDownCircle className="text-green-600"/> : <ArrowUpCircle className="text-red-600"/>}
-                    Registrar Movimentação
+      {/* MODAL LANÇAMENTO (CORRIGIDO) */}
+      {modalType === 'MOVIMENTO' && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-8 relative">
+                <button onClick={() => setModalType(null)} className="absolute top-8 right-8 text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                <h3 className="text-2xl font-black text-slate-800 mb-6 flex items-center gap-3">
+                  {formData.tipo_movimento === 'ENTRADA' ? <ArrowDownCircle className="text-emerald-500"/> : <ArrowUpCircle className="text-red-500"/>}
+                  Movimentar Estoque
                 </h3>
-                
-                <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
-                    <button onClick={() => setMovimento({...movimento, tipo: 'ENTRADA'})} className={`flex-1 py-2 text-xs font-bold rounded transition-all ${movimento.tipo === 'ENTRADA' ? 'bg-white shadow text-green-700' : 'text-gray-500'}`}>ENTRADA (COMPRA)</button>
-                    <button onClick={() => setMovimento({...movimento, tipo: 'SAIDA'})} className={`flex-1 py-2 text-xs font-bold rounded transition-all ${movimento.tipo === 'SAIDA' ? 'bg-white shadow text-red-700' : 'text-gray-500'}`}>SAÍDA (VENDA/USO)</button>
+
+                <div className="flex p-1 bg-slate-100 rounded-2xl mb-8 font-black text-[10px] uppercase tracking-widest">
+                  <button onClick={() => setFormData({...formData, tipo_movimento: 'ENTRADA', cliente: '', fornecedor: ''})} className={`flex-1 py-3 rounded-xl transition-all ${formData.tipo_movimento === 'ENTRADA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
+                  <button onClick={() => setFormData({...formData, tipo_movimento: 'SAIDA', cliente: '', fornecedor: ''})} className={`flex-1 py-3 rounded-xl transition-all ${formData.tipo_movimento === 'SAIDA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-400'}`}>Saída (Venda)</button>
                 </div>
 
-                <form onSubmit={handleSalvarMovimento} className="space-y-4">
+                <form onSubmit={handleSalvarMovimento} className="space-y-5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto</label>
+                    <select required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none focus:ring-4 focus:ring-orange-500/5"
+                      value={formData.produto} onChange={e => setFormData({...formData, produto: e.target.value})}>
+                      <option value="">Selecione um item...</option>
+                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Saldo: {p.estoque_atual})</option>)}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Produto</label>
-                        <select required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white" 
-                            value={movimento.produto_id} onChange={e => setMovimento({...movimento, produto_id: e.target.value})}>
-                            <option value="">Selecione...</option>
-                            {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Saldo: {p.estoque_atual})</option>)}
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantidade</label>
+                      <input type="number" required min="1" className="w-full bg-slate-50 p-4 rounded-2xl border-none outline-none font-bold" 
+                        value={formData.quantidade} onChange={e => setFormData({...formData, quantidade: e.target.value})}/>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{formData.tipo_movimento === 'ENTRADA' ? 'Custo (R$)' : 'Venda (R$)'}</label>
+                      <input type="number" step="0.01" required className="w-full bg-slate-50 p-4 rounded-2xl border-none outline-none font-bold"
+                        value={formData.preco_unitario} onChange={e => setFormData({...formData, preco_unitario: e.target.value})}/>
+                    </div>
+                  </div>
+
+                  {formData.tipo_movimento === 'ENTRADA' ? (
+                    <div className="animate-in slide-in-from-left-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fornecedor Origem</label>
+                        <select className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700" value={formData.fornecedor} onChange={e => setFormData({...formData, fornecedor: e.target.value})}>
+                          <option value="">Selecione o fornecedor...</option>
+                          {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
                         </select>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
-                            <input required type="number" min="1" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                                value={movimento.quantidade} onChange={e => setMovimento({...movimento, quantidade: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{movimento.tipo === 'ENTRADA' ? 'Custo (R$)' : 'Venda (R$)'}</label>
-                            <input required type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none" 
-                                value={movimento.preco_unitario} onChange={e => setMovimento({...movimento, preco_unitario: e.target.value})} />
-                        </div>
+                  ) : (
+                    <div className="animate-in slide-in-from-right-2">
+                        <label className="text-[10px] font-black text-orange-600 uppercase tracking-widest ml-1 flex items-center gap-1"><User size={10}/> Cliente Destino (Venda)</label>
+                        <select required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value})}>
+                          <option value="">Selecione o cliente...</option>
+                          {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                        </select>
                     </div>
+                  )}
 
-                    {movimento.tipo === 'ENTRADA' && (
+                  <button type="submit" className={`w-full py-5 rounded-3xl font-black text-white shadow-xl transition-all active:scale-95 ${formData.tipo_movimento === 'ENTRADA' ? 'bg-emerald-500 shadow-emerald-500/20 hover:bg-emerald-600' : 'bg-red-500 shadow-red-500/20 hover:bg-red-600'}`}>
+                    Confirmar Lançamento
+                  </button>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL PRODUTO / FORNECEDOR */}
+      {(modalType === 'PRODUTO' || modalType === 'FORNECEDOR') && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 relative">
+                <button onClick={() => setModalType(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                <h3 className="font-black text-slate-800 text-xl mb-6">
+                    {modalType === 'PRODUTO' ? (editId ? 'Editar Item' : 'Novo Produto') : 'Novo Fornecedor'}
+                </h3>
+                
+                <form onSubmit={modalType === 'PRODUTO' ? handleSalvarProduto : (e) => { e.preventDefault(); estoqueService.criarFornecedor(formData).then(carregarDados); setModalType(null); }} className="space-y-4">
+                    {modalType === 'PRODUTO' ? (
+                      <>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
-                            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white" 
-                                value={movimento.fornecedor_id} onChange={e => setMovimento({...movimento, fornecedor_id: e.target.value})}>
-                                <option value="">Opcional...</option>
-                                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
-                            </select>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
+                            <input required className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-4 focus:ring-orange-500/5 font-bold" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estoque Mín.</label>
+                              <input type="number" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl outline-none" value={formData.estoque_minimo} onChange={e => setFormData({...formData, estoque_minimo: e.target.value})} />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço Sugerido</label>
+                              <input type="number" step="0.01" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold text-emerald-600" value={formData.preco_venda_sugerido} onChange={e => setFormData({...formData, preco_venda_sugerido: e.target.value})} />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social</label>
+                            <input required className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700" value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone</label>
+                            <input className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} placeholder="(00) 00000-0000" />
+                        </div>
+                      </>
                     )}
-
-                    {movimento.tipo === 'SAIDA' && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Destino (Cliente)</label>
-                            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-white" 
-                                value={movimento.cliente_id} onChange={e => setMovimento({...movimento, cliente_id: e.target.value})}>
-                                <option value="">Interno / Avulso</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social} ({c.tipo_cliente})</option>)}
-                            </select>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                            <FileText size={14}/> Anexar Documento (PDF/Foto)
-                        </label>
-                        <input 
-                            type="file" 
-                            accept="application/pdf,image/*"
-                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary-light/10 file:text-primary-dark hover:file:bg-primary-light/20"
-                            onChange={e => setMovimento({...movimento, arquivo: e.target.files[0]})}
-                        />
-                        <p className="text-[10px] text-gray-400 mt-1">Ex: Nota fiscal, Orçamento assinado, Recibo.</p>
-                    </div>
-                    
-                    <div className="flex gap-3 justify-end mt-6">
-                        <button type="button" onClick={() => setModalMovimento(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                        <button type="submit" className={`px-6 py-2 text-white rounded-lg font-bold ${movimento.tipo === 'ENTRADA' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
-                            Confirmar
-                        </button>
-                    </div>
+                    <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-orange-500 transition-all active:scale-95 shadow-xl mt-4">
+                        Confirmar Cadastro
+                    </button>
                 </form>
             </div>
         </div>

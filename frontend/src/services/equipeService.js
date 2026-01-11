@@ -1,15 +1,13 @@
 import api from './api';
 
 const equipeService = {
-  // Busca um técnico específico por ID
-  buscarPorId: async (id) => {
-    const response = await api.get(`/equipe/${id}/`);
+  listar: async () => {
+    const response = await api.get('/equipe/');
     return response.data;
   },
 
-  // Busca a lista de todos os técnicos da equipe
-  listar: async () => {
-    const response = await api.get('/equipe/');
+  buscarPorId: async (id) => {
+    const response = await api.get(`/equipe/${id}/`);
     return response.data;
   },
 
@@ -18,10 +16,25 @@ const equipeService = {
     return response.data;
   },
 
+  atualizar: async (id, dados) => {
+    const response = await api.put(`/equipe/${id}/`, dados);
+    return response.data;
+  },
+
   excluir: async (id) => {
     const response = await api.delete(`/equipe/${id}/`);
     return response.data;
+  },
+
+getMe: async () => {
+    const response = await api.get('/equipe/me/');
+    return response.data;
+  },
+  updateMe: async (dados) => {
+    const response = await api.patch('/equipe/me/', dados);
+    return response.data;
   }
+
 };
 
 export default equipeService;

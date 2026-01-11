@@ -1,18 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-// REMOVIDO: import axios from 'axios';
-import { Lock, User, ArrowRight } from 'lucide-react';
-
-// IMPORTAÇÃO DO SERVIÇO
+import { Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
+
+  // Se o usuário já estiver logado, manda direto para a Home
+  useEffect(() => {
+    if (authService.isAuthenticated()) navigate('/');
+  }, [navigate]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCredentials(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -20,92 +26,100 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // 1. Chama o serviço de autenticação
-      const data = await authService.login({
-        username,
-        password
-      });
+      const data = await authService.login(credentials);
 
-      // 2. Salva o token no navegador
-      // O interceptor do api.js lerá isso automaticamente nas próximas chamadas
-      const token = data.access;
-      localStorage.setItem('token', token);
+      // Guardamos o token e o username (para exibir um "Olá, fulano" no dashboard)
+      localStorage.setItem('token', data.access);
+      localStorage.setItem('username', credentials.username);
       
-      // 3. Entra no sistema
       navigate('/');
-      
     } catch (err) {
-      console.error(err);
-      setError('Usuário ou senha incorretos.');
+      // Tratamento de erro mais específico
+      if (!err.response) {
+        setError('Servidor offline. Tente novamente mais tarde.');
+      } else if (err.response.status === 401) {
+        setError('Usuário ou senha incorretos.');
+      } else {
+        setError('Ocorreu um erro inesperado. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-white font-sans">
+    <div className="min-h-screen flex bg-[#F4F6F9] font-sans">
       
-      {/* LADO ESQUERDO (IMAGEM) */}
-      <div className="hidden lg:flex w-1/2 bg-primary-dark items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-primary-dark/90 z-10"></div>
-        {/* Imagem de Fundo */}
+      {/* LADO ESQUERDO: Branding (Oculto em mobile) */}
+      <div className="hidden lg:flex w-1/2 bg-slate-900 items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/90 to-slate-900/95 z-10"></div>
         <img 
           src="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop" 
-          alt="Office" 
-          className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50"
+          alt="Escritório" 
+          className="absolute inset-0 w-full h-full object-cover opacity-40"
         />
         
         <div className="relative z-20 text-white p-12 max-w-lg">
-          <h1 className="text-5xl font-bold mb-6">CYRI<span className="text-primary-light">US</span></h1>
-          <p className="text-xl text-gray-300 leading-relaxed">
-            Gestão inteligente para sua empresa de TI.
-            <br/>Controle chamados, estoque e contratos em um só lugar.
+          <h1 className="text-6xl font-black tracking-tighter mb-4">
+            CYRI<span className="text-indigo-400">US</span>
+          </h1>
+          <div className="h-1 w-20 bg-indigo-500 mb-6"></div>
+          <p className="text-xl text-slate-300 leading-relaxed font-light">
+            Sua infraestrutura de TI sob controle total. 
+            Simples, inteligente e eficiente.
           </p>
         </div>
       </div>
 
-      {/* LADO DIREITO (FORMULÁRIO) */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-[#F4F6F9]">
-        <div className="w-full max-w-md bg-white p-10 rounded-2xl shadow-xl">
+      {/* LADO DIREITO: Form de Login */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
           
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-800">Login</h2>
-            <p className="text-gray-500 mt-2">Entre com suas credenciais de acesso.</p>
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-slate-800">Bem-vindo</h2>
+            <p className="text-slate-500 mt-1">Acesse sua conta para continuar</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-5">
             
             {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
-                {error}
+              <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100 animate-in fade-in duration-300">
+                <AlertCircle size={18} />
+                <span>{error}</span>
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Usuário</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><User size={20} /></span>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 ml-1">Usuário</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                  <User size={18} />
+                </span>
                 <input 
+                  name="username"
                   type="text" 
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-light/50 outline-none transition-all"
+                  value={credentials.username}
+                  onChange={handleChange}
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                   placeholder="Seu usuário"
                   required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Senha</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Lock size={20} /></span>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 ml-1">Senha</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                  <Lock size={18} />
+                </span>
                 <input 
+                  name="password"
                   type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-light/50 outline-none transition-all"
-                  placeholder="••••••••"
+                  value={credentials.password}
+                  onChange={handleChange}
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  placeholder="Sua senha secreta"
                   required
                 />
               </div>
@@ -114,11 +128,19 @@ export default function Login() {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-3 bg-primary-dark hover:bg-[#1a1b4b] text-white font-bold rounded-lg transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 disabled:opacity-70"
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed mt-8"
             >
-              {loading ? 'Entrando...' : <>Acessar Sistema <ArrowRight size={18} /></>}
+              {loading ? (
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <>Entrar no sistema <ArrowRight size={20} /></>
+              )}
             </button>
           </form>
+
+          <p className="text-center mt-10 text-sm text-slate-400">
+            © {new Date().getFullYear()} Cyrius ERP. Todos os direitos reservados.
+          </p>
         </div>
       </div>
     </div>

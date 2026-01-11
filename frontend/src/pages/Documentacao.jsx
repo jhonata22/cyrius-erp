@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-// REMOVIDO: import axios from 'axios';
 import { 
   ArrowLeft, Save, Building2, Wifi, Lock, Monitor, 
-  Server, TrendingUp, Phone, Mail, User, Globe, Shield, Search, BookOpen, X 
+  Server, TrendingUp, Phone, Mail, User, Globe, Shield, 
+  Search, BookOpen, X, ChevronRight, CheckCircle2, 
+  AlertTriangle, Info, MapPin, Plus, Trash2 
 } from 'lucide-react';
 
 // SERVIÇOS
@@ -14,22 +15,18 @@ export default function Documentacao() {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // --- ESTADOS DE DADOS ---
   const [listaClientes, setListaClientes] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DO CLIENTE ATUAL ---
   const [cliente, setCliente] = useState(null);
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
   
-  // --- ESTADOS LÓGICOS ---
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
   const [formTemp, setFormTemp] = useState({}); 
 
-  // Estado para os textos longos
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
     topologia_rede: '',
@@ -38,540 +35,355 @@ export default function Documentacao() {
     pontos_fracos_melhorias: ''
   });
 
-  // --- REFATORADO: Carregamento de Dados ---
-  useEffect(() => {
-    const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
+    try {
       setLoading(true);
-      try {
-        if (!id) {
-          // MODO SELEÇÃO
-          const dadosClientes = await clienteService.listar();
-          setListaClientes(dadosClientes);
-        } else {
-          // MODO DETALHE
-          // Nota: documentacaoService.listarAtivos deve ser implementado no service
-          // ou usamos uma chamada direta se ainda não existir.
-          // Vou assumir que você tem um endpoint de ativos ou vai filtrar no front por enquanto.
-          const [dadosCliente, dadosAtivos] = await Promise.all([
-            clienteService.buscarPorId(id),
-            // Se documentacaoService.listarAtivos não existir, troque por axios ou crie no service
-            documentacaoService.listarAtivos ? documentacaoService.listarAtivos() : Promise.resolve([]) 
-          ]);
-          
-          setCliente(dadosCliente);
-          
-          // Filtra ativos do cliente atual (se a API retornar todos)
-          if (Array.isArray(dadosAtivos)) {
-              setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
-          }
+      if (!id) {
+        const dadosClientes = await clienteService.listar();
+        setListaClientes(dadosClientes);
+      } else {
+        const [dadosCliente, dadosAtivos] = await Promise.all([
+          clienteService.buscarPorId(id),
+          documentacaoService.listarAtivos()
+        ]);
+        
+        setCliente(dadosCliente);
+        setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
 
-          // Popula os textos
-          if (dadosCliente.documentacao_tecnica) {
-            setDocId(dadosCliente.documentacao_tecnica.id);
-            setTextos({
-              configuracao_mikrotik: dadosCliente.documentacao_tecnica.configuracao_mikrotik || '',
-              topologia_rede: dadosCliente.documentacao_tecnica.topologia_rede || '',
-              estrutura_servidores: dadosCliente.documentacao_tecnica.estrutura_servidores || '',
-              rotina_backup: dadosCliente.documentacao_tecnica.rotina_backup || '',
-              pontos_fracos_melhorias: dadosCliente.documentacao_tecnica.pontos_fracos_melhorias || ''
-            });
-          } else {
-            setDocId(null);
-            setTextos({ configuracao_mikrotik: '', topologia_rede: '', estrutura_servidores: '', rotina_backup: '', pontos_fracos_melhorias: '' });
-          }
+        if (dadosCliente.documentacao_tecnica) {
+          const doc = dadosCliente.documentacao_tecnica;
+          setDocId(doc.id);
+          setTextos({
+            configuracao_mikrotik: doc.configuracao_mikrotik || '',
+            topologia_rede: doc.topologia_rede || '', 
+            estrutura_servidores: doc.estrutura_servidores || '',
+            rotina_backup: doc.rotina_backup || '',
+            pontos_fracos_melhorias: doc.pontos_fracos_melhorias || ''
+          });
         }
-      } catch (error) {
-        console.error("Erro ao carregar:", error);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    carregarDados();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  // Função auxiliar para recarregar apenas quando necessário
-  const recarregarAtual = async () => {
-      if (!id) return;
-      const dadosCliente = await clienteService.buscarPorId(id);
-      setCliente(dadosCliente);
-      
-      // Recarrega lista de ativos se o método existir
-      if (documentacaoService.listarAtivos) {
-          const dadosAtivos = await documentacaoService.listarAtivos();
-          setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
-      }
-      
-      // Atualiza ID do documento se tiver sido criado agora
-      if (dadosCliente.documentacao_tecnica) {
-          setDocId(dadosCliente.documentacao_tecnica.id);
-      }
-  };
+  useEffect(() => { carregarDados(); }, [carregarDados]);
 
-  // --- REFATORADO: Salvar Textos (CORREÇÃO DO ERRO 400) ---
+  // --- FUNÇÃO PARA SALVAR TEXTOS TÉCNICOS ---
   const handleSalvarTextos = async () => {
     try {
-      // O PULO DO GATO: Enviar ID do cliente explicitamente no payload
-      const payload = { 
-          cliente: parseInt(id), 
-          ...textos 
-      };
-
-      if (docId) {
-          // Atualizar (PUT)
-          await documentacaoService.atualizar(docId, payload);
-          alert("Textos atualizados com sucesso!");
-      } else {
-          // Criar (POST)
-          await documentacaoService.criar(payload);
-          alert("Textos criados com sucesso!");
-      }
-      recarregarAtual();
+      const payload = { cliente: parseInt(id), ...textos };
+      if (docId) await documentacaoService.atualizar(docId, payload);
+      else await documentacaoService.criar(payload);
+      alert("Dossiê Cyrius Atualizado!");
+      carregarDados();
     } catch (error) {
       alert("Erro ao salvar textos.");
-      console.error(error);
     }
   };
 
-  // --- REFATORADO: Salvar Modal (Genérico) ---
+  // --- FUNÇÃO PARA SALVAR NOVOS ITENS (CONTATO, EMAIL, PROVEDOR) ---
   const handleSalvarModal = async (e) => {
     e.preventDefault();
     try {
       const payload = { ...formTemp, cliente: parseInt(id) };
-      
-      // Mapeia o tipo de modal para a URL correta (usando o método genérico salvarItem que criamos)
       let url = '';
       if (modalAberto === 'contato') url = '/contatos/';
       if (modalAberto === 'provedor') url = '/provedores/';
-      if (modalAberto === 'email') url = '/emails/'; // ou '/contas_email/' dependendo do seu backend
+      if (modalAberto === 'email') url = '/emails/'; 
       if (modalAberto === 'ativo') url = '/ativos/';
 
       await documentacaoService.salvarItem(url, payload);
-      
-      alert("Item adicionado!");
+      alert("Registro adicionado!");
       setModalAberto(null);
       setFormTemp({});
-      recarregarAtual();
+      carregarDados();
     } catch (error) {
-      console.error(error);
-      alert("Erro ao adicionar item. Verifique os campos obrigatórios.");
+      alert("Erro ao salvar. Verifique os campos.");
     }
   };
 
+  // --- FUNÇÃO PARA EXCLUIR ITENS ---
+  const handleExcluirItem = async (url, itemId) => {
+    if (!window.confirm("Deseja remover permanentemente?")) return;
+    try {
+      await documentacaoService.excluirItem(url, itemId);
+      carregarDados();
+    } catch (error) {
+      alert("Erro ao excluir.");
+    }
+  };
 
-  // --- MODO 1: SELEÇÃO DE CLIENTE ---
+  // MODO 1: SELEÇÃO
   if (!id) {
     const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
-
     return (
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">Documentação Técnica</h1>
-          <p className="text-gray-500 text-sm">Selecione um cliente para visualizar ou editar o dossiê técnico.</p>
+      <div className="animate-in fade-in duration-500">
+        <header className="mb-10">
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Documentação</h1>
+          <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
+        </header>
+        <div className="relative mb-8 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF]" size={20} />
+          <input type="text" placeholder="Buscar cliente..." className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all shadow-sm" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
-
-        <div className="relative mb-6">
-          <input type="text" placeholder="Buscar cliente..." className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-light/50 shadow-sm"
-            value={busca} onChange={e => setBusca(e.target.value)}
-          />
-          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        </div>
-
-        {loading ? <p className="text-center py-10 text-gray-500">Carregando carteira...</p> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtrados.map(cli => (
-              <div key={cli.id} onClick={() => navigate(`/documentacao/${cli.id}`)} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group hover:border-primary-light">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-primary-dark group-hover:text-white transition-colors">
-                    <Building2 size={24} />
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${cli.tipo_cliente === 'CONTRATO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {cli.tipo_cliente}
-                  </span>
-                </div>
-                <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary-dark">{cli.razao_social}</h3>
-                <p className="text-sm text-gray-500 mt-1 truncate">{cli.endereco}</p>
-                <div className="mt-4 pt-4 border-t border-gray-50 flex items-center text-xs text-gray-400 font-medium">
-                  <BookOpen size={14} className="mr-1" /> Acessar Documentação
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtrados.map(cli => (
+            <div key={cli.id} onClick={() => navigate(`/documentacao/${cli.id}`)} className="group bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="p-4 bg-slate-50 text-[#302464] rounded-2xl group-hover:bg-[#302464] group-hover:text-white transition-all"><Building2 size={24} /></div>
+                <div><h3 className="font-black text-slate-800">{cli.razao_social}</h3><span className="text-[9px] font-black uppercase text-slate-400">{cli.tipo_cliente}</span></div>
               </div>
-            ))}
-          </div>
-        )}
+              <div className="flex items-center justify-between text-slate-300 group-hover:text-[#7C69AF] transition-colors mt-4 pt-4 border-t border-slate-50">
+                  <span className="text-[10px] font-black uppercase tracking-widest">Abrir Dossiê</span><ChevronRight size={18} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  // --- MODO 2: VISUALIZAÇÃO DA DOCUMENTAÇÃO ---
-  
-  if (loading) return <div className="p-8 text-center text-gray-500">Carregando dossiê técnico...</div>;
-  if (!cliente) return <div className="p-8 text-center text-red-500">Cliente não encontrado.</div>;
-
-  const contatos = cliente.contatos || [];
-  const provedores = cliente.provedores || [];
-  const emails = cliente.contas_email || [];
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'geral':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Building2 size={20} className="text-primary-dark" /> Dados Cadastrais
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase font-bold">Razão Social</p>
-                  <p className="text-gray-800">{cliente.razao_social}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase font-bold">CNPJ / CPF</p>
-                  <p className="text-gray-800 font-mono">{cliente.cnpj || cliente.cpf}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-xs text-gray-500 uppercase font-bold">Endereço</p>
-                  <p className="text-gray-800">{cliente.endereco}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <User size={20} className="text-primary-dark" /> Gestores e Contatos
-                </h3>
-                <button onClick={() => setModalAberto('contato')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">
-                  + Adicionar
-                </button>
-              </div>
-              
-              {contatos.length === 0 ? <p className="text-gray-400 text-sm">Nenhum contato cadastrado.</p> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {contatos.map(c => (
-                    <div key={c.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="font-bold text-gray-800">{c.nome}</p>
-                      <p className="text-xs text-primary-dark font-bold uppercase mb-2">{c.cargo}</p>
-                      <div className="space-y-1 text-sm text-gray-600">
-                        {c.telefone && <p className="flex items-center gap-2"><Phone size={14} /> {c.telefone}</p>}
-                        {c.email && <p className="flex items-center gap-2"><Mail size={14} /> {c.email}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      case 'rede':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <Globe size={20} className="text-blue-600" /> Links de Internet
-                </h3>
-                <button onClick={() => setModalAberto('provedor')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Provedor</button>
-              </div>
-              {provedores.length === 0 ? <p className="text-gray-400 text-sm">Sem registro de internet.</p> : (
-                <div className="grid gap-4">
-                  {provedores.map(p => (
-                    <div key={p.id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-blue-50/50 rounded-lg border border-blue-100">
-                      <div>
-                        <p className="font-bold text-gray-800">{p.nome_operadora} - {p.plano_contratado}</p>
-                        <p className="text-xs text-gray-500">IP Fixo: {p.ip_fixo || 'Dinâmico'}</p>
-                      </div>
-                      <div className="text-sm text-gray-600 mt-2 md:mt-0 text-right">
-                        <p><strong>Suporte:</strong> {p.telefone_suporte}</p>
-                        <p className="text-xs font-mono bg-white px-2 py-1 rounded border mt-1">PPPoE: {p.usuario_pppoe} / ***</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <Wifi size={20} className="text-orange-600" /> Mikrotik / Firewall
-                </h3>
-                <textarea 
-                  className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
-                  placeholder="Scripts, Regras de NAT, VPNs..."
-                  value={textos.configuracao_mikrotik}
-                  onChange={e => setTextos({...textos, configuracao_mikrotik: e.target.value})}
-                />
-              </div>
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <Shield size={20} className="text-green-600" /> Topologia de Rede
-                </h3>
-                <textarea 
-                  className="w-full h-40 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
-                  placeholder="Cascateamento de Switchs, VLANs, Mapa físico..."
-                  value={textos.topologia_rede}
-                  onChange={e => setTextos({...textos, topologia_rede: e.target.value})}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-               <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Alterações de Texto</button>
-            </div>
-          </div>
-        );
-
-      case 'senhas':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-             <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <Mail size={20} className="text-purple-600" /> Contas de E-mail (Revenda)
-                </h3>
-                <button onClick={() => setModalAberto('email')} className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold text-gray-600">+ Nova Conta</button>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-3">E-mail</th>
-                      <th className="px-4 py-3">Usuário</th>
-                      <th className="px-4 py-3">Senha</th>
-                      <th className="px-4 py-3">Provedor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {emails.map(e => (
-                      <tr key={e.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-800">{e.email}</td>
-                        <td className="px-4 py-3 text-gray-600">{e.nome_usuario}</td>
-                        <td className="px-4 py-3 font-mono bg-gray-100 rounded text-gray-600 w-32 text-center">{e.senha}</td>
-                        <td className="px-4 py-3 text-gray-500">{e.provedor}</td>
-                      </tr>
-                    ))}
-                    {emails.length === 0 && (
-                      <tr>
-                        <td colSpan="4" className="text-center py-6 text-gray-400">Nenhum email cadastrado.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-          </div>
-        );
-
-      case 'inventario':
-        return (
-          <div className="space-y-6">
-             <div className="flex justify-between items-center">
-                <h3 className="font-bold text-gray-800">Ativos Registrados ({ativos.length})</h3>
-                <button onClick={() => setModalAberto('ativo')} className="bg-primary-dark text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-light flex gap-2 items-center">
-                  <Monitor size={16} /> Adicionar Ativo
-                </button>
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ativos.map(ativo => (
-                  <div key={ativo.id} className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className={`p-2 rounded-lg ${ativo.tipo === 'COMPUTADOR' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                         {ativo.tipo === 'COMPUTADOR' ? <Monitor size={20} /> : <Server size={20} />}
-                      </div>
-                      <span className="text-[10px] font-bold bg-gray-100 px-2 py-1 rounded uppercase text-gray-500">{ativo.tipo}</span>
-                    </div>
-                    <h4 className="font-bold text-gray-800">{ativo.nome}</h4>
-                    <p className="text-xs text-gray-500 mb-3">{ativo.marca_modelo}</p>
-                    
-                    <div className="space-y-1 bg-gray-50 p-2 rounded text-xs text-gray-600">
-                       {ativo.processador && <p><strong>CPU:</strong> {ativo.processador}</p>}
-                       {ativo.anydesk_id && <p className="text-red-600 font-bold">AnyDesk: {ativo.anydesk_id}</p>}
-                       {ativo.ip_local && <p><strong>IP:</strong> {ativo.ip_local}</p>}
-                       {ativo.usuario_local && <p>User: {ativo.usuario_local}</p>}
-                    </div>
-                  </div>
-                ))}
-             </div>
-          </div>
-        );
-
-      case 'servidores':
-        return (
-           <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <Server size={20} className="text-indigo-600" /> Estrutura de Servidores
-                </h3>
-                <p className="text-xs text-gray-400 mb-2">Descreva o AD, DHCP, DNS, Virtualização, Funções...</p>
-                <textarea 
-                  className="w-full h-48 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
-                  value={textos.estrutura_servidores}
-                  onChange={e => setTextos({...textos, estrutura_servidores: e.target.value})}
-                />
-              </div>
-              
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <Save size={20} className="text-teal-600" /> Rotina de Backup
-                </h3>
-                <p className="text-xs text-gray-400 mb-2">Onde está o backup? Nuvem? HD Externo? Qual software?</p>
-                <textarea 
-                  className="w-full h-32 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-light/50"
-                  value={textos.rotina_backup}
-                  onChange={e => setTextos({...textos, rotina_backup: e.target.value})}
-                />
-              </div>
-              <div className="flex justify-end">
-                 <button onClick={handleSalvarTextos} className="bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-light"><Save size={16}/> Salvar Textos</button>
-              </div>
-           </div>
-        );
-
-      case 'consultoria':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm border-l-4 border-l-yellow-500">
-             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <TrendingUp size={20} className="text-yellow-600" /> Pontos de Atenção & Melhorias
-             </h3>
-             <p className="text-sm text-gray-600 mb-4">
-               Use este espaço para registrar equipamentos obsoletos, riscos de segurança e sugestões de upgrade para apresentar ao cliente.
-             </p>
-             <textarea 
-                className="w-full h-64 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                placeholder="- Servidor principal sem garantia&#10;- Switch cascateado causando lentidão&#10;- Falta de backup na nuvem"
-                value={textos.pontos_fracos_melhorias}
-                onChange={e => setTextos({...textos, pontos_fracos_melhorias: e.target.value})}
-              />
-              <div className="flex justify-end mt-4">
-                 <button onClick={handleSalvarTextos} className="bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-yellow-700"><Save size={16}/> Salvar Análise</button>
-              </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
+  if (loading || !cliente) return <div className="p-20 text-center text-[#7C69AF] font-black animate-pulse">Sincronizando...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto pb-10">
-      <button onClick={() => setListaClientes(listaClientes)} className="flex items-center text-gray-500 hover:text-primary-dark mb-6 text-sm font-medium transition-colors">
-      </button>
-
-      {/* CABEÇALHO DO CLIENTE */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-primary-dark">
-            <Building2 size={32} />
-            </div>
+    <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
+      
+      {/* HEADER CLIENTE */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
+        <div className="flex items-center gap-5">
+            <div className="w-16 h-16 bg-[#302464] rounded-2xl shadow-xl flex items-center justify-center text-white"><Building2 size={32} /></div>
             <div>
-            <h1 className="text-2xl font-bold text-gray-800">{cliente.razao_social}</h1>
-            <p className="text-gray-500 text-sm flex items-center gap-2">
-                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{cliente.tipo_cliente}</span>
-                <span>• Contrato R$ {cliente.valor_contrato_mensal}</span>
-            </p>
+                <h1 className="text-3xl font-black text-slate-800">{cliente?.razao_social}</h1>
+                <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-emerald-100 mt-1 inline-block">{cliente?.tipo_cliente}</span>
             </div>
         </div>
-        
-        <button 
-            onClick={() => { setCliente(null); navigate('/documentacao'); }}
-            className="text-sm text-primary-dark hover:underline flex items-center gap-1"
-        >
+        <button onClick={() => navigate('/documentacao')} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all">
             <ArrowLeft size={16} /> Trocar Cliente
         </button>
       </div>
 
-      {/* NAVEGAÇÃO POR ABAS */}
-      <div className="flex overflow-x-auto gap-2 border-b border-gray-200 mb-6 pb-1">
+      {/* TABS */}
+      <div className="flex overflow-x-auto gap-2 p-1.5 bg-slate-200/50 rounded-2xl mb-8 no-scrollbar">
         {[
-          { id: 'geral', label: 'Visão Geral', icon: Building2 },
-          { id: 'rede', label: 'Rede & Internet', icon: Globe },
-          { id: 'senhas', label: 'Senhas & Emails', icon: Lock },
-          { id: 'inventario', label: 'Inventário', icon: Monitor },
-          { id: 'servidores', label: 'Servidores & Backup', icon: Server },
+          { id: 'geral', label: 'Cadastro', icon: Building2 },
+          { id: 'rede', label: 'Rede', icon: Globe },
+          { id: 'senhas', label: 'Emails', icon: Mail },
+          { id: 'inventario', label: 'Ativos', icon: Monitor },
+          { id: 'servidores', label: 'Infra', icon: Server },
           { id: 'consultoria', label: 'Consultoria', icon: TrendingUp },
         ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors whitespace-nowrap
-              ${activeTab === tab.id 
-                ? 'bg-white border-b-2 border-primary-dark text-primary-dark' 
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-          >
-            <tab.icon size={16} />
-            {tab.label}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-[#302464] shadow-sm' : 'text-slate-500'}`}>
+            <tab.icon size={14} /> {tab.label}
           </button>
         ))}
       </div>
 
-      {/* CONTEÚDO DA ABA ATIVA */}
-      {renderContent()}
-
-      {/* --- MODAL (INVISÍVEL ATÉ CLICAR) --- */}
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg">Adicionar Item</h3>
-              <button onClick={() => {setModalAberto(null); setFormTemp({});}} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
+      <div className="animate-in slide-in-from-bottom-2 duration-300">
+        
+        {/* ABA GERAL */}
+        {activeTab === 'geral' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                        <h3 className="font-black text-[#302464] text-xs uppercase mb-8">Informações Base</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-slate-700">
+                            <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Razão Social</p><p className="font-bold">{cliente?.razao_social}</p></div>
+                            <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Documento</p><p className="font-mono">{cliente?.cnpj || cliente?.cpf}</p></div>
+                            <div className="md:col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Endereço</p><p className="font-bold flex items-center gap-2"><MapPin size={14} className="text-[#A696D1]"/> {cliente?.endereco}</p></div>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase">Contatos</h3><button onClick={() => setModalAberto('contato')} className="p-2 bg-slate-50 text-[#7C69AF] rounded-xl hover:bg-purple-100 transition-all"><Plus size={18}/></button></div>
+                    <div className="space-y-4">
+                        {(cliente?.contatos || []).map(c => (
+                            <div key={c.id} className="group p-4 bg-slate-50 rounded-2xl relative transition-all">
+                                <button onClick={() => handleExcluirItem('/contatos/', c.id)} className="absolute top-2 right-2 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={14}/></button>
+                                <p className="font-black text-slate-800 text-sm">{c.nome}</p>
+                                <p className="text-[10px] font-black text-[#7C69AF] uppercase mb-1">{c.cargo}</p>
+                                <p className="text-xs text-slate-500 font-bold">{c.telefone}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
-            
-            <form onSubmit={handleSalvarModal} className="space-y-3">
-              
-              {modalAberto === 'contato' && (
-                <>
-                  <input required placeholder="Nome Completo" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
-                  <input required placeholder="Cargo (Ex: Gestor)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
-                  <input placeholder="Telefone" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
-                  <input placeholder="Email" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, email: e.target.value})} />
-                </>
-              )}
+        )}
 
-              {modalAberto === 'provedor' && (
-                <>
-                  <input required placeholder="Operadora (Ex: Vivo)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
-                  <input placeholder="Plano (Ex: 300MB)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
-                  <input placeholder="Telefone Suporte" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
-                  <input placeholder="IP Fixo (Opcional)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
-                  <input placeholder="Usuario PPPoE" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
-                  <input placeholder="Senha PPPoE" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
-                </>
-              )}
+        {/* ABA REDE */}
+        {activeTab === 'rede' && (
+            <div className="space-y-6">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase flex items-center gap-2"><Globe size={16}/> Provedores</h3><button onClick={() => setModalAberto('provedor')} className="bg-[#302464] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-purple-900/20">+ Novo Link</button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {(cliente?.provedores || []).map(p => (
+                            <div key={p.id} className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-xl transition-all duration-300 relative">
+                                <button onClick={() => handleExcluirItem('/provedores/', p.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                                <div className="flex justify-between mb-4">
+                                    <div><p className="font-black text-slate-800 leading-tight">{p.nome_operadora}</p><p className="text-xs font-bold text-[#7C69AF]">{p.plano_contratado}</p></div>
+                                    <span className="text-[9px] font-mono text-slate-400 bg-white px-2 py-1 rounded border">IP: {p.ip_fixo || 'Dinâmico'}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
+                                    <div><p className="text-[8px] font-black text-slate-300 uppercase">Usuário</p><p className="font-bold text-slate-700 truncate">{p.usuario_pppoe || '---'}</p></div>
+                                    <div><p className="text-[8px] font-black text-slate-300 uppercase">Senha</p><p className="font-mono font-black text-[#7C69AF]">{p.senha_pppoe || '---'}</p></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <textarea className="w-full h-64 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm font-mono text-xs focus:ring-4 focus:ring-purple-100 outline-none" value={textos.configuracao_mikrotik} onChange={e => setTextos({...textos, configuracao_mikrotik: e.target.value})} placeholder="Scripts Mikrotik..."/>
+                    <textarea className="w-full h-64 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm text-sm focus:ring-4 focus:ring-purple-100 outline-none" value={textos.topologia_rede} onChange={e => setTextos({...textos, topologia_rede: e.target.value})} placeholder="Topologia de Rede..."/>
+                </div>
+                <div className="flex justify-end"><button onClick={handleSalvarTextos} className="bg-[#302464] text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase shadow-xl hover:bg-[#7C69AF] transition-all">Salvar Dossiê de Rede</button></div>
+            </div>
+        )}
 
-              {modalAberto === 'email' && (
-                <>
-                  <input required type="email" placeholder="Endereço de Email" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, email: e.target.value})} />
-                  <input required placeholder="Senha" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} />
-                  <input placeholder="Nome do Usuário" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome_usuario: e.target.value})} />
-                  <input placeholder="Provedor (Locaweb, Google)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, provedor: e.target.value})} />
-                </>
-              )}
+        {/* ABA EMAILS */}
+        {activeTab === 'senhas' && (
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase flex items-center gap-2"><Mail size={16}/> Contas de Email</h3><button onClick={() => setModalAberto('email')} className="bg-[#302464] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase">+ Nova Conta</button></div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead><tr className="text-[10px] font-black text-slate-400 uppercase border-b border-slate-50"><th className="pb-4">Email</th><th className="pb-4 text-center">Senha</th><th className="pb-4 text-right">Ação</th></tr></thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {(cliente?.contas_email || []).map(e => (
+                                <tr key={e.id} className="hover:bg-slate-50 transition-colors font-bold text-slate-700">
+                                    <td className="py-4">{e.email}</td><td className="py-4 text-center font-mono text-[#7C69AF]">{e.senha}</td>
+                                    <td className="py-4 text-right"><button onClick={() => handleExcluirItem('/emails/', e.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
 
-              {modalAberto === 'ativo' && (
-                <>
-                  <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
-                  <select className="w-full p-2 border rounded bg-white" onChange={e => setFormTemp({...formTemp, tipo: e.target.value})} defaultValue="">
-                    <option value="" disabled>Selecione o Tipo...</option>
-                    <option value="COMPUTADOR">Computador</option>
-                    <option value="SERVIDOR">Servidor</option>
-                    <option value="REDE">Equipamento de Rede</option>
-                    <option value="IMPRESSORA">Impressora</option>
-                  </select>
-                  <input placeholder="Marca / Modelo" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, marca_modelo: e.target.value})} />
-                  <input placeholder="AnyDesk ID" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, anydesk_id: e.target.value})} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Usuário Local" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, usuario_local: e.target.value})} />
-                    <input placeholder="Senha Local" className="w-full p-2 border rounded" onChange={e => setFormTemp({...formTemp, senha_local: e.target.value})} />
-                  </div>
-                </>
-              )}
+        {/* ABA ATIVOS */}
+{activeTab === 'inventario' && (
+    <div className="space-y-6">
+        {/* Sub-header da aba com contador */}
+        <div className="flex justify-between items-center mb-4 px-2">
+            <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                <Monitor size={16} className="text-[#7C69AF]"/> Parque Tecnológico ({ativos.length})
+            </h3>
+            <button 
+                onClick={() => setModalAberto('ativo')}
+                className="bg-[#302464] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#7C69AF] transition-all active:scale-95"
+            >
+                + Adicionar Dispositivo
+            </button>
+        </div>
 
-              <button type="submit" className="w-full py-2 bg-primary-dark text-white rounded hover:bg-primary-light font-bold">Salvar Item</button>
-            </form>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ativos.map(a => (
+                <div 
+                    key={a.id} 
+                    onClick={() => navigate(`/ativos/${a.id}`)} // NAVEGAÇÃO PARA DETALHES
+                    className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
+                >
+                    {/* Header do Card */}
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-3 bg-slate-50 text-[#7C69AF] rounded-xl group-hover:bg-[#302464] group-hover:text-white transition-all shadow-inner">
+                            <Monitor size={20}/>
+                        </div>
+                        <span className="text-[8px] font-black bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-widest text-slate-400 border border-slate-50">
+                            {a.tipo}
+                        </span>
+                    </div>
+
+                    {/* Identificação */}
+                    <h4 className="font-black text-slate-800 leading-tight line-clamp-1 group-hover:text-[#7C69AF] transition-colors">
+                        {a.nome}
+                    </h4>
+                    <p className="text-[10px] font-bold text-[#A696D1] mt-1 truncate uppercase tracking-tighter">
+                        {a.marca_modelo || 'Modelo não informado'}
+                    </p>
+
+                    {/* Rodapé do Card com Acesso Rápido */}
+                    <div className="mt-5 pt-4 border-t border-slate-50 space-y-2">
+                        <div className="flex justify-between items-center text-[9px] font-black uppercase">
+                            <span className="text-slate-300 tracking-widest">AnyDesk</span>
+                            <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-50">
+                                {a.anydesk_id || '--- --- ---'}
+                            </span>
+                        </div>
+                        
+                        {/* Indicador de Clique */}
+                        <div className="flex justify-end pt-1">
+                            <span className="text-[8px] font-black text-slate-200 group-hover:text-[#7C69AF] uppercase tracking-widest flex items-center gap-1 transition-colors">
+                                Ver Ficha <ChevronRight size={10} />
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Efeito Visual de Fundo */}
+                    <div className="absolute -right-4 -bottom-4 text-slate-50 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                        <Monitor size={80} />
+                    </div>
+                </div>
+            ))}
+
+            {/* Empty State: Caso não existam ativos */}
+            {ativos.length === 0 && (
+                <div className="col-span-full py-16 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300">
+                    <Monitor size={48} className="mb-4 opacity-20" />
+                    <p className="font-black text-[10px] uppercase tracking-[0.2em]">Nenhum ativo registrado neste cliente</p>
+                </div>
+            )}
+        </div>
+    </div>
+)}
+
+        {/* ABA SERVIDORES */}
+        {activeTab === 'servidores' && (
+            <div className="space-y-6">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100"><label className="text-[10px] font-black text-slate-400 uppercase mb-4 block flex items-center gap-2"><Server size={14} className="text-[#7C69AF]"/> Infraestrutura</label><textarea className="w-full h-48 bg-slate-50 rounded-3xl p-8 text-sm text-slate-600 font-bold border-none outline-none focus:ring-4 focus:ring-purple-100" value={textos.estrutura_servidores} onChange={e => setTextos({...textos, estrutura_servidores: e.target.value})} /></div>
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100"><label className="text-[10px] font-black text-slate-400 uppercase mb-4 block flex items-center gap-2"><Save size={14} className="text-[#7C69AF]"/> Backup</label><textarea className="w-full h-32 bg-slate-50 rounded-3xl p-8 text-sm text-slate-600 font-bold border-none outline-none focus:ring-4 focus:ring-purple-100" value={textos.rotina_backup} onChange={e => setTextos({...textos, rotina_backup: e.target.value})} /></div>
+                <div className="flex justify-end"><button onClick={handleSalvarTextos} className="bg-[#302464] text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all">Salvar Infraestrutura</button></div>
+            </div>
+        )}
+
+        {/* ABA CONSULTORIA */}
+        {activeTab === 'consultoria' && (
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden border-l-8 border-l-amber-500">
+                <h3 className="text-xl font-black text-slate-800 mb-2 flex items-center gap-3"><TrendingUp className="text-amber-500"/> Análise Consultiva</h3>
+                <textarea className="w-full h-80 bg-amber-50/50 rounded-[2rem] p-10 text-slate-700 font-bold border-2 border-dashed border-amber-200 outline-none focus:bg-white transition-all" value={textos.pontos_fracos_melhorias} onChange={e => setTextos({...textos, pontos_fracos_melhorias: e.target.value})} />
+                <div className="flex justify-end mt-8"><button onClick={handleSalvarTextos} className="bg-amber-500 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all">Salvar Análise</button></div>
+            </div>
+        )}
+
+      </div>
+
+      {/* MODAL */}
+      {modalAberto && (
+        <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative border border-white/20">
+                <button onClick={() => { setModalAberto(null); setFormTemp({}); }} className="absolute top-8 right-8 text-slate-400 hover:text-red-500"><X size={24}/></button>
+                <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">Novo Registro</h3>
+                <form onSubmit={handleSalvarModal} className="space-y-4">
+                    {modalAberto === 'provedor' && (
+                        <>
+                            <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
+                            <input placeholder="Plano" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="Admin / PPPoE" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
+                                <input placeholder="Senha Link" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
+                            </div>
+                            <input placeholder="Telefone Suporte" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
+                        </>
+                    )}
+                    {modalAberto === 'email' && (
+                        <><input required type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, email: e.target.value})} /><input required placeholder="Senha" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} /></>
+                    )}
+                    {modalAberto === 'contato' && (
+                        <><input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} /><input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} /></>
+                    )}
+                    <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4">Confirmar</button>
+                </form>
+            </div>
         </div>
       )}
     </div>

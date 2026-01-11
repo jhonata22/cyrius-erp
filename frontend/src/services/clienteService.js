@@ -6,25 +6,23 @@ const clienteService = {
     return response.data;
   },
 
-  criar: async (dados) => {
-    const response = await api.post('/clientes/', dados);
+  buscarPorId: async (id) => {
+    const response = await api.get(`/clientes/${id}/`);
     return response.data;
   },
 
-  atualizar: async (id, dados) => {
-    const response = await api.put(`/clientes/${id}/`, dados);
+  criar: async (payload) => {
+    const response = await api.post('/clientes/', payload);
+    return response.data;
+  },
+
+  atualizar: async (id, payload) => {
+    const response = await api.put(`/clientes/${id}/`, payload);
     return response.data;
   },
 
   excluir: async (id) => {
-    const response = await api.delete(`/clientes/${id}/`);
-    return response.data;
-  },
-  
-  // Para buscar detalhes de um cliente específico (se precisar no futuro)
-buscarPorId: async (id) => {
-    const response = await api.get(`/clientes/${id}/`);
-    return response.data;
+    await api.delete(`/clientes/${id}/`);
   }
 };
 

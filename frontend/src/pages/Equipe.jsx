@@ -1,26 +1,27 @@
 import { useState, useEffect } from 'react';
-// REMOVIDO: import axios from 'axios';
-import { Plus, User, Briefcase, DollarSign, Trash2, Shield } from 'lucide-react';
-
-// IMPORTAÇÃO DO SERVIÇO
+import { Plus, User, Briefcase, DollarSign, Trash2, Shield, X, Info } from 'lucide-react';
 import equipeService from '../services/equipeService';
 
 export default function Equipe() {
   const [funcionarios, setFuncionarios] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    nome: '',
+    cargo: 'TECNICO',
+    custo_hora: ''
+  });
 
-  // Estados do Formulário
-  const [nome, setNome] = useState('');
-  const [cargo, setCargo] = useState('TECNICO'); // Valor padrão
-  const [custoHora, setCustoHora] = useState('');
-
-  // REFATORADO: Carregar dados via Serviço
   const carregarEquipe = async () => {
     try {
+      setLoading(true);
       const data = await equipeService.listar();
       setFuncionarios(data);
     } catch (error) {
       console.error("Erro ao carregar equipe:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,153 +29,166 @@ export default function Equipe() {
     carregarEquipe();
   }, []);
 
-  // REFATORADO: Salvar via Serviço
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const dados = {
-      nome,
-      cargo,
-      custo_hora: parseFloat(custoHora)
-    };
-
     try {
-      await equipeService.criar(dados);
+      await equipeService.criar({
+        ...formData,
+        custo_hora: parseFloat(formData.custo_hora)
+      });
       
       setIsModalOpen(false);
+      setFormData({ nome: '', cargo: 'TECNICO', custo_hora: '' });
       carregarEquipe();
-      
-      // Limpar form
-      setNome('');
-      setCustoHora('');
-      
-      alert("Funcionário cadastrado com sucesso!");
+      alert("Colaborador cadastrado com sucesso!");
     } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar. Verifique se o usuário tem permissão de Gestor.");
+      alert("Erro ao salvar. Verifique se o usuário já existe ou se você tem permissão de Gestor.");
     }
   };
 
-  // REFATORADO: Excluir via Serviço
   const excluirFuncionario = async (id) => {
-    if (window.confirm("Tem certeza que deseja remover este funcionário?")) {
+    if (window.confirm("Deseja realmente remover este colaborador?")) {
       try {
         await equipeService.excluir(id);
         carregarEquipe();
       } catch (error) {
-        console.error(error);
-        alert("Erro ao excluir. Verifique permissões.");
+        alert("Erro ao excluir. O técnico pode ter atendimentos vinculados no histórico.");
       }
     }
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
+    <div className="animate-in fade-in duration-500">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestão de Equipe</h1>
-          <p className="text-gray-500 text-sm mt-1">Cadastre técnicos e gestores do sistema.</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Equipe</h1>
+          <div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="bg-primary-dark hover:bg-[#1a1b4b] text-white px-5 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 text-sm font-medium"
+          className="bg-[#302464] hover:bg-[#7C69AF] text-white px-8 py-3.5 rounded-2xl flex items-center gap-2 transition-all duration-300 shadow-xl shadow-purple-900/20 font-black text-sm active:scale-95"
         >
-          <Plus size={18} />
+          <Plus size={20} />
           Novo Colaborador
         </button>
       </div>
 
-      {/* GRID DE CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {funcionarios.map(func => (
-          <div key={func.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative group">
-            
-            {/* Botão de Excluir */}
-            <button 
-              onClick={() => excluirFuncionario(func.id)}
-              className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 size={18} />
+      {loading ? (
+        <div className="py-20 text-center text-[#7C69AF] font-black uppercase tracking-widest text-[10px] animate-pulse">Sincronizando Time Cyrius...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {funcionarios.map(func => (
+            <div key={func.id} className="bg-white p-6 rounded-[2.2rem] shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden">
+              
+              <button 
+                onClick={() => excluirFuncionario(func.id)}
+                className="absolute top-6 right-6 text-slate-200 hover:text-red-500 transition-colors z-10"
+              >
+                <Trash2 size={18} />
+              </button>
+
+              <div className="flex items-center gap-5 mb-8">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg
+                  ${func.cargo !== 'TECNICO' ? 'bg-[#7C69AF] shadow-purple-500/20' : 'bg-[#302464] shadow-slate-900/20'}`}>
+                  {func.nome.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg leading-tight group-hover:text-[#7C69AF] transition-colors">{func.nome}</h3>
+                  <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase tracking-[0.15em] mt-1 inline-block border
+                    ${func.cargo !== 'TECNICO' ? 'bg-purple-50 text-[#7C69AF] border-purple-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                    {func.cargo}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-6 border-t border-slate-50">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+                    <Briefcase size={14} className="text-[#A696D1]" /> Atuação
+                  </span>
+                  <span className="font-black text-slate-700 text-sm">{func.cargo}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+                    <DollarSign size={14} className="text-[#A696D1]" /> Custo/Hora
+                  </span>
+                  <span className="font-black text-[#302464] text-sm">R$ {func.custo_hora}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MODAL PADRONIZADO CYRIUS */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]">
+              <X size={24} />
             </button>
 
-            <div className="flex items-center gap-4 mb-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg
-                ${func.cargo === 'GESTOR' || func.cargo === 'SOCIO' ? 'bg-purple-600' : 'bg-blue-500'}`}>
-                {func.nome.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800">{func.nome}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold
-                  ${func.cargo === 'GESTOR' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {func.cargo}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm text-gray-500">
-              <div className="flex items-center gap-2">
-                <Briefcase size={16} />
-                <span>Cargo: {func.cargo}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <DollarSign size={16} />
-                <span>Custo/Hora: R$ {func.custo_hora}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* MODAL DE CADASTRO */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="font-bold text-gray-800 text-lg mb-6">Novo Colaborador</h3>
+            <h3 className="font-black text-[#302464] text-2xl mb-2">Novo Membro</h3>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">Credenciais de acesso automáticas</p>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><User size={18} /></span>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#7C69AF] transition-colors"><User size={18} /></span>
                   <input 
-                    type="text" required value={nome} onChange={e => setNome(e.target.value)}
-                    className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-light/50 outline-none"
-                    placeholder="Ex: Ana Souza"
+                    name="nome" type="text" required value={formData.nome} onChange={handleChange}
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-none rounded-2xl focus:ring-4 focus:ring-purple-500/5 outline-none transition-all font-bold text-[#302464]"
+                    placeholder="Ex: João da Silva"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cargo / Permissão</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Shield size={18} /></span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cargo</label>
                   <select 
-                    value={cargo} onChange={e => setCargo(e.target.value)}
-                    className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-light/50 outline-none bg-white"
+                    name="cargo" value={formData.cargo} onChange={handleChange}
+                    className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700 cursor-pointer"
                   >
-                    <option value="TECNICO">Técnico (Acesso Padrão)</option>
-                    <option value="GESTOR">Gestor (Acesso Total)</option>
-                    <option value="SOCIO">Sócio (Acesso Total)</option>
+                    <option value="TECNICO">Técnico</option>
+                    <option value="GESTOR">Gestor</option>
+                    <option value="SOCIO">Sócio</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Custo Hora (R$)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><DollarSign size={18} /></span>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Custo/Hora</label>
                   <input 
-                    type="number" step="0.01" required value={custoHora} onChange={e => setCustoHora(e.target.value)}
-                    className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-light/50 outline-none"
+                    name="custo_hora" type="number" step="0.01" required value={formData.custo_hora} onChange={handleChange}
+                    className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-[#302464]"
                     placeholder="0.00"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-primary-dark text-white rounded-lg hover:bg-[#1a1b4b]">Salvar</button>
+              <div className="bg-purple-50 p-5 rounded-[1.5rem] border border-purple-100 flex gap-4 items-start">
+                <div className="p-2 bg-white rounded-xl shadow-sm text-[#7C69AF] shrink-0">
+                    <Shield size={20} />
+                </div>
+                <p className="text-[10px] text-[#7C69AF] font-bold leading-relaxed">
+                  SENHA TEMPORÁRIA: <span className="font-black underline decoration-2">Mudar@123456</span>. 
+                  O colaborador deverá redefinir a senha no primeiro acesso ao painel.
+                </p>
               </div>
+
+              <button 
+                type="submit" 
+                className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-900/20 active:scale-95 transition-all mt-4"
+              >
+                Ativar Colaborador
+              </button>
             </form>
           </div>
         </div>

@@ -5,34 +5,31 @@ from .models import (
     Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, Fornecedor, Produto, MovimentacaoEstoque
 )
 
-# --- 1. CLIENTE & SUB-TABELAS ---
+# =====================================================
+# 1. CLIENTES E SUB-TABELAS
+# =====================================================
 
 class ContatoClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContatoCliente
         fields = '__all__'
-        # REMOVIDO read_only_fields PARA PERMITIR SALVAR O ID DO CLIENTE
 
 class ProvedorInternetSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProvedorInternet
         fields = '__all__'
-        # REMOVIDO read_only_fields
 
 class ContaEmailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContaEmail
         fields = '__all__'
-        # REMOVIDO read_only_fields
 
 class DocumentacaoTecnicaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentacaoTecnica
         fields = '__all__'
-        # REMOVIDO read_only_fields
 
 class ClienteSerializer(serializers.ModelSerializer):
-    # Nested Serializers (apenas para leitura/exibição)
     contatos = ContatoClienteSerializer(many=True, read_only=True)
     provedores = ProvedorInternetSerializer(many=True, read_only=True)
     contas_email = ContaEmailSerializer(many=True, read_only=True)
@@ -42,66 +39,63 @@ class ClienteSerializer(serializers.ModelSerializer):
         model = Cliente
         fields = '__all__'
 
-# --- 2. EQUIPE ---
+# =====================================================
+# 2. EQUIPE
+# =====================================================
 
 class EquipeSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='usuario.username', read_only=True)
+
     class Meta:
         model = Equipe
-        fields = '__all__'
-        read_only_fields = ['usuario']
+        fields = ['id', 'nome', 'cargo', 'custo_hora', 'username']
 
     def create(self, validated_data):
-        nome_completo = validated_data.get('nome', '')
-        username = nome_completo.lower().replace(" ", "")
-        
-        if User.objects.filter(username=username).exists():
-            import random
-            username = f"{username}{random.randint(1,99)}"
+        # Importação local para evitar erros de importação circular
+        from core.services.equipe import criar_membro_equipe
+        return criar_membro_equipe(**validated_data)
 
-        novo_usuario = User.objects.create_user(
-            username=username,
-            password='123456'
-        )
-
-        equipe = Equipe.objects.create(
-            usuario=novo_usuario,
-            **validated_data
-        )
-        return equipe
-
-# --- 3. ATIVOS (INVENTÁRIO) ---
+# =====================================================
+# 3. CHAMADOS E ATIVOS
+# =====================================================
 
 class AtivoSerializer(serializers.ModelSerializer):
+    nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
+    
     class Meta:
         model = Ativo
         fields = '__all__'
 
-# --- 4. CHAMADOS ---
-
 class ChamadoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
-
+    
     class Meta:
         model = Chamado
         fields = '__all__'
-        read_only_fields = ['tecnicos', 'protocolo']
+        read_only_fields = ['protocolo', 'created_at', 'updated_at']
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
+    """ O SERIALIZER QUE ESTAVA FALTANDO """
+    nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
+    
     class Meta:
         model = ChamadoTecnico
         fields = '__all__'
 
-# --- 5. FINANCEIRO ---
+# =====================================================
+# 4. FINANCEIRO
+# =====================================================
 
 class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
-    cliente_detalhes = ClienteSerializer(source='cliente', read_only=True)
+    nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
+    nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
 
     class Meta:
         model = LancamentoFinanceiro
         fields = '__all__'
 
 # =====================================================
-# INVENTÁRIO - NOVOS SERIALIZERS
+# 5. INVENTÁRIO
 # =====================================================
 
 class FornecedorSerializer(serializers.ModelSerializer):
@@ -110,26 +104,30 @@ class FornecedorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProdutoSerializer(serializers.ModelSerializer):
-    # Campo calculado (somente leitura) que vem do @property no Model
-    estoque_atual = serializers.IntegerField(read_only=True)
+    # Usa o campo calculado pelo Manager para performance
+    estoque_atual = serializers.SerializerMethodField()
 
     class Meta:
         model = Produto
         fields = '__all__'
 
+    def get_estoque_atual(self, obj):
+        return getattr(obj, 'estoque_real', obj.estoque_atual)
+
 class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
     nome_produto = serializers.CharField(source='produto.nome', read_only=True)
     nome_usuario = serializers.CharField(source='usuario.username', read_only=True)
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
+
     class Meta:
         model = MovimentacaoEstoque
         fields = '__all__'
     
     def validate(self, data):
-        # Regra de Negócio: Não deixar sair se não tiver estoque
-        if data['tipo_movimento'] == 'SAIDA':
+        if data.get('tipo_movimento') == 'SAIDA':
             produto = data['produto']
-            qtd_saida = data['quantidade']
-            if produto.estoque_atual < qtd_saida:
-                raise serializers.ValidationError(f"Estoque insuficiente! Atual: {produto.estoque_atual}")
+            if produto.estoque_atual < data['quantidade']:
+                raise serializers.ValidationError({
+                    "quantidade": f"Estoque insuficiente. Disponível: {produto.estoque_atual}"
+                })
         return data
