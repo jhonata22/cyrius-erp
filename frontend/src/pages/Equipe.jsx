@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Plus, User, Briefcase, DollarSign, Trash2, Shield, X, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // <--- 1. IMPORTAÇÃO
 import equipeService from '../services/equipeService';
 
 export default function Equipe() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const navigate = useNavigate(); // <--- 2. INICIALIZAÇÃO
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -84,11 +87,21 @@ export default function Equipe() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {funcionarios.map(func => (
-            <div key={func.id} className="bg-white p-6 rounded-[2.2rem] shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden">
+            <div 
+                key={func.id} 
+                // 3. EVENTO DE CLIQUE NO CARD INTEIRO
+                onClick={() => navigate(`/perfil/${func.id}`)}
+                className="bg-white p-6 rounded-[2.2rem] shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden cursor-pointer"
+            >
               
               <button 
-                onClick={() => excluirFuncionario(func.id)}
+                onClick={(e) => {
+                    // 4. IMPEDE QUE O CLIQUE NA LIXEIRA ABRA O PERFIL
+                    e.stopPropagation(); 
+                    excluirFuncionario(func.id);
+                }}
                 className="absolute top-6 right-6 text-slate-200 hover:text-red-500 transition-colors z-10"
+                title="Excluir Colaborador"
               >
                 <Trash2 size={18} />
               </button>
@@ -139,6 +152,9 @@ export default function Equipe() {
                   <span className="font-black text-[#302464] text-sm">R$ {func.custo_hora}</span>
                 </div>
               </div>
+              
+              {/* DICA VISUAL PARA O USUÁRIO SABER QUE É CLICÁVEL */}
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-[#7C69AF] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
             </div>
           ))}
         </div>

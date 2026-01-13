@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Monitor, Cpu, Layers, HardDrive, 
-  User, Shield, Globe, Save, Trash2, Smartphone, 
-  QrCode, Info, ChevronRight, Settings
+  Trash2, Smartphone, QrCode, Save, Globe, 
+  Printer, Share2, Info // <--- INFO ADICIONADO AQUI
 } from 'lucide-react';
+import QRCode from "react-qr-code"; 
 import ativoService from '../services/ativoService';
 
 export default function AtivoDetalhes() {
@@ -39,8 +40,69 @@ export default function AtivoDetalhes() {
     }
   };
 
+  // --- FUNÇÃO DE IMPRESSÃO ---
+  const handleImprimirEtiqueta = () => {
+    const printWindow = window.open('', '', 'width=400,height=400');
+    
+    // Captura o SVG do QR Code gerado na tela
+    const svgElement = document.getElementById("qrcode-svg");
+    
+    // Proteção caso o SVG ainda não tenha renderizado
+    if (!svgElement) {
+        alert("Aguarde o QR Code carregar.");
+        return;
+    }
+
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Etiqueta - ${ativo.nome}</title>
+                <style>
+                    body { 
+                        font-family: sans-serif; 
+                        display: flex; 
+                        flex-direction: column; 
+                        align-items: center; 
+                        justify-content: center; 
+                        height: 100vh; 
+                        margin: 0; 
+                        text-align: center;
+                    }
+                    .etiqueta {
+                        border: 2px solid #000;
+                        padding: 10px;
+                        border-radius: 8px;
+                        width: 250px;
+                    }
+                    h2 { margin: 0 0 10px 0; font-size: 14px; font-weight: bold; }
+                    .footer { margin-top: 10px; font-size: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="etiqueta">
+                    <h2>${ativo.nome}</h2>
+                    ${svgData}
+                    <div class="footer">
+                        ID: ${ativo.id} | ${ativo.tipo}<br/>
+                        <strong>CYRIUS ERP - PATRIMÔNIO</strong>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+  };
+
   if (loading) return <div className="p-20 text-center text-[#7C69AF] font-black animate-pulse uppercase tracking-widest text-[10px]">Lendo Hardware...</div>;
   if (!ativo) return <div className="p-20 text-center text-red-500 font-bold">Ativo não localizado.</div>;
+
+  // URL para o QR Code (Link direto para esta página)
+  const qrValue = window.location.href; 
 
   return (
     <div className="max-w-6xl mx-auto pb-20 animate-in fade-in duration-500">
@@ -65,17 +127,37 @@ export default function AtivoDetalhes() {
         
         {/* COLUNA ESQUERDA: QR CODE E IDENTIFICAÇÃO */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-[#302464] p-8 rounded-[2.5rem] text-white shadow-2xl shadow-purple-900/30 text-center relative overflow-hidden">
+          <div className="bg-[#302464] p-8 rounded-[2.5rem] text-white shadow-2xl shadow-purple-900/30 text-center relative overflow-hidden group">
              <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#7C69AF] opacity-20 rounded-full blur-3xl"></div>
              
-             {/* Futura Área do QR CODE */}
-             <div className="w-48 h-48 bg-white/10 backdrop-blur-md rounded-[2rem] mx-auto mb-6 flex items-center justify-center border-2 border-dashed border-white/20 group hover:border-[#A696D1] transition-all cursor-help">
-                <QrCode size={80} className="text-[#A696D1] opacity-50 group-hover:opacity-100 transition-opacity" />
-                <span className="absolute bottom-4 text-[8px] font-black uppercase tracking-widest text-white/40">QR Code (Em Breve)</span>
+             {/* ÁREA DO QR CODE */}
+             <div className="bg-white p-4 rounded-[1.5rem] mx-auto mb-6 w-fit shadow-lg transform group-hover:scale-105 transition-transform duration-300">
+                <div className="w-32 h-32">
+                    <QRCode 
+                        id="qrcode-svg"
+                        value={qrValue} 
+                        size={256} 
+                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        viewBox={`0 0 256 256`}
+                    />
+                </div>
              </div>
 
+             {/* BOTÃO DE IMPRIMIR FLUTUANTE */}
+             <button 
+                onClick={handleImprimirEtiqueta}
+                className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white backdrop-blur-sm transition-all"
+                title="Imprimir Etiqueta"
+             >
+                <Printer size={18} />
+             </button>
+
              <h2 className="text-xl font-black">{editData.nome}</h2>
-             <p className="text-[#A696D1] text-[10px] font-black uppercase tracking-[0.2em] mt-1">{editData.tipo}</p>
+             <p className="text-[#A696D1] text-[10px] font-black uppercase tracking-[0.2em] mt-1 mb-4">{editData.tipo}</p>
+             
+             <button onClick={handleImprimirEtiqueta} className="text-[10px] font-bold bg-[#7C69AF] hover:bg-white hover:text-[#302464] px-4 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto">
+                <Printer size={12} /> IMPRIMIR QR CODE
+             </button>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">

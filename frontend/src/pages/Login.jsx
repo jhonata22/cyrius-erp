@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
+import equipeService from '../services/equipeService';
 
 export default function Login() {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
@@ -26,22 +27,48 @@ export default function Login() {
     setLoading(true);
 
     try {
+      // 1. Autentica e pega o Token
       const data = await authService.login(credentials);
-
-      // Guardamos o token e o username (para exibir um "Olá, fulano" no dashboard)
-      localStorage.setItem('token', data.access);
-      localStorage.setItem('username', credentials.username);
       
+      // Salva o token imediatamente para as próximas requisições funcionarem
+      localStorage.setItem('token', data.access);
+      
+      // 2. Busca os dados do perfil para descobrir o CARGO
+      // O token salvo acima será usado automaticamente pelo axios interceptor (se configurado)
+      // ou pelo serviço.
+      try {
+        const perfil = await equipeService.getMe();
+        
+        localStorage.setItem('username', perfil.nome || credentials.username);
+        // SALVA O CARGO (Essencial para o sistema de permissões)
+        localStorage.setItem('cargo', perfil.cargo); 
+        
+        // Se tiver foto, pode salvar também
+        if (perfil.foto) localStorage.setItem('user_foto', perfil.foto);
+
+      } catch (profileError) {
+        console.warn("Não foi possível carregar o perfil completo (pode ser superuser sem equipe).", profileError);
+        // Fallback: Se der erro ao buscar perfil, salva apenas o username
+        localStorage.setItem('username', credentials.username);
+        // Se for admin django puro, talvez não tenha cargo definido na tabela equipe, 
+        // então definimos um padrão ou deixamos vazio.
+        localStorage.setItem('cargo', '');
+      }
+      
+      // 3. Redireciona para o Dashboard
       navigate('/');
+      
     } catch (err) {
-      // Tratamento de erro mais específico
+      console.error(err);
       if (!err.response) {
         setError('Servidor offline. Tente novamente mais tarde.');
       } else if (err.response.status === 401) {
         setError('Usuário ou senha incorretos.');
       } else {
-        setError('Ocorreu um erro inesperado. Tente novamente.');
+        setError('Erro ao processar login. Tente novamente.');
       }
+      // Se deu erro, limpa qualquer token que possa ter ficado
+      localStorage.removeItem('token');
     } finally {
       setLoading(false);
     }

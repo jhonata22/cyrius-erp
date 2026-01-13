@@ -2,7 +2,10 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
-    Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, Fornecedor, Produto, MovimentacaoEstoque
+    Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, 
+    Fornecedor, Produto, MovimentacaoEstoque,
+    # NOVOS MODELS
+    OrdemServico, ItemServico, AnexoServico
 )
 
 # =====================================================
@@ -51,9 +54,7 @@ class EquipeSerializer(serializers.ModelSerializer):
         fields = ['id', 'nome', 'cargo', 'custo_hora', 'username', 'foto']
         read_only_fields = ['usuario']
         
-
     def create(self, validated_data):
-        # Importação local para evitar erros de importação circular
         from core.services.equipe import criar_membro_equipe
         return criar_membro_equipe(**validated_data)
 
@@ -77,7 +78,6 @@ class ChamadoSerializer(serializers.ModelSerializer):
         read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos']
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
-    """ O SERIALIZER QUE ESTAVA FALTANDO """
     nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
     
     class Meta:
@@ -106,7 +106,6 @@ class FornecedorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProdutoSerializer(serializers.ModelSerializer):
-    # Usa o campo calculado pelo Manager para performance
     estoque_atual = serializers.SerializerMethodField()
 
     class Meta:
@@ -133,3 +132,40 @@ class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
                     "quantidade": f"Estoque insuficiente. Disponível: {produto.estoque_atual}"
                 })
         return data
+
+# =====================================================
+# 6. SERVIÇOS (ORDEM DE SERVIÇO)
+# =====================================================
+
+class ItemServicoSerializer(serializers.ModelSerializer):
+    nome_produto = serializers.CharField(source='produto.nome', read_only=True)
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = ItemServico
+        fields = ['id', 'os', 'produto', 'nome_produto', 'quantidade', 'preco_venda', 'subtotal']
+
+class AnexoServicoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnexoServico
+        fields = '__all__'
+
+class OrdemServicoSerializer(serializers.ModelSerializer):
+    nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
+    nome_tecnico = serializers.CharField(source='tecnico_responsavel.nome', read_only=True)
+    
+    # Nested Serializers (Read Only para listagem)
+    itens = ItemServicoSerializer(many=True, read_only=True)
+    anexos = AnexoServicoSerializer(many=True, read_only=True)
+    
+    # Campos Calculados (@property no model)
+    total_pecas = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    valor_total_geral = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = OrdemServico
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at', 'data_conclusao', 'status']
+        extra_kwargs = {
+            'tecnico_responsavel': {'required': False, 'allow_null': True}
+        }
