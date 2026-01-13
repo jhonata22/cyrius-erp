@@ -15,3 +15,4 @@ backend/.env
 
 .env
 backend/docs_estoque/*.pdf
+backend/*
