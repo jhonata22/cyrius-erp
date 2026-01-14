@@ -145,31 +145,52 @@ export default function Inventario() {
 
       {loading ? <div className="py-20 text-center text-[#7C69AF] font-black uppercase tracking-widest text-[10px] animate-pulse">Sincronizando Estoque...</div> : (
         <>
-          {activeTab === 'PRODUTOS' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              <div onClick={() => openModal('PRODUTO')} className="border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center p-6 hover:border-[#7C69AF] hover:bg-purple-50/30 cursor-pointer transition-all group min-h-[160px]">
-                <Plus className="text-slate-300 group-hover:text-[#7C69AF]" size={32} />
-                <span className="mt-2 font-black text-slate-400 group-hover:text-[#302464] uppercase tracking-widest text-[9px]">Novo Item</span>
-              </div>
-              {filteredData.map(prod => (
-                <div key={prod.id} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`p-3 rounded-2xl ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-[#302464]'}`}><Package size={24} /></div>
-                    <div className="text-right"><span className={`text-2xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>{prod.estoque_atual}</span><p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p></div>
-                  </div>
-                  <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
-                  <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{prod.categoria}</span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={(e) => { e.stopPropagation(); openModal('PRODUTO', prod); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"><Edit size={14} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Excluir?")) estoqueService.excluirProduto(prod.id).then(carregarDados)}} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+{activeTab === 'PRODUTOS' && (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div onClick={() => openModal('PRODUTO')} className="border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center p-6 hover:border-[#7C69AF] hover:bg-purple-50/30 cursor-pointer transition-all group min-h-[160px]">
+      <Plus className="text-slate-300 group-hover:text-[#7C69AF]" size={32} />
+      <span className="mt-2 font-black text-slate-400 group-hover:text-[#302464] uppercase tracking-widest text-[9px]">Novo Item</span>
+    </div>
+    
+    {filteredData.map(prod => (
+      <div key={prod.id} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden">
+        <div className="flex justify-between items-start mb-4">
+          <div className={`p-3 rounded-2xl ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-[#302464]'}`}>
+            <Package size={24} />
+          </div>
+          <div className="text-right">
+            <span className={`text-2xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>
+              {prod.estoque_atual}
+            </span>
+            <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p>
+          </div>
+        </div>
 
+        <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
+        
+        {/* EXIBIÇÃO DO PREÇO SUGERIDO - ADICIONADO AQUI */}
+        <div className="mt-2 flex items-center gap-1.5">
+            <p className="text-[12px] font-black text-slate-400 uppercase tracking-tighter">Preço sugerido:</p>
+            <p className="text-xs font-black text-emerald-600">
+                {prod.preco_venda_sugerido ? `R$ ${parseFloat(prod.preco_venda_sugerido).toFixed(2)}` : 'R$ 0,00'}
+            </p>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{prod.categoria}</span>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); openModal('PRODUTO', prod); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl">
+                <Edit size={14} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Excluir?")) estoqueService.excluirProduto(prod.id).then(carregarDados)}} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl">
+                <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
           {activeTab === 'HISTORICO' && (
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
               <table className="w-full text-left text-xs">
