@@ -2,10 +2,14 @@ import api from './api';
 
 const servicoService = {
   // 1. CRUD Básico
-  listar: async () => {
-    const response = await api.get('/servicos/');
+  listar: async (filtros) => { // Aceita filtros
+    // Converte objeto { ativo: 1 } em string "?ativo=1"
+    const params = new URLSearchParams(filtros).toString(); 
+    const url = params ? `/servicos/?${params}` : '/servicos/';
+    
+    const response = await api.get(url);
     return response.data;
-  },
+},
 
   buscarPorId: async (id) => {
     const response = await api.get(`/servicos/${id}/`);

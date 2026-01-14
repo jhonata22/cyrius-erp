@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, AlertTriangle, ChevronRight, Search, Info 
+  Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, AlertTriangle, ChevronRight, Search, Info, Monitor 
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 import clienteService from '../services/clienteService';
+import ativoService from '../services/ativoService'; // <--- IMPORT NOVO
 
 // MAPAS VISUAIS
 const PRIORIDADE_MAP = {
@@ -32,6 +33,7 @@ export default function Chamados() {
   const [chamados, setChamados] = useState([]);
   const [equipe, setEquipe] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [ativos, setAtivos] = useState([]); // <--- ESTADO NOVO
   
   // UI
   const [busca, setBusca] = useState('');
@@ -41,6 +43,7 @@ export default function Chamados() {
   // Formulário
   const [formData, setFormData] = useState({
     cliente: '',
+    ativo: '', // <--- CAMPO NOVO
     titulo: '',
     descricao_detalhada: '',
     prioridade: 'MEDIA',
@@ -59,14 +62,17 @@ export default function Chamados() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [c, e, cli] = await Promise.all([
+      // Carregamos também os ativos agora
+      const [c, e, cli, atv] = await Promise.all([
         chamadoService.listar(),
         equipeService.listar(),
-        clienteService.listar()
+        clienteService.listar(),
+        ativoService.listar() // <--- CARREGA ATIVOS
       ]);
       setChamados(c);
       setEquipe(e);
       setClientes(cli);
+      setAtivos(atv);
     } catch (err) {
       console.error(err);
     } finally {
@@ -76,18 +82,26 @@ export default function Chamados() {
 
   useEffect(() => { carregarDados(); }, []);
 
+  // Filtra ativos baseado no cliente selecionado no formulário
+  const ativosDoCliente = useMemo(() => {
+    if (!formData.cliente) return [];
+    // Filtra onde o ID do cliente bate com o selecionado
+    return ativos.filter(a => a.cliente === parseInt(formData.cliente) || a.cliente?.id === parseInt(formData.cliente));
+  }, [formData.cliente, ativos]);
+
   const chamadosFiltrados = useMemo(() => {
     return chamados.filter(c => 
       c.titulo.toLowerCase().includes(busca.toLowerCase()) || 
       c.protocolo?.includes(busca) ||
-      (c.nome_cliente && c.nome_cliente.toLowerCase().includes(busca.toLowerCase()))
+      (c.nome_cliente && c.nome_cliente.toLowerCase().includes(busca.toLowerCase())) ||
+      (c.nome_ativo && c.nome_ativo.toLowerCase().includes(busca.toLowerCase())) // Busca também pelo nome do ativo
     );
   }, [busca, chamados]);
 
   const handleOpenModal = (mode) => {
     setModalMode(mode);
     setFormData({
-      cliente: '', titulo: '', descricao_detalhada: '',
+      cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
       prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', 
       custo_ida: '', custo_volta: '', tecnicos: []
     });
@@ -96,7 +110,13 @@ export default function Chamados() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Se mudou o cliente, limpamos o ativo selecionado anteriormente
+    if (name === 'cliente') {
+        setFormData(prev => ({ ...prev, [name]: value, ativo: '' }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const toggleTecnico = (id) => {
@@ -116,9 +136,10 @@ export default function Chamados() {
     if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
     try {
-      // SANITIZAÇÃO DOS DADOS (O SEGREDO PARA EVITAR ERRO 400)
+      // SANITIZAÇÃO DOS DADOS
       const payload = {
         cliente: formData.cliente,
+        ativo: formData.ativo || null, // <--- ENVIA O ATIVO (ou null)
         titulo: formData.titulo,
         descricao_detalhada: formData.descricao_detalhada,
         prioridade: formData.prioridade,
@@ -128,7 +149,6 @@ export default function Chamados() {
         status: modalMode === 'VISITA' ? 'AGENDADO' : 'ABERTO',
         tipo_atendimento: modalMode,
         
-        // Se estiver vazio, manda null ou 0. Django odeia string vazia em data/número.
         data_agendamento: formData.data_agendamento ? new Date(formData.data_agendamento).toISOString() : null,
         custo_ida: formData.custo_ida ? parseFloat(formData.custo_ida) : 0,
         custo_volta: formData.custo_volta ? parseFloat(formData.custo_volta) : 0
@@ -208,6 +228,12 @@ export default function Chamados() {
                     <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide">
                         <Building2 size={13} className="text-slate-300" /> {item.nome_cliente}
                     </span>
+                    {/* Exibe o Ativo se existir */}
+                    {item.nome_ativo && (
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide">
+                            <Monitor size={13} className="text-slate-300" /> {item.nome_ativo}
+                        </span>
+                    )}
                     <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
                       {item.tipo_atendimento === 'VISITA' ? (
                          <><Calendar size={13} className="text-[#A696D1]" /> {item.data_agendamento ? new Date(item.data_agendamento).toLocaleString('pt-BR') : 'Data Pendente'}</>
@@ -279,15 +305,31 @@ export default function Chamados() {
                 </div>
               )}
 
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
-                <select 
-                  name="cliente" required value={formData.cliente} onChange={handleInputChange}
-                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700"
-                >
-                  <option value="">Selecione...</option>
-                  {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
-                </select>
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
+                    <select 
+                    name="cliente" required value={formData.cliente} onChange={handleInputChange}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700"
+                    >
+                    <option value="">Selecione...</option>
+                    {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                    </select>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                        <Monitor size={10} /> Equipamento / Ativo (Opcional)
+                    </label>
+                    <select 
+                    name="ativo" value={formData.ativo} onChange={handleInputChange}
+                    disabled={!formData.cliente}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                    <option value="">{formData.cliente ? 'Selecione ou deixe vazio...' : 'Selecione um cliente antes...'}</option>
+                    {ativosDoCliente.map(a => <option key={a.id} value={a.id}>{a.nome} ({a.tipo})</option>)}
+                    </select>
+                </div>
               </div>
 
               <div className="md:col-span-2 space-y-1">

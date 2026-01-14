@@ -4,7 +4,6 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, 
     Fornecedor, Produto, MovimentacaoEstoque,
-    # NOVOS MODELS
     OrdemServico, ItemServico, AnexoServico
 )
 
@@ -65,16 +64,30 @@ class EquipeSerializer(serializers.ModelSerializer):
 class AtivoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
     
+    # --- CORREÇÃO AQUI ---
+    # Removido 'nome_ativo' e 'tipo_ativo'. 
+    # O Ativo É o próprio ativo, ele não tem um campo 'ativo' dentro dele.
+    
     class Meta:
         model = Ativo
         fields = '__all__'
 
 class ChamadoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
-    
+    nome_ativo = serializers.CharField(source='ativo.nome', read_only=True)
+    tipo_ativo = serializers.CharField(source='ativo.tipo', read_only=True)
+
     class Meta:
         model = Chamado
-        fields = '__all__'
+        fields = [
+            'id', 'cliente', 'nome_cliente', 
+            'ativo', 'nome_ativo', 'tipo_ativo',
+            'titulo', 'descricao_detalhada', 'origem', 
+            'status', 'prioridade', 'tipo_atendimento', 
+            'data_agendamento', 'custo_ida', 'custo_volta', 
+            'custo_transporte', 'protocolo', 'data_abertura', 
+            'data_fechamento', 'tecnicos', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos']
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
@@ -140,10 +153,12 @@ class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
 class ItemServicoSerializer(serializers.ModelSerializer):
     nome_produto = serializers.CharField(source='produto.nome', read_only=True)
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-
+    
+    # --- CORREÇÃO AQUI ---
+    # A Class Meta deste serializer estava errada no seu código
     class Meta:
         model = ItemServico
-        fields = ['id', 'os', 'produto', 'nome_produto', 'quantidade', 'preco_venda', 'subtotal']
+        fields = ['id', 'produto', 'nome_produto', 'quantidade', 'preco_venda', 'subtotal']
 
 class AnexoServicoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -154,18 +169,24 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
     nome_tecnico = serializers.CharField(source='tecnico_responsavel.nome', read_only=True)
     
-    # Nested Serializers (Read Only para listagem)
+    # Aqui sim pode ter nome_ativo, pois OrdemServico TEM o campo ativo
+    nome_ativo = serializers.CharField(source='ativo.nome', read_only=True)
+    tipo_ativo = serializers.CharField(source='ativo.tipo', read_only=True)
+
+    # Nested Serializers
     itens = ItemServicoSerializer(many=True, read_only=True)
     anexos = AnexoServicoSerializer(many=True, read_only=True)
     
-    # Campos Calculados (@property no model)
     total_pecas = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     valor_total_geral = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = OrdemServico
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'data_conclusao', 'status']
+        read_only_fields = ['created_at', 'updated_at', 'data_conclusao', 'status', 'total_pecas', 'valor_total_geral']
+        
+        # Fundamental para permitir salvar o ID e ler o Nome
         extra_kwargs = {
-            'tecnico_responsavel': {'required': False, 'allow_null': True}
+            'tecnico_responsavel': {'required': False, 'allow_null': True},
+            'ativo': {'required': False, 'allow_null': True} 
         }

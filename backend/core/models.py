@@ -160,6 +160,15 @@ class Chamado(TimeStampedModel):
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT)
+
+    ativo = models.ForeignKey(
+        Ativo, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='historico_servicos',
+        help_text="Equipamento que recebeu o serviço")
+    
     titulo = models.CharField(max_length=100)
     descricao_detalhada = models.TextField(max_length=500)
     origem = models.CharField(max_length=50, default='TELEFONE')
@@ -382,7 +391,7 @@ class OrdemServico(TimeStampedModel):
     # Identificação
     titulo = models.CharField(max_length=150, help_text="Ex: Formatação PC, Instalação Câmeras")
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='servicos')
-    tecnico_responsavel = models.ForeignKey(Equipe, on_delete=models.PROTECT, related_name='servicos_liderados')
+    tecnico_responsavel = models.ForeignKey(Equipe, on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.LABORATORIO)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ORCAMENTO)
     
@@ -403,6 +412,13 @@ class OrdemServico(TimeStampedModel):
     valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     # valor_pecas -> Calculado via soma dos itens (property)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    ativo = models.ForeignKey(
+        'Ativo',  # Use string 'Ativo' caso a classe Ativo esteja definida abaixo desta
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='historico_os', # Nome diferente do Chamado para não dar conflito
+        help_text="Equipamento vinculado a esta OS")
     
     class Meta:
         db_table = 'TB_ORDEM_SERVICO'

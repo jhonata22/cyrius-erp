@@ -1,8 +1,11 @@
 import api from './api';
 
 const chamadoService = {
-  listar: async () => {
-    const response = await api.get('/chamados/');
+  listar: async (filtros = {}) => {
+    const params = new URLSearchParams(filtros).toString();
+    const url = params ? `/chamados/?${params}` : '/chamados/';
+    
+    const response = await api.get(url);
     return response.data;
   },
 
@@ -35,6 +38,7 @@ const chamadoService = {
   },
 
   getDashboardStats: async () => {
+    // Aqui mantemos sem filtros para pegar o geral
     const chamados = await chamadoService.listar();
     const hojeStr = new Date().toISOString().split('T')[0];
 

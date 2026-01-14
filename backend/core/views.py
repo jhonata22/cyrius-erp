@@ -130,14 +130,35 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Começamos com todos os chamados
         qs = Chamado.objects.all().order_by('-created_at')
 
-        if hasattr(user, 'equipe') and user.equipe.cargo in ['GESTOR', 'SOCIO']:
-            return qs
+        # --- 1. LÓGICA DE PERMISSÃO (SEGURANÇA) ---
+        # Se o usuário NÃO for GESTOR/SÓCIO, filtramos para ver apenas os seus
+        is_gestor = hasattr(user, 'equipe') and user.equipe.cargo in ['GESTOR', 'SOCIO']
         
-        return qs.filter(
-            Q(chamadotecnico__tecnico=user.equipe) | Q(tecnicos=None)
-        ).distinct()
+        if not is_gestor:
+            qs = qs.filter(
+                Q(chamadotecnico__tecnico=user.equipe) | Q(tecnicos=None)
+            ).distinct()
+        
+        # (Se for Gestor, ele continua com o 'qs' contendo tudo, sem filtrar ainda)
+
+        # --- 2. LÓGICA DE FILTROS DA URL (FUNCIONALIDADE) ---
+        # Agora aplicamos os filtros que vêm do Frontend.
+        # Isso deve acontecer para TODOS (Gestor também quer filtrar por ativo se estiver na tela do ativo)
+
+        # Filtro: /api/chamados/?ativo=5
+        ativo_id = self.request.query_params.get('ativo')
+        if ativo_id:
+            qs = qs.filter(ativo_id=ativo_id)
+
+        # Filtro: /api/chamados/?cliente=10
+        cliente_id = self.request.query_params.get('cliente')
+        if cliente_id:
+            qs = qs.filter(cliente_id=cliente_id)
+
+        return qs
 
     def perform_create(self, serializer):
         chamado = serializer.save()
@@ -149,8 +170,8 @@ class ChamadoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         chamado = serializer.save()
         if chamado.status == 'FINALIZADO':
+            # Certifique-se que essa função 'finalizar_chamado' está importada corretamente
             finalizar_chamado(chamado)
-
 # =====================================================
 # 5. FINANCEIRO
 # =====================================================
@@ -208,15 +229,27 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = OrdemServico.objects.all().select_related('cliente', 'tecnico_responsavel').prefetch_related('itens', 'anexos')
+        # Dica: Adicionei 'ativo' no select_related para otimizar a performance
+        qs = OrdemServico.objects.all().select_related('cliente', 'tecnico_responsavel', 'ativo').prefetch_related('itens', 'anexos')
 
-        # GESTOR e SÓCIO veem tudo
-        if hasattr(user, 'equipe') and user.equipe.cargo in ['GESTOR', 'SOCIO']:
-            return qs
-        
-        # TÉCNICO vê apenas as OS onde é responsável
-        # (Ou podemos liberar leitura para todos e edição só para dono/gestor, mas vamos restringir por enquanto)
-        return qs.filter(tecnico_responsavel=user.equipe)
+        # --- 1. LÓGICA DE PERMISSÃO (SEGURANÇA) ---
+        # Se NÃO for GESTOR nem SÓCIO, vê apenas as suas.
+        # Se for GESTOR/SÓCIO, passa direto e vê tudo (mas ainda sujeito aos filtros abaixo!)
+        if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
+             qs = qs.filter(tecnico_responsavel=user.equipe)
+
+        # --- 2. LÓGICA DE FILTROS (FUNCIONALIDADE) ---
+        # Filtro VITAL para o histórico do equipamento funcionar
+        ativo_id = self.request.query_params.get('ativo')
+        if ativo_id:
+            qs = qs.filter(ativo_id=ativo_id)
+
+        # Filtro opcional por cliente
+        cliente_id = self.request.query_params.get('cliente')
+        if cliente_id:
+            qs = qs.filter(cliente_id=cliente_id)
+
+        return qs
 
     # --- CORREÇÃO DO ERRO 400: Lógica de Atribuição Automática ---
     def perform_create(self, serializer):
@@ -290,9 +323,3 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             # Logar erro real no console do servidor
             print(f"Erro Crítico Finalizar OS: {e}")
             return Response({"erro": "Erro ao finalizar OS. Verifique o estoque e tente novamente."}, status=500)
-
-# ViewSet Simples apenas para manipulação direta de anexos (ex: excluir)
-class AnexoServicoViewSet(viewsets.ModelViewSet):
-    queryset = AnexoServico.objects.all()
-    serializer_class = AnexoServicoSerializer
-    permission_classes = [IsFuncionario]

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // <--- useMemo ADICIONADO
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Wrench, Truck, Monitor, Calendar, 
@@ -6,13 +6,15 @@ import {
 } from 'lucide-react';
 import servicoService from '../services/servicoService';
 import clienteService from '../services/clienteService';
-import equipeService from '../services/equipeService'; // <--- 1. IMPORTADO
+import equipeService from '../services/equipeService';
+import ativoService from '../services/ativoService'; // <--- 1. IMPORTADO
 
 export default function Servicos() {
   const navigate = useNavigate();
   const [servicos, setServicos] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [tecnicos, setTecnicos] = useState([]); // <--- 2. ESTADO DOS TÉCNICOS
+  const [tecnicos, setTecnicos] = useState([]);
+  const [ativos, setAtivos] = useState([]); // <--- 2. ESTADO DOS ATIVOS
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState('TODOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -20,10 +22,11 @@ export default function Servicos() {
   // Form para Nova OS
   const [formData, setFormData] = useState({
     cliente: '',
+    ativo: '', // <--- 3. CAMPO NO STATE
     titulo: '',
     tipo: 'LABORATORIO',
     descricao_problema: '',
-    tecnico_responsavel: '' // <--- 3. CAMPO NO STATE
+    tecnico_responsavel: ''
   });
 
   useEffect(() => {
@@ -33,17 +36,17 @@ export default function Servicos() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      // Carrega Serviços, Clientes e Equipe ao mesmo tempo
-      const [listaServicos, listaClientes, listaEquipe] = await Promise.all([
+      // Carrega Serviços, Clientes, Equipe e ATIVOS
+      const [listaServicos, listaClientes, listaEquipe, listaAtivos] = await Promise.all([
         servicoService.listar(),
         clienteService.listar(),
-        equipeService.listar()
+        equipeService.listar(),
+        ativoService.listar() // <--- 4. CARREGA ATIVOS
       ]);
       setServicos(listaServicos);
       setClientes(listaClientes);
+      setAtivos(listaAtivos);
       
-      // Filtra apenas quem pode assumir OS (Técnico, Gestor, Sócio)
-      // Se quiser que o Estagiário apareça, adicione 'ESTAGIARIO' na lista
       const tecnicosElegiveis = listaEquipe.filter(m => ['TECNICO', 'GESTOR', 'SOCIO', 'ESTAGIARIO'].includes(m.cargo));
       setTecnicos(tecnicosElegiveis);
 
@@ -54,18 +57,23 @@ export default function Servicos() {
     }
   };
 
+  // --- FILTRO INTELIGENTE DE ATIVOS ---
+  const ativosDoCliente = useMemo(() => {
+    if (!formData.cliente) return [];
+    // Filtra onde o ID do cliente bate com o selecionado
+    return ativos.filter(a => a.cliente === parseInt(formData.cliente) || a.cliente?.id === parseInt(formData.cliente));
+  }, [formData.cliente, ativos]);
+
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
       // Prepara o payload
       const payload = {
         ...formData,
-        cliente: parseInt(formData.cliente)
+        cliente: parseInt(formData.cliente),
+        ativo: formData.ativo ? parseInt(formData.ativo) : null // <--- 5. ENVIA O ATIVO
       };
 
-      // Lógica do Técnico:
-      // Se selecionou alguém, converte para Inteiro.
-      // Se deixou vazio ("Eu mesmo"), remove a chave para o backend usar o user logado.
       if (formData.tecnico_responsavel) {
           payload.tecnico_responsavel = parseInt(formData.tecnico_responsavel);
       } else {
@@ -82,7 +90,6 @@ export default function Servicos() {
   };
 
   // --- HELPERS VISUAIS ---
-  
   const getStatusStyle = (status) => {
     switch (status) {
         case 'ORCAMENTO': return 'bg-amber-50 text-amber-600 border-amber-100';
@@ -178,6 +185,12 @@ export default function Servicos() {
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-wide truncate">
                             {os.nome_cliente}
                         </p>
+                        {/* Exibe o nome do ativo se existir */}
+                        {os.nome_ativo && (
+                           <p className="text-[#7C69AF] text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1">
+                              <Monitor size={10} /> {os.nome_ativo}
+                           </p>
+                        )}
                     </div>
 
                     <div className="pl-4 pt-4 border-t border-slate-50 flex items-center justify-between text-slate-400">
@@ -189,14 +202,13 @@ export default function Servicos() {
                         </div>
                         
                         <div className="text-right">
-                            {/* EXIBE O NOME DO TÉCNICO SE O BACKEND MANDAR */}
                              {os.nome_tecnico && (
                                 <p className="text-[9px] font-bold mb-1 text-[#302464]">
                                     Resp: {os.nome_tecnico.split(' ')[0]}
                                 </p>
                              )}
                              <p className="text-[9px] font-bold mt-1 text-slate-300">
-                                {new Date(os.data_entrada).toLocaleDateString()}
+                                {new Date(os.created_at || os.data_entrada).toLocaleDateString()}
                              </p>
                         </div>
                     </div>
@@ -233,7 +245,7 @@ export default function Servicos() {
                         <select 
                             className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
                             value={formData.cliente}
-                            onChange={e => setFormData({...formData, cliente: e.target.value})}
+                            onChange={e => setFormData({...formData, cliente: e.target.value, ativo: ''})} // Limpa o ativo ao mudar cliente
                             required
                         >
                             <option value="">Selecione o Cliente...</option>
@@ -243,9 +255,26 @@ export default function Servicos() {
                         </select>
                     </div>
 
+                    {/* 6. CAMPO NOVO: ATIVO / EQUIPAMENTO */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                            <Monitor size={10} /> Equipamento / Ativo (Opcional)
+                        </label>
+                        <select 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF] disabled:opacity-50 disabled:cursor-not-allowed"
+                            value={formData.ativo}
+                            onChange={e => setFormData({...formData, ativo: e.target.value})}
+                            disabled={!formData.cliente}
+                        >
+                            <option value="">{formData.cliente ? 'Selecione ou deixe vazio...' : 'Selecione um cliente antes...'}</option>
+                            {ativosDoCliente.map(a => (
+                                <option key={a.id} value={a.id}>{a.nome} ({a.tipo})</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* GRID: TÉCNICO E TIPO */}
                     <div className="grid grid-cols-2 gap-4">
-                        {/* 4. CAMPO NOVO: TÉCNICO RESPONSÁVEL */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnico Resp.</label>
                             <select 
