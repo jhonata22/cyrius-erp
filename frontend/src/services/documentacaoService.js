@@ -1,29 +1,33 @@
 import api from './api';
 
 const documentacaoService = {
-  // ... (outros métodos mantidos)
 
+  // Método genérico para salvar sub-itens (Contatos, Provedores, Contratos, etc)
+  // O Axios detecta automaticamente se 'payload' é JSON ou FormData (Arquivo)
   salvarItem: async (url, payload) => {
     const response = await api.post(url, payload);
     return response.data;
   },
 
-  // NOVO MÉTODO PARA EXCLUSÃO
+  // Método genérico para exclusão
   excluirItem: async (url, id) => {
     const response = await api.delete(`${url}${id}/`);
     return response.data;
   },
 
+  // Busca lista de ativos para a aba Inventário
   listarAtivos: async () => {
     const response = await api.get('/ativos/');
     return response.data;
   },
   
+  // Cria o registro principal da documentação (textos)
   criar: async (payload) => {
     const response = await api.post('/documentacao/', payload);
     return response.data;
   },
 
+  // Atualiza o registro principal da documentação (textos)
   atualizar: async (id, payload) => {
     const response = await api.put(`/documentacao/${id}/`, payload);
     return response.data;

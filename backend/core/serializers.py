@@ -4,12 +4,17 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, 
     Fornecedor, Produto, MovimentacaoEstoque,
-    OrdemServico, ItemServico, AnexoServico
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente
 )
 
 # =====================================================
 # 1. CLIENTES E SUB-TABELAS
 # =====================================================
+
+class ContratoClienteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContratoCliente
+        fields = ['id', 'cliente', 'arquivo', 'descricao', 'data_upload']
 
 class ContatoClienteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,6 +41,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     provedores = ProvedorInternetSerializer(many=True, read_only=True)
     contas_email = ContaEmailSerializer(many=True, read_only=True)
     documentacao_tecnica = DocumentacaoTecnicaSerializer(read_only=True)
+    contratos = ContratoClienteSerializer(many=True, read_only=True)
 
     class Meta:
         model = Cliente

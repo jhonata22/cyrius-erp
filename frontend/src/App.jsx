@@ -16,7 +16,7 @@ import Equipe from './pages/Equipe';
 import Configuracoes from './pages/Configuracoes';
 import Perfil from './pages/Perfil';
 import Servicos from './pages/Servicos';
-import ServicoDetalhes from './pages/ServicoDetalhes'
+import ServicoDetalhes from './pages/ServicoDetalhes';
 
 // --- COMPONENTE GUARDA-COSTAS (Rota Protegida) ---
 const RotaProtegida = ({ children, allowedRoles }) => {
@@ -57,12 +57,27 @@ function App() {
       <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
       <Route path="/chamados/:id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
       <Route path="/clientes" element={<RotaProtegida><Clientes /></RotaProtegida>} />
+      
+      {/* A documentação é aberta a todos, mas a aba CONTRATOS é protegida internamente */}
       <Route path="/documentacao" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
       <Route path="/documentacao/:id" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
+      
       <Route path="/perfil" element={<RotaProtegida><Perfil /></RotaProtegida>} />
-      <Route path="/config" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
       <Route path="/perfil/:id" element={<RotaProtegida><Perfil /></RotaProtegida>} />
+      <Route path="/config" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
 
+      {/* --- MÓDULO DE SERVIÇOS (Técnicos e Gestores) --- */}
+      <Route path="/servicos" element={
+        <RotaProtegida allowedRoles={['TECNICO', 'GESTOR', 'SOCIO']}>
+            <Servicos />
+        </RotaProtegida>
+      } />
+
+      <Route path="/servicos/:id" element={
+        <RotaProtegida allowedRoles={['TECNICO', 'GESTOR', 'SOCIO']}>
+            <ServicoDetalhes />
+        </RotaProtegida>
+      } />
 
       {/* --- ACESSO GERENCIAL (GESTOR E SÓCIO) --- */}
       <Route path="/equipe" element={
@@ -80,22 +95,8 @@ function App() {
 
       {/* Rota Padrão para 404 - Redireciona para home */}
       <Route path="*" element={<Navigate to="/" replace />} />
-
-      {/* --- MÓDULO DE SERVIÇOS --- */}
-<Route path="/servicos" element={
-  <RotaProtegida allowedRoles={['TECNICO', 'GESTOR', 'SOCIO']}>
-      <Servicos />
-  </RotaProtegida>
-} />
-
-<Route path="/servicos/:id" element={
-  <RotaProtegida allowedRoles={['TECNICO', 'GESTOR', 'SOCIO']}>
-      <ServicoDetalhes />
-  </RotaProtegida>
-} />
     </Routes>   
   );
-
 }
 
 export default App;

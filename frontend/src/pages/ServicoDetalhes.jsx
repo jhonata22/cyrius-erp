@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
-  AlertTriangle, Truck, Download, Printer, QrCode 
+  AlertTriangle, Truck, Download, Printer, QrCode,
+  Edit // <--- IMPORT NOVO
 } from 'lucide-react';
-import QRCode from 'react-qr-code'; // <--- IMPORT DA BIBLIOTECA
+import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
 import estoqueService from '../services/estoqueService'; 
 
@@ -22,8 +23,8 @@ export default function ServicoDetalhes() {
   const [modalItemOpen, setModalItemOpen] = useState(false);
   const [modalAnexoOpen, setModalAnexoOpen] = useState(false);
 
-  // Forms dos Modais
-  const [itemForm, setItemForm] = useState({ produto: '', quantidade: 1 });
+  // Forms dos Modais (ATUALIZADO: Inclui ID para edição)
+  const [itemForm, setItemForm] = useState({ id: null, produto: '', quantidade: 1 });
   const [anexoForm, setAnexoForm] = useState({ arquivo: null, tipo: 'FOTO', descricao: '' });
 
   // Edição Geral
@@ -104,6 +105,7 @@ export default function ServicoDetalhes() {
     }
   };
 
+  // --- AÇÃO 1: ADICIONAR OU EDITAR ITEM ---
   const handleAdicionarItem = async (e) => {
     e.preventDefault();
     if (!itemForm.produto) return;
@@ -111,18 +113,50 @@ export default function ServicoDetalhes() {
     try {
       const prodSelecionado = produtos.find(p => p.id === parseInt(itemForm.produto));
       
-      await servicoService.adicionarItem(id, {
+      const payload = {
         produto: itemForm.produto,
         quantidade: itemForm.quantidade,
-        preco_venda: prodSelecionado.preco_venda_sugerido
-      });
+        preco_venda: prodSelecionado ? prodSelecionado.preco_venda_sugerido : 0 // Mantém preço se achar
+      };
+
+      if (itemForm.id) {
+        // MODO EDIÇÃO
+        // Certifique-se que seu service tenha o método atualizarItem (PUT/PATCH)
+        await servicoService.atualizarItem(itemForm.id, payload);
+      } else {
+        // MODO CRIAÇÃO
+        await servicoService.adicionarItem(id, payload);
+      }
 
       setModalItemOpen(false);
-      setItemForm({ produto: '', quantidade: 1 });
+      setItemForm({ id: null, produto: '', quantidade: 1 }); // Reseta
       carregarDados();
     } catch (error) {
-      alert("Erro ao adicionar item: " + (error.response?.data?.erro || "Verifique o estoque."));
+      alert("Erro ao salvar item: " + (error.response?.data?.erro || "Verifique o estoque."));
     }
+  };
+
+  // --- NOVA AÇÃO: EXCLUIR ITEM ---
+  const handleExcluirItem = async (itemId) => {
+    if(!window.confirm("Tem certeza que deseja remover este item?")) return;
+
+    try {
+        // Certifique-se que seu service tenha o método removerItem (DELETE)
+        await servicoService.removerItem(itemId); 
+        carregarDados();
+    } catch (error) {
+        alert("Erro ao excluir item.");
+    }
+  };
+
+  // --- HELPER: ABRIR MODAL PARA EDIÇÃO ---
+  const abrirEdicao = (item) => {
+    setItemForm({
+        id: item.id,
+        produto: item.produto, // Assumindo que o back retorna o ID do produto neste campo ou em produto_id
+        quantidade: item.quantidade
+    });
+    setModalItemOpen(true);
   };
 
   const handleAnexar = async (e) => {
@@ -140,12 +174,8 @@ export default function ServicoDetalhes() {
   };
 
   // --- FUNÇÕES DE IMPRESSÃO ---
-
   const imprimirOS = () => {
     const totalGeral = (parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0);
-    
-    // Caminho do logo (Certifique-se de ter um logo.png na pasta public)
-    // Se não tiver imagem, ele vai mostrar o alt "CYRIUS"
     const logoHtml = `<img src="/logo.png" alt="CYRIUS" style="max-height: 200px;" />`; 
 
     const janela = window.open('', '', 'width=800,height=600');
@@ -171,15 +201,12 @@ export default function ServicoDetalhes() {
         </head>
         <body>
           <div class="header">
-            <div class="logo-container">
-                ${logoHtml}
-            </div>
+            <div class="logo-container">${logoHtml}</div>
             <div class="info-os">
               <h1>OS #${String(os.id).padStart(4, '0')}</h1>
               <p>Data: ${new Date(os.data_entrada).toLocaleDateString()}</p>
             </div>
           </div>
-
           <div class="section">
             <div class="grid">
               <div>
@@ -192,12 +219,10 @@ export default function ServicoDetalhes() {
               </div>
             </div>
           </div>
-
           <div class="section">
             <div class="section-title">Descrição do Problema</div>
             <p>${os.descricao_problema}</p>
           </div>
-
           <div class="section">
             <div class="section-title">Peças Utilizadas</div>
             <table>
@@ -214,7 +239,6 @@ export default function ServicoDetalhes() {
               </tbody>
             </table>
           </div>
-
           <div class="section">
              <div class="section-title">Resumo Financeiro</div>
              <table style="width: 50%; margin-left: auto;">
@@ -222,11 +246,8 @@ export default function ServicoDetalhes() {
                 <tr><td>Mão de Obra</td><td style="text-align:right">${formatMoney(editData.valor_mao_de_obra)}</td></tr>
                 <tr><td>Desconto</td><td style="text-align:right; color: red;">- ${formatMoney(editData.desconto)}</td></tr>
              </table>
-             <div class="total-row">
-                TOTAL: ${formatMoney(totalGeral)}
-             </div>
+             <div class="total-row">TOTAL: ${formatMoney(totalGeral)}</div>
           </div>
-
           <div class="assinaturas">
             <div class="line">Assinatura do Técnico</div>
             <div class="line">Assinatura do Cliente</div>
@@ -239,16 +260,12 @@ export default function ServicoDetalhes() {
   };
 
   const imprimirEtiqueta = () => {
-    // 1. Pega o SVG gerado pelo componente react-qr-code escondido na tela
     const svgElement = document.getElementById('qr-code-hidden');
-    
     if (!svgElement) {
         alert("Erro ao gerar QR Code. Tente novamente.");
         return;
     }
-
-    const qrCodeSvg = svgElement.innerHTML; // Pega o HTML do SVG
-
+    const qrCodeSvg = svgElement.innerHTML; 
     const janela = window.open('', '', 'width=400,height=400');
     janela.document.write(`
         <html>
@@ -266,11 +283,7 @@ export default function ServicoDetalhes() {
                 <div class="tag">
                     <h2>OS #${String(os.id).padStart(4, '0')}</h2>
                     <p>${os.nome_cliente.substring(0, 25)}</p>
-                    
-                    <div class="qr-container">
-                        ${qrCodeSvg}
-                    </div>
-                    
+                    <div class="qr-container">${qrCodeSvg}</div>
                     <p>Entrada: ${new Date(os.data_entrada).toLocaleDateString()}</p>
                     <p style="font-size: 10px; margin-top: 10px; text-transform: uppercase;">CYRIUS - CONTROLE INTERNO</p>
                 </div>
@@ -278,16 +291,11 @@ export default function ServicoDetalhes() {
         </html>
     `);
     janela.document.close();
-    setTimeout(() => {
-        janela.print();
-    }, 500);
+    setTimeout(() => { janela.print(); }, 500);
   };
 
-  // --- HELPERS ---
   const formatMoney = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
   const isLocked = os?.status === 'CONCLUIDO' || os?.status === 'CANCELADO';
-  
-  // URL para o QR Code (Aponta para a página atual)
   const urlParaQR = window.location.href;
 
   if (loading || !os) return <div className="p-20 text-center text-[#7C69AF] animate-pulse font-black">Carregando O.S...</div>;
@@ -295,13 +303,8 @@ export default function ServicoDetalhes() {
   return (
     <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
       
-      {/* COMPONENTE INVISÍVEL PARA GERAR O QR CODE SVG */}
       <div style={{ display: 'none' }} id="qr-code-hidden">
-         <QRCode 
-            value={urlParaQR}
-            size={150}
-            level="H" 
-         />
+         <QRCode value={urlParaQR} size={150} level="H" />
       </div>
 
       {/* HEADER */}
@@ -323,7 +326,6 @@ export default function ServicoDetalhes() {
         </div>
 
         <div className="flex gap-2">
-            {/* BOTÕES DE IMPRESSÃO */}
             <button onClick={imprimirOS} className="px-4 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2" title="Imprimir OS">
                 <Printer size={18} /> <span className="hidden sm:inline">Imprimir OS</span>
             </button>
@@ -346,7 +348,7 @@ export default function ServicoDetalhes() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* COLUNA ESQUERDA (2/3) - Detalhes e Itens */}
+        {/* COLUNA ESQUERDA (2/3) */}
         <div className="lg:col-span-2 space-y-8">
             
             {/* DESCRIÇÃO E LAUDO */}
@@ -368,14 +370,17 @@ export default function ServicoDetalhes() {
                 />
             </div>
 
-            {/* PEÇAS E PRODUTOS */}
+            {/* PEÇAS E PRODUTOS (COM BOTÕES DE EDIÇÃO/EXCLUSÃO) */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                         <Box size={16} className="text-[#7C69AF]"/> Peças & Produtos Utilizados
                     </h3>
                     {!isLocked && (
-                        <button onClick={() => setModalItemOpen(true)} className="text-xs font-black text-[#7C69AF] hover:bg-purple-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1">
+                        <button 
+                            onClick={() => { setItemForm({ id: null, produto: '', quantidade: 1 }); setModalItemOpen(true); }} 
+                            className="text-xs font-black text-[#7C69AF] hover:bg-purple-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+                        >
                             <Plus size={14} /> Adicionar
                         </button>
                     )}
@@ -393,8 +398,28 @@ export default function ServicoDetalhes() {
                                     <p className="font-bold text-slate-700 text-sm">{item.nome_produto}</p>
                                     <p className="text-xs text-slate-400 font-bold">{item.quantidade}x {formatMoney(item.preco_venda)}</p>
                                 </div>
-                                <div className="text-right">
+                                <div className="flex items-center gap-4">
                                     <p className="font-black text-[#302464]">{formatMoney(item.subtotal)}</p>
+                                    
+                                    {/* BOTÕES DE AÇÃO (EDITAR / EXCLUIR) */}
+                                    {!isLocked && (
+                                        <div className="flex items-center gap-1">
+                                            <button 
+                                                onClick={() => abrirEdicao(item)}
+                                                className="p-2 text-[#7C69AF] bg-white rounded-lg shadow-sm hover:bg-purple-50 transition-colors" 
+                                                title="Editar Quantidade"
+                                            >
+                                                <Edit size={14} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleExcluirItem(item.id)}
+                                                className="p-2 text-red-400 bg-white rounded-lg shadow-sm hover:bg-red-50 transition-colors" 
+                                                title="Remover Item"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -423,13 +448,7 @@ export default function ServicoDetalhes() {
                              </div>
                              <p className="font-bold text-slate-700 text-xs truncate mb-1">{anexo.tipo}</p>
                              <p className="text-[10px] text-slate-400 truncate">{anexo.descricao || 'Sem descrição'}</p>
-                             
-                             <a 
-                                href={anexo.arquivo} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="absolute top-2 right-2 p-1.5 bg-white rounded-lg text-slate-400 hover:text-[#302464] shadow-sm opacity-0 group-hover:opacity-100 transition-all"
-                             >
+                             <a href={anexo.arquivo} target="_blank" rel="noopener noreferrer" className="absolute top-2 right-2 p-1.5 bg-white rounded-lg text-slate-400 hover:text-[#302464] shadow-sm opacity-0 group-hover:opacity-100 transition-all">
                                 <Download size={14} />
                              </a>
                         </div>
@@ -443,67 +462,44 @@ export default function ServicoDetalhes() {
 
         {/* COLUNA DIREITA (1/3) - Financeiro e Resumo */}
         <div className="space-y-6">
-            
-            {/* CARD FINANCEIRO */}
             <div className="bg-[#302464] p-8 rounded-[2.5rem] text-white shadow-xl shadow-purple-900/20 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#7C69AF] opacity-20 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                
                 <h3 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-6 flex items-center gap-2 relative z-10">
                     <DollarSign size={14}/> Resumo Financeiro
                 </h3>
-
                 <div className="space-y-4 relative z-10">
                     <div className="flex justify-between items-center text-sm">
                         <span className="opacity-70">Peças ({os.itens.length})</span>
                         <span className="font-bold">{formatMoney(os.total_pecas)}</span>
                     </div>
-                    
                     <div className="flex justify-between items-center text-sm">
                         <span className="opacity-70">Mão de Obra</span>
                         {isLocked ? (
                             <span className="font-bold">{formatMoney(editData.valor_mao_de_obra)}</span>
                         ) : (
-                            <input 
-                                type="number" 
-                                className="w-24 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-right font-bold outline-none focus:border-white/50"
-                                value={editData.valor_mao_de_obra}
-                                onChange={e => setEditData({...editData, valor_mao_de_obra: e.target.value})}
-                            />
+                            <input type="number" className="w-24 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-right font-bold outline-none focus:border-white/50" value={editData.valor_mao_de_obra} onChange={e => setEditData({...editData, valor_mao_de_obra: e.target.value})} />
                         )}
                     </div>
-
                     <div className="flex justify-between items-center text-sm">
                         <span className="opacity-70 text-red-300">Desconto</span>
                         {isLocked ? (
                             <span className="font-bold text-red-300">- {formatMoney(editData.desconto)}</span>
                         ) : (
-                            <input 
-                                type="number" 
-                                className="w-24 bg-red-500/20 border border-red-500/30 text-red-200 rounded-lg px-2 py-1 text-right font-bold outline-none focus:border-red-400"
-                                value={editData.desconto}
-                                onChange={e => setEditData({...editData, desconto: e.target.value})}
-                            />
+                            <input type="number" className="w-24 bg-red-500/20 border border-red-500/30 text-red-200 rounded-lg px-2 py-1 text-right font-bold outline-none focus:border-red-400" value={editData.desconto} onChange={e => setEditData({...editData, desconto: e.target.value})} />
                         )}
                     </div>
-
                     <div className="h-px bg-white/10 my-4"></div>
-
                     <div className="flex justify-between items-end">
                         <span className="font-black text-lg">TOTAL</span>
                         <div className="text-right">
                              <span className="block text-3xl font-black tracking-tighter">
-                                {formatMoney(
-                                    (parseFloat(os.total_pecas) || 0) + 
-                                    (parseFloat(editData.valor_mao_de_obra) || 0) - 
-                                    (parseFloat(editData.desconto) || 0)
-                                )}
+                                {formatMoney((parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0))}
                              </span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* CUSTOS OPERACIONAIS (SAÍDAS) */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Truck size={14} className="text-[#7C69AF]"/> Custos Operacionais
@@ -512,19 +508,12 @@ export default function ServicoDetalhes() {
                     <label className="text-[9px] font-black text-red-400 uppercase tracking-widest block mb-1">Deslocamento / Terceiros</label>
                     <div className="flex items-center gap-2">
                         <span className="text-red-400 font-bold">R$</span>
-                        <input 
-                            type="number"
-                            className="bg-transparent font-black text-red-600 outline-none w-full"
-                            value={editData.custo_deslocamento}
-                            onChange={e => setEditData({...editData, custo_deslocamento: e.target.value})}
-                            disabled={isLocked}
-                        />
+                        <input type="number" className="bg-transparent font-black text-red-600 outline-none w-full" value={editData.custo_deslocamento} onChange={e => setEditData({...editData, custo_deslocamento: e.target.value})} disabled={isLocked} />
                     </div>
                     <p className="text-[9px] text-red-400 mt-2 leading-tight">Valor a ser reembolsado ao técnico (Sai do caixa da empresa).</p>
                 </div>
             </div>
 
-            {/* INFO TÉCNICA */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                  <div className="space-y-4 text-xs font-bold text-slate-500">
                     <div className="flex justify-between">
@@ -543,24 +532,24 @@ export default function ServicoDetalhes() {
                     )}
                  </div>
             </div>
-
         </div>
       </div>
 
-      {/* MODAL ADICIONAR ITEM */}
+      {/* MODAL ADICIONAR/EDITAR ITEM */}
       {modalItemOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative">
                 <button onClick={() => setModalItemOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-[#302464]"><ArrowLeft size={20} /></button>
-                <h3 className="font-black text-[#302464] text-xl mb-6">Adicionar Peça</h3>
+                <h3 className="font-black text-[#302464] text-xl mb-6">{itemForm.id ? 'Editar Quantidade' : 'Adicionar Peça'}</h3>
                 <form onSubmit={handleAdicionarItem} className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto do Estoque</label>
                         <select 
-                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none"
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none disabled:opacity-50"
                             value={itemForm.produto}
                             onChange={e => setItemForm({...itemForm, produto: e.target.value})}
                             required
+                            disabled={!!itemForm.id} // Desabilita troca de produto na edição
                         >
                             <option value="">Selecione...</option>
                             {produtos.map(p => (
@@ -584,7 +573,7 @@ export default function ServicoDetalhes() {
         </div>
       )}
 
-      {/* MODAL ANEXO */}
+      {/* MODAL ANEXO (Mantido igual) */}
       {modalAnexoOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative">
@@ -593,30 +582,16 @@ export default function ServicoDetalhes() {
                 <form onSubmit={handleAnexar} className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Arquivo (PDF/Img)</label>
-                        <input 
-                            type="file"
-                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-500 text-xs"
-                            onChange={e => setAnexoForm({...anexoForm, arquivo: e.target.files[0]})}
-                            required
-                        />
+                        <input type="file" className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-500 text-xs" onChange={e => setAnexoForm({...anexoForm, arquivo: e.target.files[0]})} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <select 
-                            className="bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none text-xs"
-                            value={anexoForm.tipo}
-                            onChange={e => setAnexoForm({...anexoForm, tipo: e.target.value})}
-                        >
+                        <select className="bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none text-xs" value={anexoForm.tipo} onChange={e => setAnexoForm({...anexoForm, tipo: e.target.value})}>
                             <option value="FOTO">Foto</option>
                             <option value="NOTA_FISCAL">Nota Fiscal</option>
                             <option value="ORCAMENTO">Orçamento</option>
                             <option value="LAUDO">Laudo</option>
                         </select>
-                        <input 
-                             className="bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none text-xs"
-                             placeholder="Descrição curta"
-                             value={anexoForm.descricao}
-                             onChange={e => setAnexoForm({...anexoForm, descricao: e.target.value})}
-                        />
+                        <input className="bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none text-xs" placeholder="Descrição curta" value={anexoForm.descricao} onChange={e => setAnexoForm({...anexoForm, descricao: e.target.value})} />
                     </div>
                     <button className="w-full py-4 bg-[#302464] text-white rounded-2xl font-black text-sm uppercase tracking-widest mt-4">Enviar Arquivo</button>
                 </form>

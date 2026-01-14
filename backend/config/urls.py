@@ -7,6 +7,7 @@ from rest_framework.routers import DefaultRouter
 from django.conf import settings
 from django.conf.urls.static import static
 
+# 1. ADICIONE O IMPORT AQUI
 from core.views import (
     ClienteViewSet, 
     ChamadoViewSet, 
@@ -20,7 +21,9 @@ from core.views import (
     FornecedorViewSet, 
     ProdutoViewSet, 
     MovimentacaoEstoqueViewSet,
-    OrdemServicoViewSet
+    OrdemServicoViewSet,
+    ContratoViewSet,
+    ItemServicoViewSet # <--- IMPORT NOVO
 )
 
 from rest_framework_simplejwt.views import (
@@ -43,19 +46,16 @@ router.register(r'chamados', ChamadoViewSet, basename='chamado')
 router.register(r'ativos', AtivoViewSet)
 router.register(r'servicos', OrdemServicoViewSet, basename='servicos')
 
+# 2.1 Itens da OS (Para edição/exclusão individual)
+router.register(r'itens-servico', ItemServicoViewSet) # <--- ROTA NOVA
+
 # 3. Financeiro
 router.register(r'financeiro', LancamentoFinanceiroViewSet)
 
-# 4. Estoque (CORREÇÃO AQUI)
-# Antes estava apenas 'produtos' e 'estoque', agora agrupamos:
 router.register(r'fornecedores', FornecedorViewSet)
 router.register(r'estoque/produtos', ProdutoViewSet, basename='produtos') 
 router.register(r'estoque/movimentacoes', MovimentacaoEstoqueViewSet, basename='movimentacoes')
-
-# OBS: Se você tiver páginas antigas acessando '/api/produtos/' direto, 
-# elas vão quebrar. O ideal é atualizar o frontend para usar o novo padrão 
-# OU manter a linha abaixo descomentada como "alias":
-# router.register(r'produtos', ProdutoViewSet)
+router.register(r'contratos', ContratoViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

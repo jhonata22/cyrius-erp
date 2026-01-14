@@ -95,6 +95,33 @@ class Equipe(models.Model):
 # =====================================================
 # 3. ATIVOS E DOCUMENTAÇÃO
 # =====================================================
+
+class ContratoCliente(models.Model):
+    """
+    Tabela para armazenar PDFs de contratos.
+    Relacionamento: 1 Cliente pode ter N Contratos.
+    """
+    cliente = models.ForeignKey(
+        'Cliente', 
+        on_delete=models.CASCADE, 
+        related_name='contratos' # Importante: O front espera 'contratos' na lista de clientes
+    )
+    
+    # O upload_to organiza os arquivos na pasta media/contratos/ano/mes
+    arquivo = models.FileField(upload_to='contratos/%Y/%m/') 
+    
+    descricao = models.CharField(max_length=200, verbose_name="Descrição do Contrato")
+    data_upload = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'TB_CONTRATO_CLIENTE'
+        verbose_name = 'Contrato'
+        verbose_name_plural = 'Contratos'
+        ordering = ['-data_upload'] # Mais recentes primeiro
+
+    def __str__(self):
+        return f"Contrato {self.descricao} - {self.cliente}"
+
 class Ativo(models.Model):
     class TipoAtivo(models.TextChoices):
         COMPUTADOR = 'COMPUTADOR', 'Computador/Notebook'

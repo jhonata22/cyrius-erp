@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, parsers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -21,7 +21,7 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Chamado, ChamadoTecnico, LancamentoFinanceiro,
     Ativo, Fornecedor, Produto, MovimentacaoEstoque, FechamentoFinanceiro,
-    OrdemServico, ItemServico, AnexoServico # <--- NOVOS MODELS
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente
 )
 
 # --- SERIALIZERS ---
@@ -31,7 +31,7 @@ from .serializers import (
     EquipeSerializer, ChamadoSerializer, ChamadoTecnicoSerializer,
     LancamentoFinanceiroSerializer, AtivoSerializer,
     FornecedorSerializer, ProdutoSerializer, MovimentacaoEstoqueSerializer,
-    OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer # <--- NOVOS SERIALIZERS
+    OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, ContratoClienteSerializer
 )
 
 # --- MIXIN DE OTIMIZAÇÃO ---
@@ -70,6 +70,14 @@ class DocumentacaoTecnicaViewSet(OptimizedQuerySetMixin, viewsets.ModelViewSet):
     queryset = DocumentacaoTecnica.objects.all()
     serializer_class = DocumentacaoTecnicaSerializer
     permission_classes = [IsFuncionario]
+
+class ContratoViewSet(viewsets.ModelViewSet):
+    queryset = ContratoCliente.objects.all()
+    serializer_class = ContratoClienteSerializer
+    permission_classes = [IsSocio]
+    
+    # Isso é CRUCIAL para aceitar upload de arquivos (FormData)
+    parser_classes = (parsers.MultiPartParser, parsers.FormParser);
 
 # =====================================================
 # 2. ATIVOS
@@ -323,3 +331,29 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             # Logar erro real no console do servidor
             print(f"Erro Crítico Finalizar OS: {e}")
             return Response({"erro": "Erro ao finalizar OS. Verifique o estoque e tente novamente."}, status=500)
+
+# =====================================================
+# 7.1 ITENS DE SERVIÇO (CRUD INDIVIDUAL)
+# =====================================================
+
+class ItemServicoViewSet(viewsets.ModelViewSet):
+    """
+    Permite editar (PATCH) e excluir (DELETE) itens de serviço individualmente.
+    A rota para isso é /api/itens-servico/
+    """
+    queryset = ItemServico.objects.all()
+    serializer_class = ItemServicoSerializer
+    permission_classes = [IsFuncionario]
+
+    def perform_update(self, serializer):
+        # Opcional: Impedir edição se a OS estiver finalizada
+        item = self.get_object()
+        if item.os.status in ['CONCLUIDO', 'CANCELADO', 'FINALIZADO']:
+            raise ValidationError("Não é possível editar itens de uma OS já finalizada.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Opcional: Impedir exclusão se a OS estiver finalizada
+        if instance.os.status in ['CONCLUIDO', 'CANCELADO', 'FINALIZADO']:
+             raise ValidationError("Não é possível remover itens de uma OS já finalizada.")
+        instance.delete()
