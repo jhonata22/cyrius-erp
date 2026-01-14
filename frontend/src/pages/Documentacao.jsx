@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, Building2, Wifi, Lock, Monitor, 
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, 
   Search, BookOpen, X, ChevronRight, CheckCircle2, 
-  AlertTriangle, Info, MapPin, Plus, Trash2 
+  AlertTriangle, Info, MapPin, Plus, Trash2, Eye, EyeOff 
 } from 'lucide-react';
 
 // SERVIÇOS
@@ -22,6 +22,9 @@ export default function Documentacao() {
   const [cliente, setCliente] = useState(null);
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
+  
+  // Estado para controlar quais senhas estão visíveis
+  const [visiblePasswords, setVisiblePasswords] = useState({});
     
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
@@ -30,10 +33,17 @@ export default function Documentacao() {
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
     topologia_rede: '',
-    structure_servidores: '',
+    estrutura_servidores: '',
     rotina_backup: '',
     pontos_fracos_melhorias: ''
   });
+
+  const togglePassword = (type, itemId) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [`${type}-${itemId}`]: !prev[`${type}-${itemId}`]
+    }));
+  };
 
   const carregarDados = useCallback(async () => {
     try {
@@ -71,7 +81,6 @@ export default function Documentacao() {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
-  // --- FUNÇÃO PARA SALVAR TEXTOS TÉCNICOS ---
   const handleSalvarTextos = async () => {
     try {
       const payload = { cliente: parseInt(id), ...textos };
@@ -84,7 +93,6 @@ export default function Documentacao() {
     }
   };
 
-  // --- FUNÇÃO PARA SALVAR NOVOS ITENS (CONTATO, EMAIL, PROVEDOR, ATIVO) ---
   const handleSalvarModal = async (e) => {
     e.preventDefault();
     try {
@@ -106,7 +114,6 @@ export default function Documentacao() {
     }
   };
 
-  // --- FUNÇÃO PARA EXCLUIR ITENS ---
   const handleExcluirItem = async (url, itemId) => {
     if (!window.confirm("Deseja remover permanentemente?")) return;
     try {
@@ -117,7 +124,6 @@ export default function Documentacao() {
     }
   };
 
-  // MODO 1: SELEÇÃO DE CLIENTE
   if (!id) {
     const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
     return (
@@ -228,7 +234,17 @@ export default function Documentacao() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
                                     <div><p className="text-[8px] font-black text-slate-300 uppercase">Usuário</p><p className="font-bold text-slate-700 truncate">{p.usuario_pppoe || '---'}</p></div>
-                                    <div><p className="text-[8px] font-black text-slate-300 uppercase">Senha</p><p className="font-mono font-black text-[#7C69AF]">{p.senha_pppoe || '---'}</p></div>
+                                    <div>
+                                      <p className="text-[8px] font-black text-slate-300 uppercase">Senha</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-mono font-black text-[#7C69AF] truncate">
+                                          {visiblePasswords[`rede-${p.id}`] ? p.senha_pppoe : '••••••••'}
+                                        </p>
+                                        <button onClick={() => togglePassword('rede', p.id)} className="text-slate-400 hover:text-[#7C69AF] transition-colors">
+                                          {visiblePasswords[`rede-${p.id}`] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                      </div>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -252,7 +268,15 @@ export default function Documentacao() {
                         <tbody className="divide-y divide-slate-50">
                             {(cliente?.contas_email || []).map(e => (
                                 <tr key={e.id} className="hover:bg-slate-50 transition-colors font-bold text-slate-700">
-                                    <td className="py-4">{e.email}</td><td className="py-4 text-center font-mono text-[#7C69AF]">{e.senha}</td>
+                                    <td className="py-4">{e.email}</td>
+                                    <td className="py-4 text-center font-mono text-[#7C69AF]">
+                                      <div className="flex items-center justify-center gap-3">
+                                        <span>{visiblePasswords[`email-${e.id}`] ? e.senha : '••••••••'}</span>
+                                        <button onClick={() => togglePassword('email', e.id)} className="text-slate-400 hover:text-[#7C69AF] transition-colors">
+                                          {visiblePasswords[`email-${e.id}`] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                      </div>
+                                    </td>
                                     <td className="py-4 text-right"><button onClick={() => handleExcluirItem('/emails/', e.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button></td>
                                 </tr>
                             ))}
