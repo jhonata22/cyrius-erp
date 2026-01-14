@@ -14,7 +14,7 @@ import documentacaoService from '../services/documentacaoService';
 export default function Documentacao() {
   const { id } = useParams();
   const navigate = useNavigate();
-   
+    
   const [listaClientes, setListaClientes] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,7 @@ export default function Documentacao() {
   const [cliente, setCliente] = useState(null);
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
-   
+    
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
   const [formTemp, setFormTemp] = useState({}); 
@@ -30,7 +30,7 @@ export default function Documentacao() {
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
     topologia_rede: '',
-    estrutura_servidores: '',
+    structure_servidores: '',
     rotina_backup: '',
     pontos_fracos_melhorias: ''
   });
@@ -151,7 +151,7 @@ export default function Documentacao() {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
-       
+        
       {/* HEADER CLIENTE */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-5">
@@ -166,8 +166,8 @@ export default function Documentacao() {
         </button>
       </div>
 
-      {/* TABS */}
-      <div className="flex overflow-x-auto gap-2 p-1.5 bg-slate-200/50 rounded-2xl mb-8 no-scrollbar">
+      {/* TABS CENTRALIZADAS */}
+      <div className="flex justify-center overflow-x-auto gap-2 p-1.5 bg-slate-200/50 rounded-2xl mb-8 no-scrollbar">
         {[
           { id: 'geral', label: 'Cadastro', icon: Building2 },
           { id: 'rede', label: 'Rede', icon: Globe },
@@ -265,7 +265,6 @@ export default function Documentacao() {
         {/* ABA ATIVOS (INVENTÁRIO) */}
         {activeTab === 'inventario' && (
             <div className="space-y-6">
-                {/* Sub-header da aba com contador */}
                 <div className="flex justify-between items-center mb-4 px-2">
                     <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
                         <Monitor size={16} className="text-[#7C69AF]"/> Parque Tecnológico ({ativos.length})
@@ -282,7 +281,7 @@ export default function Documentacao() {
                     {ativos.map(a => (
                         <div 
                             key={a.id} 
-                            onClick={() => navigate(`/ativos/${a.id}`)} // LINK PARA ATIVO DETALHES
+                            onClick={() => navigate(`/ativos/${a.id}`)} 
                             className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
                         >
                             <div className="flex justify-between items-start mb-4">
@@ -294,7 +293,7 @@ export default function Documentacao() {
                                 </span>
                             </div>
 
-                            <h4 className="font-black text-slate-800 leading-tight line-clamp-1 group-hover:text-[#7C69AF] transition-colors">
+                            <h4 className="font-black text-slate-800 leading-tight line-clamp-1 group-hover:text-[#302464] transition-colors">
                                 {a.nome}
                             </h4>
                             <p className="text-[10px] font-bold text-[#A696D1] mt-1 truncate uppercase tracking-tighter">
@@ -360,12 +359,10 @@ export default function Documentacao() {
                 <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">Novo Registro</h3>
                 <form onSubmit={handleSalvarModal} className="space-y-4">
                     
-                    {/* FORMULÁRIO DE PROVEDOR (CORREÇÃO ITEM 2: IP FIXO ADICIONADO) */}
                     {modalAberto === 'provedor' && (
                         <>
                             <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
                             <input placeholder="Plano" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
-                            {/* CAMPO IP FIXO ADICIONADO */}
                             <input placeholder="IP Fixo (Opcional)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono text-slate-600" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
                             
                             <div className="grid grid-cols-2 gap-2">
@@ -376,22 +373,18 @@ export default function Documentacao() {
                         </>
                     )}
 
-                    {/* FORMULÁRIO DE EMAIL */}
                     {modalAberto === 'email' && (
                         <><input required type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, email: e.target.value})} /><input required placeholder="Senha" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} /></>
                     )}
 
-                    {/* FORMULÁRIO DE CONTATO (CORREÇÃO ITEM 1: TELEFONE ADICIONADO) */}
                     {modalAberto === 'contato' && (
                         <>
                             <input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
                             <input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
-                            {/* CAMPO TELEFONE ADICIONADO */}
                             <input placeholder="Telefone / Celular" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
                         </>
                     )}
 
-                    {/* FORMULÁRIO DE ATIVO/DISPOSITIVO (CORREÇÃO ITEM 3: FORMULÁRIO CRIADO) */}
                     {modalAberto === 'ativo' && (
                         <>
                             <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
