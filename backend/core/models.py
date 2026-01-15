@@ -303,6 +303,7 @@ class LancamentoFinanceiro(TimeStampedModel):
     categoria = models.CharField(max_length=20, choices=Categoria.choices, default=Categoria.DESPESA)
     data_vencimento = models.DateField()
     data_pagamento = models.DateField(null=True, blank=True)
+    fornecedor = models.ForeignKey('Fornecedor', on_delete=models.SET_NULL, null=True, blank=True, related_name='lancamentos')
 
     class Meta: 
         db_table = 'TB_LANCAMENTO_FINANCEIRO'

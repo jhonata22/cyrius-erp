@@ -3,13 +3,15 @@ from django.utils import timezone
 from core.models import MovimentacaoEstoque, LancamentoFinanceiro
 
 def processar_movimentacao_estoque(produto, quantidade, tipo_movimento, usuario, 
-                                  cliente=None, fornecedor=None, preco_unitario=0, 
-                                  numero_serial=None, arquivo=None):
-    """
-    Cria a movimentação e gera o financeiro automaticamente.
-    """
+                                   cliente=None, fornecedor=None, preco_unitario=0, 
+                                   numero_serial=None, arquivo=None):
+    
+    # LOG DE ENTRADA
+    print(f"\n[DEBUG ESTOQUE] Iniciando: {tipo_movimento} | Prod: {produto.nome}")
+    print(f"[DEBUG ESTOQUE] Fornecedor recebido: {fornecedor} | Cliente recebido: {cliente}")
+
     with transaction.atomic():
-        # 1. Cria a movimentação de estoque
+        # 1. Cria a movimentação
         movimentacao = MovimentacaoEstoque.objects.create(
             produto=produto,
             quantidade=quantidade,
@@ -22,32 +24,42 @@ def processar_movimentacao_estoque(produto, quantidade, tipo_movimento, usuario,
             arquivo=arquivo
         )
 
-        # Converte para float para garantir cálculo correto
+        # 2. Cálculos
         qtd = float(quantidade or 0)
         preco = float(preco_unitario or 0)
         valor_total = qtd * preco
+        print(f"[DEBUG ESTOQUE] Valor Total calculado: {valor_total}")
 
-        # 2. GERAÇÃO DE FINANCEIRO (VENDA -> ENTRADA)
+        # LÓGICA DE VENDA (SAÍDA)
         if tipo_movimento == 'SAIDA' and cliente and valor_total > 0:
+            print("[DEBUG ESTOQUE] Criando ENTRADA financeira (Venda)...")
             LancamentoFinanceiro.objects.create(
                 cliente=cliente,
                 descricao=f"Venda: {produto.nome} (Qtd: {quantidade})",
                 valor=valor_total,
                 tipo_lancamento='ENTRADA',
                 categoria='VENDA',
-                status='PENDENTE', # Fica a receber
+                status='PENDENTE',
                 data_vencimento=timezone.now().date()
             )
 
-        # 3. GERAÇÃO DE FINANCEIRO (COMPRA -> SAÍDA)
+        # LÓGICA DE COMPRA (ENTRADA)
         elif tipo_movimento == 'ENTRADA' and fornecedor and valor_total > 0:
+            print("[DEBUG ESTOQUE] Criando SAÍDA financeira (Compra)...")
             LancamentoFinanceiro.objects.create(
-                descricao=f"Compra Estoque: {produto.nome} - {fornecedor.razao_social}",
+                fornecedor=fornecedor,
+                descricao=f"Compra Estoque: {produto.nome}",
                 valor=valor_total,
                 tipo_lancamento='SAIDA',
                 categoria='COMPRA',
-                status='PENDENTE', # Fica a pagar
+                status='PENDENTE',
                 data_vencimento=timezone.now().date()
             )
+        else:
+            print("[DEBUG ESTOQUE] Nenhuma regra financeira aplicada.")
+            if tipo_movimento == 'ENTRADA' and not fornecedor:
+                print("[DEBUG ESTOQUE] MOTIVO: Tipo é ENTRADA mas o objeto Fornecedor é Nulo.")
+            if valor_total <= 0:
+                print("[DEBUG ESTOQUE] MOTIVO: Valor total é zero ou negativo.")
 
     return movimentacao

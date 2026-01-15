@@ -134,25 +134,49 @@ class ProdutoSerializer(serializers.ModelSerializer):
     def get_estoque_atual(self, obj):
         return getattr(obj, 'estoque_real', obj.estoque_atual)
 
+from .models import MovimentacaoEstoque, Fornecedor 
+
 class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
     nome_produto = serializers.CharField(source='produto.nome', read_only=True)
-    nome_usuario = serializers.CharField(source='usuario.username', read_only=True)
-    nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
+    
+    # --- ADICIONE ESTAS LINHAS PARA FORÇAR O RECONHECIMENTO DOS IDs ---
+    # Isso garante que o DRF aceite o ID numérico e transforme no objeto Fornecedor/Cliente real
+    fornecedor = serializers.PrimaryKeyRelatedField(
+        queryset=Fornecedor.objects.all(), required=False, allow_null=True
+    )
+    cliente = serializers.PrimaryKeyRelatedField(
+        queryset=Cliente.objects.all(), required=False, allow_null=True
+    )
+    # -----------------------------------------------------------------
+
+    nome_usuario = serializers.SerializerMethodField()
+    nome_cliente = serializers.SerializerMethodField()
+    nome_fornecedor = serializers.SerializerMethodField() 
 
     class Meta:
         model = MovimentacaoEstoque
         fields = '__all__'
     
+    def get_nome_usuario(self, obj):
+        return obj.usuario.username if obj.usuario else None
+
+    def get_nome_cliente(self, obj):
+        return obj.cliente.razao_social if obj.cliente else None
+
+    def get_nome_fornecedor(self, obj):
+        return obj.fornecedor.razao_social if obj.fornecedor else None
+
     def validate(self, data):
+        # Opcional: Log de depuração dentro do Serializer para ver o que ele validou
+        # print(f"DEBUG VALIDATE: Fornecedor na validacao: {data.get('fornecedor')}")
+        
         if data.get('tipo_movimento') == 'SAIDA':
             produto = data['produto']
             if produto.estoque_atual < data['quantidade']:
                 raise serializers.ValidationError({
                     "quantidade": f"Estoque insuficiente. Disponível: {produto.estoque_atual}"
                 })
-        return data
-
-# =====================================================
+        return data# =====================================================
 # 6. SERVIÇOS (ORDEM DE SERVIÇO)
 # =====================================================
 

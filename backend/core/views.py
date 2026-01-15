@@ -216,19 +216,37 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     serializer_class = MovimentacaoEstoqueSerializer
     permission_classes = [IsFuncionario]
 
+    # --- MÉTODO DE DEBUG (Remova depois de resolver) ---
+    def create(self, request, *args, **kwargs):
+        print("\n=== DEBUG INÍCIO REQUEST ===")
+        print("DADOS RECEBIDOS:", request.data)
+        
+        serializer = self.get_serializer(data=request.data)
+        
+        if not serializer.is_valid():
+            print("❌ ERRO DE VALIDAÇÃO DETECTADO:")
+            print(serializer.errors) # <--- ISSO VAI MOSTRAR O MOTIVO NO TERMINAL
+            print("============================\n")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        print("✅ VALIDAÇÃO OK! INDO PARA O PERFORM_CREATE...")
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         dados = serializer.validated_data
-        processar_movimentacao_estoque(
+        
+        print(f"🔧 EXECUTANDO SERVIÇO... Fornecedor ID: {dados.get('fornecedor')}")
+
+        movimentacao = processar_movimentacao_estoque(
             produto=dados['produto'],
             quantidade=dados['quantidade'],
             tipo_movimento=dados['tipo_movimento'],
             usuario=self.request.user,
             cliente=dados.get('cliente'),
+            fornecedor=dados.get('fornecedor'),
             preco_unitario=dados.get('preco_unitario', 0)
         )
-
-# =====================================================
-# 7. MÓDULO DE SERVIÇOS (ORDEM DE SERVIÇO)
+        serializer.instance = movimentacao# 7. MÓDULO DE SERVIÇOS (ORDEM DE SERVIÇO)
 # =====================================================
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
