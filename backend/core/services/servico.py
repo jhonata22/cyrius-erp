@@ -65,8 +65,12 @@ def finalizar_ordem_servico(os, usuario_responsavel):
             tipo_movimento='SAIDA',
             usuario=usuario_responsavel,
             cliente=os.cliente,
-            preco_unitario=item.preco_venda, # Preço que foi vendido
-            # Oculto: Motivo/Obs gerado automaticamente
+            preco_unitario=item.preco_venda, 
+            # --- CORREÇÃO PONTUAL AQUI ---
+            # Bloqueia a criação do financeiro individual da peça,
+            # pois ela será cobrada no total da OS abaixo.
+            gerar_financeiro=False 
+            # -----------------------------
         )
 
     # 2. FINANCEIRO: RECEITA (O que o cliente paga)
