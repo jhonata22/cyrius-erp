@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, DollarSign, AlertTriangle, Building2, TrendingUp, RefreshCw, 
-  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2
+  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2, Printer
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -68,16 +68,13 @@ export default function Financeiro() {
          const ehDoMes = mesItem === mesSelecionado && anoItem === anoSelecionado;
 
          // 2. É pendente antigo? (Arrasta para o mês atual)
-         // Verifica se é PENDENTE e se a data é ANTERIOR à data selecionada
          const ehPendenteAntigo = (l.status === 'PENDENTE' || l.status === 'ATRASADO') && 
                                   ((anoItem < anoSelecionado) || (anoItem === anoSelecionado && mesItem < mesSelecionado));
 
          return ehDoMes || ehPendenteAntigo;
       });
 
-      // ORDENAÇÃO: Vencimento (Mais recentes no topo, mas pendentes antigos aparecem misturados conforme data)
-      // Dica: Se quiser pendentes antigos SEMPRE no topo, mude a lógica do sort.
-      // Aqui mantive "mais recente primeiro".
+      // ORDENAÇÃO: Vencimento
       listaParaExtrato.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
 
       setLancamentosFiltrados(listaParaExtrato);
@@ -146,8 +143,7 @@ export default function Financeiro() {
       return listaFinal.sort((a, b) => new Date(a.isGroup ? a.data_mais_antiga : a.data_vencimento) - new Date(b.isGroup ? b.data_mais_antiga : b.data_vencimento));
   }, [todosLancamentos]);
 
-  // 2. Serviços do Mês (Usa listaFiltrada para mostrar serviços que estão visíveis no extrato, ou pode usar filtro estrito)
-  // Vou manter filtro estrito do mês atual para o dashboard não ficar poluído com serviços de 2024 em 2025
+  // 2. Serviços do Mês
   const servicosMes = useMemo(() => {
       return todosLancamentos.filter(l => {
           const [ano, mes] = l.data_vencimento.split('-');
@@ -185,17 +181,96 @@ export default function Financeiro() {
     } catch { alert("Erro ao confirmar."); }
   };
 
-  // --- NOVA FUNÇÃO: EXCLUIR ---
   const handleExcluir = async (id) => {
       if (!window.confirm("Tem certeza que deseja EXCLUIR este lançamento? Essa ação não pode ser desfeita.")) return;
       try {
-          // Certifique-se que financeiroService tem o metodo remover(id)
           await financeiroService.excluir(id); 
           carregarDados();
       } catch (error) {
           console.error(error);
           alert("Erro ao excluir lançamento.");
       }
+  };
+
+  // --- NOVA FUNÇÃO: IMPRIMIR ---
+  const handleImprimir = () => {
+    const periodo = `${filtroData.mes}/${filtroData.ano}`;
+    const dados = extratoExibicao.sort((a,b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)); // Ordena cronológico para relatório
+    
+    // Calcula totais para o rodapé do PDF
+    let totalEnt = 0;
+    let totalSai = 0;
+
+    const printWindow = window.open('', '', 'height=600,width=800');
+    
+    // HTML do Relatório
+    printWindow.document.write('<html><head><title>Relatório Financeiro</title>');
+    printWindow.document.write(`
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
+            h1 { text-align: center; color: #302464; font-size: 24px; margin-bottom: 5px; }
+            p.sub { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th { background-color: #f3f4f6; color: #302464; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+            td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+            tr:nth-child(even) { background-color: #f9fafb; }
+            .valor { font-weight: bold; text-align: right; }
+            .entrada { color: #059669; }
+            .saida { color: #dc2626; }
+            .status-tag { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .PAGO { background: #ecfdf5; color: #059669; }
+            .PENDENTE { background: #fffbeb; color: #d97706; }
+            .ATRASADO { background: #fef2f2; color: #dc2626; }
+            .resumo-box { margin-top: 30px; display: flex; justify-content: flex-end; }
+            .resumo-table { width: 300px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+            .resumo-row { display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+            .resumo-total { background: #302464; color: white; font-weight: bold; border: none; }
+        </style>
+    `);
+    printWindow.document.write('</head><body>');
+    
+    printWindow.document.write(`<h1>Relatório Financeiro</h1><p class="sub">Período: ${periodo}</p>`);
+    
+    printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Cliente</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
+    
+    dados.forEach(item => {
+        const valor = parseFloat(item.valor);
+        if(item.tipo_lancamento === 'ENTRADA') totalEnt += valor; else totalSai += valor;
+        
+        printWindow.document.write(`
+            <tr>
+                <td>${new Date(item.data_vencimento).toLocaleDateString('pt-BR')}</td>
+                <td>${item.descricao}</td>
+                <td>${item.nome_cliente || '-'}</td>
+                <td><span class="status-tag ${item.status}">${item.status}</span></td>
+                <td class="valor ${item.tipo_lancamento === 'ENTRADA' ? 'entrada' : 'saida'}">
+                    ${item.tipo_lancamento === 'SAIDA' ? '-' : ''}R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                </td>
+            </tr>
+        `);
+    });
+    
+    printWindow.document.write('</tbody></table>');
+    
+    const saldo = totalEnt - totalSai;
+    printWindow.document.write(`
+        <div class="resumo-box">
+            <div class="resumo-table">
+                <div class="resumo-row"><span>Total Receitas</span><span class="entrada">R$ ${totalEnt.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                <div class="resumo-row"><span>Total Despesas</span><span class="saida">R$ ${totalSai.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                <div class="resumo-row resumo-total"><span>Saldo Líquido</span><span>R$ ${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+            </div>
+        </div>
+    `);
+
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    // Pequeno timeout para garantir carregamento de estilos
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
   };
 
   const handleGerarFaturas = async () => {
@@ -253,6 +328,11 @@ export default function Financeiro() {
                 className="w-20 bg-transparent px-4 py-2 font-bold text-slate-700 outline-none text-sm"
               />
            </div>
+
+           {/* --- BOTÃO IMPRIMIR NOVO --- */}
+           <button onClick={handleImprimir} className="bg-white border-2 border-slate-200 text-slate-600 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all">
+             <Printer size={16}/> Imprimir
+           </button>
 
            <button onClick={handleGerarFaturas} disabled={gerandoFaturas} className="bg-white border-2 border-[#302464] text-[#302464] px-6 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50">
              {gerandoFaturas ? <RefreshCw className="animate-spin" size={16}/> : <RefreshCw size={16}/>} Faturas
