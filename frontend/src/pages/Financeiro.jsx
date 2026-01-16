@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, DollarSign, AlertTriangle, Building2, TrendingUp, RefreshCw, 
-  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight
+  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar
 } from 'lucide-react';
 import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
 } from 'recharts';
 
 import financeiroService from '../services/financeiroService';
@@ -12,10 +12,16 @@ import clienteService from '../services/clienteService';
 
 export default function Financeiro() {
   const [activeTab, setActiveTab] = useState('DASHBOARD');
-  const [lancamentos, setLancamentos] = useState([]);
+  
+  // Dados
+  const [todosLancamentos, setTodosLancamentos] = useState([]); // Todos (para inadimplencia)
+  const [lancamentosMes, setLancamentosMes] = useState([]); // Filtrados do mês (para extrato)
   const [clientes, setClientes] = useState([]);
+  
+  // Estados de Interface
   const [loading, setLoading] = useState(true);
   const [gerandoFaturas, setGerandoFaturas] = useState(false);
+  const [buscaExtrato, setBuscaExtrato] = useState(''); // Campo de busca
 
   const [filtroData, setFiltroData] = useState({
     mes: new Date().getMonth() + 1,
@@ -24,7 +30,6 @@ export default function Financeiro() {
 
   const [dadosDashboard, setDadosDashboard] = useState({
     kpis: { 
-        // Agora temos saldoAcumulado (geral) e resultadoPeriodo (mensal)
         saldoAcumulado: 0, resultadoPeriodo: 0, 
         receitaPeriodo: 0, despesaPeriodo: 0,
         inadimplencia: 0, contratosAtivos: 0, custoTransporte: 0 
@@ -48,15 +53,20 @@ export default function Financeiro() {
         financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano)
       ]);
       
+      setTodosLancamentos(dadosFin); // Guarda tudo para calcular inadimplentes globais
+
+      // Filtra apenas o mês selecionado
       const listaFiltrada = dadosFin.filter(l => {
-         const d = new Date(l.data_vencimento);
-         // Ajuste de fuso horário
-         const dataAjustada = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
-         return (dataAjustada.getMonth() + 1) === parseInt(filtroData.mes) && 
-                dataAjustada.getFullYear() === parseInt(filtroData.ano);
+         // Ajuste simples de data string YYYY-MM-DD
+         const [ano, mes] = l.data_vencimento.split('-');
+         return parseInt(mes) === parseInt(filtroData.mes) && 
+                parseInt(ano) === parseInt(filtroData.ano);
       });
 
-      setLancamentos(listaFiltrada);
+      // ORDENAÇÃO: Do último para o primeiro (Mais recente no topo)
+      listaFiltrada.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
+
+      setLancamentosMes(listaFiltrada);
       setClientes(dadosCli);
       
       if (stats) setDadosDashboard(stats);
@@ -69,6 +79,37 @@ export default function Financeiro() {
   };
 
   useEffect(() => { carregarDados(); }, [filtroData]);
+
+  // --- LÓGICA DE DADOS COMPUTADOS (MEMO) ---
+  
+  // 1. Inadimplentes (Olha TODO o histórico, não só o mês atual)
+  const inadimplentes = useMemo(() => {
+      const hoje = new Date();
+      hoje.setHours(0,0,0,0);
+      
+      return todosLancamentos.filter(l => {
+          const vencimento = new Date(l.data_vencimento + 'T12:00:00'); // Compensar fuso
+          return (l.status === 'PENDENTE' || l.status === 'ATRASADO') && 
+                 l.tipo_lancamento === 'ENTRADA' && 
+                 vencimento < hoje;
+      }).sort((a,b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)); // Mais antigos primeiro (urgência)
+  }, [todosLancamentos]);
+
+  // 2. Serviços do Mês (Apenas mês atual)
+  const servicosMes = useMemo(() => {
+      return lancamentosMes.filter(l => l.tipo_lancamento === 'ENTRADA' && l.categoria === 'SERVICO');
+  }, [lancamentosMes]);
+
+  // 3. Extrato Filtrado pela Busca
+  const extratoExibicao = useMemo(() => {
+      if (!buscaExtrato) return lancamentosMes;
+      const termo = buscaExtrato.toLowerCase();
+      return lancamentosMes.filter(l => 
+          l.descricao.toLowerCase().includes(termo) || 
+          (l.nome_cliente && l.nome_cliente.toLowerCase().includes(termo))
+      );
+  }, [lancamentosMes, buscaExtrato]);
+
 
   const handleConfirmarPagamento = async (lancamento) => {
     if (!window.confirm(`Confirmar recebimento de R$ ${parseFloat(lancamento.valor).toFixed(2)}?`)) return;
@@ -105,10 +146,10 @@ export default function Financeiro() {
   const COLORS = ['#7C69AF', '#A696D1', '#302464'];
   const { kpis, graficoReceita, rankingVisitas } = dadosDashboard;
 
-  if (loading) return <div className="p-20 text-center font-black text-[#7C69AF] animate-pulse uppercase tracking-widest text-xs">Calculando Faturamento...</div>;
+  if (loading && todosLancamentos.length === 0) return <div className="p-20 text-center font-black text-[#7C69AF] animate-pulse uppercase tracking-widest text-xs">Calculando Faturamento...</div>;
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 pb-20">
       
       {/* HEADER E FILTROS */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-10">
@@ -249,18 +290,90 @@ export default function Financeiro() {
                     )}
                 </div>
             </div>
+
+            {/* NOVA SEÇÃO: SERVIÇOS E INADIMPLÊNCIA */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                {/* SERVIÇOS DO MÊS */}
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                     <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <Check size={16} className="text-emerald-500"/> Serviços Realizados ({filtroData.mes}/{filtroData.ano})
+                    </h3>
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                        {servicosMes.length === 0 ? (
+                            <p className="text-slate-400 text-xs text-center py-4">Nenhum serviço este mês.</p>
+                        ) : servicosMes.map(serv => (
+                            <div key={serv.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
+                                <div>
+                                    <p className="font-bold text-slate-700 text-sm">{serv.descricao}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase">{new Date(serv.data_vencimento).toLocaleDateString()} • {serv.nome_cliente || 'Avulso'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-black text-emerald-600">R$ {parseFloat(serv.valor).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* INADIMPLENTES (GERAL - NÃO SÓ DO MÊS) */}
+                <div className="bg-red-50/50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
+                     <h3 className="font-black text-red-600 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <AlertTriangle size={16} className="text-red-500"/> Inadimplentes (Geral)
+                    </h3>
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                        {inadimplentes.length === 0 ? (
+                             <div className="flex flex-col items-center justify-center py-6 text-emerald-600/60">
+                                <Check size={40} className="mb-2"/>
+                                <p className="text-xs font-bold uppercase tracking-widest">Tudo em dia!</p>
+                             </div>
+                        ) : inadimplentes.map(divida => (
+                            <div key={divida.id} className="p-4 bg-white rounded-2xl border border-red-100 shadow-sm flex justify-between items-center group hover:border-red-300 transition-colors">
+                                <div>
+                                    <p className="font-bold text-slate-800 text-sm">{divida.nome_cliente || 'Cliente Avulso'}</p>
+                                    <p className="text-[10px] font-black text-red-400 uppercase">{divida.descricao}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-1">Venceu: {new Date(divida.data_vencimento).toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                    <span className="font-black text-red-600 text-lg">R$ {parseFloat(divida.valor).toFixed(2)}</span>
+                                    <button 
+                                        onClick={() => handleConfirmarPagamento(divida)}
+                                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1"
+                                    >
+                                        <Check size={12}/> Baixar
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+            </div>
         </div>
       )}
 
-      {/* ABA LISTA (MANTER IGUAL, JÁ ESTAVA OK) */}
+      {/* ABA LISTA (EXTRATO) */}
       {activeTab === 'LISTA' && (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
+             
+             {/* BARRA DE BUSCA NO EXTRATO */}
+             <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+                <Search size={20} className="text-slate-300" />
+                <input 
+                    type="text" 
+                    placeholder="Buscar por descrição, cliente ou valor..." 
+                    className="w-full font-bold text-slate-600 outline-none placeholder:text-slate-300"
+                    value={buscaExtrato}
+                    onChange={(e) => setBuscaExtrato(e.target.value)}
+                />
+             </div>
+
              <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-100">
                     <tr><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                    {lancamentos.map(lanc => (
+                    {extratoExibicao.map(lanc => (
                         <tr key={lanc.id} className="group hover:bg-slate-50/50 transition-colors">
                             <td className="p-6"><div className="font-black text-slate-800">{lanc.descricao}</div><div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div></td>
                             <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
@@ -268,19 +381,21 @@ export default function Financeiro() {
                             <td className="p-6 text-right"><div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>{lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline mt-1">Baixar</button>}</td>
                         </tr>
                     ))}
+                    {extratoExibicao.length === 0 && (
+                        <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado.</td></tr>
+                    )}
                 </tbody>
              </table>
         </div>
       )}
 
-      {/* MODAL MANTIDO IGUAL */}
+      {/* MODAL (MANTIDO) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
                 <form onSubmit={handleSalvar} className="space-y-5">
-                    {/* (FORMULÁRIO MANTIDO IGUAL AO ANTERIOR) */}
                     <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label><input required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none focus:ring-4 focus:ring-purple-500/5" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></div>
                     <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label><input required type="number" step="0.01" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></div><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Operação</label><select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.tipo_lancamento} onChange={e => setForm({...form, tipo_lancamento: e.target.value})}><option value="ENTRADA">Receita (+)</option><option value="SAIDA">Despesa (-)</option></select></div></div>
                     <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label><select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}><option value="DESPESA">Geral</option><option value="SERVICO">Serviço</option><option value="COMPRA">Estoque</option></select></div><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vencimento</label><input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.data_vencimento} onChange={e => setForm({...form, data_vencimento: e.target.value})} /></div></div>

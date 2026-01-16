@@ -11,37 +11,44 @@ def calcular_estatisticas_financeiras(mes=None, ano=None):
     
     hoje = timezone.now().date()
     
-    # --- 1. CÁLCULO DO SALDO GLOBAL (CAIXA REAL) ---
-    # Isso soma TUDO o que já foi pago na história da empresa
+    # --- 1. CÁLCULO DO SALDO GLOBAL (CAIXA REAL - ACUMULADO) ---
+    # NÃO aplicamos filtro de mês/ano aqui propositalmente
     global_entradas = Lancamento.objects.filter(tipo_lancamento='ENTRADA', status='PAGO').aggregate(t=Sum('valor'))['t'] or 0
     global_saidas = Lancamento.objects.filter(tipo_lancamento='SAIDA', status='PAGO').aggregate(t=Sum('valor'))['t'] or 0
     saldo_acumulado = float(global_entradas) - float(global_saidas)
 
-    # --- 2. FILTROS DE PERÍODO (Para Receita/Despesa do Mês) ---
-    filtro_fin = Q()
-    filtro_ops = Q()
+    # --- 2. PREPARAR FILTROS DE PERÍODO ---
+    # Se mês/ano não vierem, usamos o mês atual como fallback para não acumular tudo
+    if not mes or not ano:
+        mes = hoje.month
+        ano = hoje.year
+
+    # Filtro Financeiro (Pelo Vencimento - Competência)
+    filtro_fin = Q(data_vencimento__month=mes, data_vencimento__year=ano)
     
-    if mes and ano:
-        filtro_fin = Q(data_vencimento__month=mes, data_vencimento__year=ano)
-        filtro_ops = Q(created_at__month=mes, created_at__year=ano)
+    # Filtro Operacional (Pela Criação)
+    filtro_ops = Q(created_at__month=mes, created_at__year=ano)
 
     # --- 3. ESTATÍSTICAS DO PERÍODO SELECIONADO ---
+    # Aqui aplicamos o filtro!
     qs_fin = Lancamento.objects.filter(filtro_fin)
     
     stats_fin = qs_fin.aggregate(
-        receita_periodo=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PAGO')),
-        despesa_periodo=Sum('valor', filter=Q(tipo_lancamento='SAIDA', status='PAGO')),
-        inadimplencia=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PENDENTE', data_vencimento__lt=hoje)),
+        # Receita do Período (Considerando Pendentes para Previsão ou só Pagos para Realizado)
+        # Abaixo: Considerando TUDO (Entrada) para mostrar potencial do mês
+        receita_periodo=Sum('valor', filter=Q(tipo_lancamento='ENTRADA')), 
+        despesa_periodo=Sum('valor', filter=Q(tipo_lancamento='SAIDA')),
+        inadimplencia=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='ATRASADO')),
         
-        # Breakdown
-        receita_contrato=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PAGO', categoria='CONTRATO')),
-        receita_avulsa=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PAGO', categoria='SERVICO')),
-        receita_hardware=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', status='PAGO', categoria='VENDA')),
+        # Breakdown para Gráfico
+        receita_contrato=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', categoria='CONTRATO')),
+        receita_avulsa=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', categoria='SERVICO')),
+        receita_hardware=Sum('valor', filter=Q(tipo_lancamento='ENTRADA', categoria='VENDA')),
     )
 
     receita_periodo = float(stats_fin['receita_periodo'] or 0)
     despesa_periodo = float(stats_fin['despesa_periodo'] or 0)
-    resultado_periodo = receita_periodo - despesa_periodo # Lucro/Prejuízo do mês
+    resultado_periodo = receita_periodo - despesa_periodo
 
     # --- 4. DADOS OPERACIONAIS ---
     custo_transporte = Chamado.objects.filter(filtro_ops).aggregate(
@@ -59,11 +66,10 @@ def calcular_estatisticas_financeiras(mes=None, ano=None):
 
     return {
         "kpis": {
-            "saldoAcumulado": saldo_acumulado,     # CAIXA REAL (Não muda com o filtro)
-            "resultadoPeriodo": resultado_periodo, # LUCRO DO MÊS (Muda com o filtro)
-            "receitaPeriodo": receita_periodo,
-            "despesaPeriodo": despesa_periodo,
-            
+            "saldoAcumulado": saldo_acumulado,     # GLOBAL
+            "resultadoPeriodo": resultado_periodo, # DO MÊS
+            "receitaPeriodo": receita_periodo,     # DO MÊS
+            "despesaPeriodo": despesa_periodo,     # DO MÊS
             "inadimplencia": float(stats_fin['inadimplencia'] or 0),
             "contratosAtivos": contratos_ativos,
             "custoTransporte": float(custo_transporte),

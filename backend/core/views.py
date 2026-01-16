@@ -191,7 +191,21 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def estatisticas(self, request):
-        return Response(financeiro_service.calcular_estatisticas_financeiras())
+        # 1. Pega os parâmetros da URL (enviados pelo React)
+        mes = request.query_params.get('mes')
+        ano = request.query_params.get('ano')
+
+        # 2. Converte para Inteiro (segurança básica)
+        try:
+            mes = int(mes) if mes else None
+            ano = int(ano) if ano else None
+        except ValueError:
+            mes = None
+            ano = None
+
+        # 3. Passa os filtros para o serviço
+        # Agora o serviço saberá separar "Acumulado" de "Período"
+        return Response(financeiro_service.calcular_estatisticas_financeiras(mes, ano))
 
     @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
     def gerar_mensalidades(self, request):
