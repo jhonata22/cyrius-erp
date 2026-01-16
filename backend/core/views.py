@@ -210,6 +210,17 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
     def gerar_mensalidades(self, request):
         return Response(financeiro_service.gerar_faturas_mensalidade(request.user))
+    
+    @action(detail=False, methods=['post'], url_path='baixar-lote')
+    def baixar_lote(self, request):
+        ids = request.data.get('ids', [])
+        
+        updated = LancamentoFinanceiro.objects.filter(id__in=ids).update(
+            status='PAGO', 
+            data_pagamento=timezone.now().date()
+        )
+        
+        return Response({'mensagem': f'{updated} lançamentos baixados com sucesso!'})
 
 # =====================================================
 # 6. ESTOQUE

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, DollarSign, AlertTriangle, Building2, TrendingUp, RefreshCw, 
-  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar
+  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -15,7 +15,7 @@ export default function Financeiro() {
   
   // Dados
   const [todosLancamentos, setTodosLancamentos] = useState([]); // Todos (para inadimplencia)
-  const [lancamentosMes, setLancamentosMes] = useState([]); // Filtrados do mês (para extrato)
+  const [lancamentosFiltrados, setLancamentosFiltrados] = useState([]); // Extrato (Mês + Pendências Passadas)
   const [clientes, setClientes] = useState([]);
   
   // Estados de Interface
@@ -53,20 +53,34 @@ export default function Financeiro() {
         financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano)
       ]);
       
-      setTodosLancamentos(dadosFin); // Guarda tudo para calcular inadimplentes globais
+      setTodosLancamentos(dadosFin); 
 
-      // Filtra apenas o mês selecionado
-      const listaFiltrada = dadosFin.filter(l => {
-         // Ajuste simples de data string YYYY-MM-DD
-         const [ano, mes] = l.data_vencimento.split('-');
-         return parseInt(mes) === parseInt(filtroData.mes) && 
-                parseInt(ano) === parseInt(filtroData.ano);
+      // --- NOVA LÓGICA DE FILTRO DO EXTRATO ---
+      const mesSelecionado = parseInt(filtroData.mes);
+      const anoSelecionado = parseInt(filtroData.ano);
+
+      const listaParaExtrato = dadosFin.filter(l => {
+         const [anoStr, mesStr] = l.data_vencimento.split('-');
+         const anoItem = parseInt(anoStr);
+         const mesItem = parseInt(mesStr);
+
+         // 1. É do mês/ano selecionado?
+         const ehDoMes = mesItem === mesSelecionado && anoItem === anoSelecionado;
+
+         // 2. É pendente antigo? (Arrasta para o mês atual)
+         // Verifica se é PENDENTE e se a data é ANTERIOR à data selecionada
+         const ehPendenteAntigo = (l.status === 'PENDENTE' || l.status === 'ATRASADO') && 
+                                  ((anoItem < anoSelecionado) || (anoItem === anoSelecionado && mesItem < mesSelecionado));
+
+         return ehDoMes || ehPendenteAntigo;
       });
 
-      // ORDENAÇÃO: Do último para o primeiro (Mais recente no topo)
-      listaFiltrada.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
+      // ORDENAÇÃO: Vencimento (Mais recentes no topo, mas pendentes antigos aparecem misturados conforme data)
+      // Dica: Se quiser pendentes antigos SEMPRE no topo, mude a lógica do sort.
+      // Aqui mantive "mais recente primeiro".
+      listaParaExtrato.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
 
-      setLancamentosMes(listaFiltrada);
+      setLancamentosFiltrados(listaParaExtrato);
       setClientes(dadosCli);
       
       if (stats) setDadosDashboard(stats);
@@ -82,45 +96,106 @@ export default function Financeiro() {
 
   // --- LÓGICA DE DADOS COMPUTADOS (MEMO) ---
   
-  // 1. Inadimplentes (Olha TODO o histórico, não só o mês atual)
-  const inadimplentes = useMemo(() => {
+  // 1. INADIMPLENTES AGRUPADOS
+  const inadimplentesAgrupados = useMemo(() => {
       const hoje = new Date();
       hoje.setHours(0,0,0,0);
       
-      return todosLancamentos.filter(l => {
-          const vencimento = new Date(l.data_vencimento + 'T12:00:00'); // Compensar fuso
+      const vencidos = todosLancamentos.filter(l => {
+          const vencimento = new Date(l.data_vencimento + 'T12:00:00');
           return (l.status === 'PENDENTE' || l.status === 'ATRASADO') && 
                  l.tipo_lancamento === 'ENTRADA' && 
                  vencimento < hoje;
-      }).sort((a,b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)); // Mais antigos primeiro (urgência)
+      });
+
+      const mapa = {};
+      const listaFinal = [];
+
+      vencidos.forEach(item => {
+          if (item.cliente) {
+              if (!mapa[item.cliente]) {
+                  mapa[item.cliente] = {
+                      id: `grupo-${item.cliente}`,
+                      isGroup: true,
+                      clienteId: item.cliente,
+                      nome_cliente: item.nome_cliente,
+                      ids_reais: [], 
+                      valor: 0,
+                      qtd: 0,
+                      data_mais_antiga: item.data_vencimento
+                  };
+                  listaFinal.push(mapa[item.cliente]);
+              }
+              const grupo = mapa[item.cliente];
+              grupo.valor += parseFloat(item.valor);
+              grupo.ids_reais.push(item.id);
+              grupo.qtd += 1;
+              if (item.data_vencimento < grupo.data_mais_antiga) {
+                  grupo.data_mais_antiga = item.data_vencimento;
+              }
+          } else {
+              listaFinal.push({
+                  ...item,
+                  isGroup: false,
+                  ids_reais: [item.id],
+                  valor: parseFloat(item.valor)
+              });
+          }
+      });
+
+      return listaFinal.sort((a, b) => new Date(a.isGroup ? a.data_mais_antiga : a.data_vencimento) - new Date(b.isGroup ? b.data_mais_antiga : b.data_vencimento));
   }, [todosLancamentos]);
 
-  // 2. Serviços do Mês (Apenas mês atual)
+  // 2. Serviços do Mês (Usa listaFiltrada para mostrar serviços que estão visíveis no extrato, ou pode usar filtro estrito)
+  // Vou manter filtro estrito do mês atual para o dashboard não ficar poluído com serviços de 2024 em 2025
   const servicosMes = useMemo(() => {
-      return lancamentosMes.filter(l => l.tipo_lancamento === 'ENTRADA' && l.categoria === 'SERVICO');
-  }, [lancamentosMes]);
+      return todosLancamentos.filter(l => {
+          const [ano, mes] = l.data_vencimento.split('-');
+          return parseInt(mes) === parseInt(filtroData.mes) && 
+                 parseInt(ano) === parseInt(filtroData.ano) &&
+                 l.tipo_lancamento === 'ENTRADA' && 
+                 l.categoria === 'SERVICO';
+      });
+  }, [todosLancamentos, filtroData]);
 
   // 3. Extrato Filtrado pela Busca
   const extratoExibicao = useMemo(() => {
-      if (!buscaExtrato) return lancamentosMes;
+      if (!buscaExtrato) return lancamentosFiltrados;
       const termo = buscaExtrato.toLowerCase();
-      return lancamentosMes.filter(l => 
+      return lancamentosFiltrados.filter(l => 
           l.descricao.toLowerCase().includes(termo) || 
           (l.nome_cliente && l.nome_cliente.toLowerCase().includes(termo))
       );
-  }, [lancamentosMes, buscaExtrato]);
+  }, [lancamentosFiltrados, buscaExtrato]);
 
 
-  const handleConfirmarPagamento = async (lancamento) => {
-    if (!window.confirm(`Confirmar recebimento de R$ ${parseFloat(lancamento.valor).toFixed(2)}?`)) return;
+  // --- AÇÕES ---
+  const handleConfirmarPagamento = async (item) => {
+    const valor = parseFloat(item.valor) || 0;
+    const msg = item.isGroup 
+        ? `Confirmar recebimento TOTAL de R$ ${valor.toFixed(2)} referente a ${item.qtd} faturas de ${item.nome_cliente}?`
+        : `Confirmar recebimento de R$ ${valor.toFixed(2)}?`;
+
+    if (!window.confirm(msg)) return;
+    
     try {
-      await financeiroService.atualizar(lancamento.id, {
-        status: 'PAGO',
-        data_pagamento: new Date().toISOString().split('T')[0],
-        cliente: lancamento.cliente
-      });
+      const idsParaBaixar = item.ids_reais ? item.ids_reais : [item.id];
+      await financeiroService.baixarEmLote(idsParaBaixar);
       carregarDados();
     } catch { alert("Erro ao confirmar."); }
+  };
+
+  // --- NOVA FUNÇÃO: EXCLUIR ---
+  const handleExcluir = async (id) => {
+      if (!window.confirm("Tem certeza que deseja EXCLUIR este lançamento? Essa ação não pode ser desfeita.")) return;
+      try {
+          // Certifique-se que financeiroService tem o metodo remover(id)
+          await financeiroService.excluir(id); 
+          carregarDados();
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao excluir lançamento.");
+      }
   };
 
   const handleGerarFaturas = async () => {
@@ -197,42 +272,32 @@ export default function Financeiro() {
         <div className="space-y-8">
             {/* LINHA 1: KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                
-                {/* SALDO ACUMULADO (GLOBAL) */}
+                {/* SALDO ACUMULADO */}
                 <div className="bg-[#302464] p-6 rounded-[2rem] border border-[#302464] shadow-xl shadow-purple-900/30">
                     <p className="text-[10px] font-black text-[#A696D1] uppercase tracking-widest mb-3">Caixa Total (Acumulado)</p>
                     <div className="flex items-end justify-between">
-                        <h3 className="text-3xl font-black text-white">
-                            R$ {kpis.saldoAcumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </h3>
+                        <h3 className="text-3xl font-black text-white">R$ {kpis.saldoAcumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                         <div className="p-2 bg-white/10 text-white rounded-xl"><Wallet size={20}/></div>
                     </div>
                 </div>
-
                 {/* RESULTADO DO MÊS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Resultado do Mês</p>
                     <div className="flex items-end justify-between">
-                        <h3 className={`text-2xl font-black ${kpis.resultadoPeriodo >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            R$ {kpis.resultadoPeriodo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </h3>
+                        <h3 className={`text-2xl font-black ${kpis.resultadoPeriodo >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>R$ {kpis.resultadoPeriodo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                         <div className={`p-2 rounded-xl ${kpis.resultadoPeriodo >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
                             {kpis.resultadoPeriodo >= 0 ? <ArrowUpRight size={20}/> : <TrendingUp size={20} className="rotate-180"/>}
                         </div>
                     </div>
                 </div>
-
                 {/* RECEITA DO MÊS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Entradas (Mês)</p>
                     <div className="flex items-end justify-between">
-                        <h3 className="text-2xl font-black text-[#7C69AF]">
-                            R$ {kpis.receitaPeriodo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </h3>
+                        <h3 className="text-2xl font-black text-[#7C69AF]">R$ {kpis.receitaPeriodo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                         <div className="p-2 bg-purple-50 text-[#7C69AF] rounded-xl"><TrendingUp size={20}/></div>
                     </div>
                 </div>
-
                 {/* CONTRATOS ATIVOS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Contratos Ativos</p>
@@ -291,7 +356,7 @@ export default function Financeiro() {
                 </div>
             </div>
 
-            {/* NOVA SEÇÃO: SERVIÇOS E INADIMPLÊNCIA */}
+            {/* NOVA SEÇÃO: SERVIÇOS E INADIMPLÊNCIA (AGRUPADO) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 {/* SERVIÇOS DO MÊS */}
@@ -316,38 +381,38 @@ export default function Financeiro() {
                     </div>
                 </div>
 
-                {/* INADIMPLENTES (GERAL - NÃO SÓ DO MÊS) */}
+                {/* INADIMPLENTES (AGRUPADO POR CLIENTE) */}
                 <div className="bg-red-50/50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
                      <h3 className="font-black text-red-600 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <AlertTriangle size={16} className="text-red-500"/> Inadimplentes (Geral)
+                        <AlertTriangle size={16} className="text-red-500"/> Inadimplentes (Acumulado)
                     </h3>
                     <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                        {inadimplentes.length === 0 ? (
+                        {inadimplentesAgrupados.length === 0 ? (
                              <div className="flex flex-col items-center justify-center py-6 text-emerald-600/60">
                                 <Check size={40} className="mb-2"/>
                                 <p className="text-xs font-bold uppercase tracking-widest">Tudo em dia!</p>
                              </div>
-                        ) : inadimplentes.map(divida => (
+                        ) : inadimplentesAgrupados.map(divida => (
                             <div key={divida.id} className="p-4 bg-white rounded-2xl border border-red-100 shadow-sm flex justify-between items-center group hover:border-red-300 transition-colors">
                                 <div>
                                     <p className="font-bold text-slate-800 text-sm">{divida.nome_cliente || 'Cliente Avulso'}</p>
-                                    <p className="text-[10px] font-black text-red-400 uppercase">{divida.descricao}</p>
-                                    <p className="text-[10px] text-slate-400 font-bold mt-1">Venceu: {new Date(divida.data_vencimento).toLocaleDateString()}</p>
+                                    {divida.isGroup ? (
+                                        <p className="text-[10px] font-black text-red-500 bg-red-100 px-2 py-0.5 rounded-md w-fit mt-1 uppercase">{divida.qtd} Faturas em Aberto</p>
+                                    ) : (
+                                        <p className="text-[10px] font-black text-red-400 uppercase">{divida.descricao}</p>
+                                    )}
+                                    <p className="text-[10px] text-slate-400 font-bold mt-1">Desde: {new Date(divida.isGroup ? divida.data_mais_antiga : divida.data_vencimento).toLocaleDateString()}</p>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
-                                    <span className="font-black text-red-600 text-lg">R$ {parseFloat(divida.valor).toFixed(2)}</span>
-                                    <button 
-                                        onClick={() => handleConfirmarPagamento(divida)}
-                                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1"
-                                    >
-                                        <Check size={12}/> Baixar
+                                    <span className="font-black text-red-600 text-lg">R$ {divida.valor.toFixed(2)}</span>
+                                    <button onClick={() => handleConfirmarPagamento(divida)} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1">
+                                        <Check size={12}/> Baixar Tudo
                                     </button>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
-
             </div>
         </div>
       )}
@@ -356,7 +421,7 @@ export default function Financeiro() {
       {activeTab === 'LISTA' && (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
              
-             {/* BARRA DE BUSCA NO EXTRATO */}
+             {/* BARRA DE BUSCA */}
              <div className="p-6 border-b border-slate-100 flex items-center gap-3">
                 <Search size={20} className="text-slate-300" />
                 <input 
@@ -378,7 +443,15 @@ export default function Financeiro() {
                             <td className="p-6"><div className="font-black text-slate-800">{lanc.descricao}</div><div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div></td>
                             <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
                             <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
-                            <td className="p-6 text-right"><div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>{lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline mt-1">Baixar</button>}</td>
+                            <td className="p-6 text-right">
+                                <div className="flex items-center justify-end gap-4">
+                                    <div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                    <div className="flex flex-col gap-2">
+                                        {lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline">Baixar</button>}
+                                        <button onClick={() => handleExcluir(lanc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            </td>
                         </tr>
                     ))}
                     {extratoExibicao.length === 0 && (
@@ -389,7 +462,7 @@ export default function Financeiro() {
         </div>
       )}
 
-      {/* MODAL (MANTIDO) */}
+      {/* MODAL MANTIDO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">

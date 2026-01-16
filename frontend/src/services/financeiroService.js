@@ -29,7 +29,12 @@ const financeiroService = {
 
   excluir: async (id) => {
     await api.delete(`/financeiro/${id}/`);
-  }
+  },
+
+  baixarEmLote: async (ids) => {
+    const response = await api.post('/financeiro/baixar-lote/', { ids });
+    return response.data;
+  },
 };
 
 export default financeiroService;
