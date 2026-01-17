@@ -537,3 +537,24 @@ class AnexoServico(models.Model):
 
     class Meta:
         db_table = 'TB_ANEXO_SERVICO'
+
+class Notificacao(models.Model):
+    TIPO_CHOICES = [
+        ('VISITA', 'Visita Técnica'),
+        ('CHURN', 'Risco de Cancelamento'),
+        ('SISTEMA', 'Sistema')
+    ]
+
+    destinatario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notificacoes')
+    titulo = models.CharField(max_length=100)
+    mensagem = models.TextField()
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='SISTEMA')
+    lida = models.BooleanField(default=False)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    link = models.CharField(max_length=200, null=True, blank=True) # Para clicar e ir para o chamado/cliente
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f"{self.titulo} - {self.destinatario.username}"

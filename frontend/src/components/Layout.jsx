@@ -6,6 +6,7 @@ import {
   Wrench
 } from 'lucide-react';
 import authService from '../services/authService';
+import NotificationBell from './NotificationBell'; // Import já existia
 
 const SidebarItem = ({ icon: Icon, text, to, isExpanded }) => {
   const location = useLocation();
@@ -40,7 +41,6 @@ export default function Layout({ children }) {
   // Função para verificar permissão
   const temPermissao = (cargosPermitidos) => {
     if (!userCargo) return false;
-    // Normaliza para maiúsculas para evitar erros (ex: 'tecnico' vs 'TECNICO')
     return cargosPermitidos.includes(userCargo.toUpperCase());
   };
 
@@ -76,7 +76,6 @@ export default function Layout({ children }) {
             <SidebarItem icon={Ticket} text="Chamados" to="/chamados" isExpanded={isExpanded} />
             
             {/* --- SÓCIOS E TÉCNICOS --- */}
-            {/* Aqui liberamos o módulo de Serviços para ambos */}
             {temPermissao(['SOCIO', 'TECNICO']) && (
                 <SidebarItem icon={Wrench} text="Serviços & Lab" to="/servicos" isExpanded={isExpanded} />
             )}
@@ -89,7 +88,7 @@ export default function Layout({ children }) {
               </>
             )}
 
-            {/* --- DOCUMENTAÇÃO E ESTOQUE (ACESSO GERAL OU AJUSTE CONFORME NECESSÁRIO) --- */}
+            {/* --- DOCUMENTAÇÃO E ESTOQUE --- */}
             <SidebarItem icon={BookOpen} text="Documentação" to="/documentacao" isExpanded={isExpanded} />
             <SidebarItem icon={Package} text="Estoque" to="/inventario" isExpanded={isExpanded} />
             
@@ -123,20 +122,29 @@ export default function Layout({ children }) {
                 <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-2.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm" />
             </div>
             
-            <Link to="/perfil" className="flex items-center gap-4 hover:opacity-80 transition-opacity cursor-pointer ml-auto">
-                <div className="text-right hidden sm:block">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">{userName}</p>
-                    <p className="text-[10px] font-black text-[#7C69AF] uppercase tracking-widest">{userCargo || 'Colaborador'}</p>
-                </div>
+            {/* ÁREA DIREITA: Notificações + Perfil */}
+            <div className="flex items-center gap-5 ml-auto">
                 
-                <div className="w-12 h-12 rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-sm shadow-xl shadow-purple-900/20 border-2 border-white overflow-hidden">
-                    {userPhoto ? (
-                      <img src={userPhoto} alt="Perfil" className="w-full h-full object-cover" />
-                    ) : (
-                      userName.substring(0, 2).toUpperCase()
-                    )}
-                </div>
-            </Link>
+                {/* --- AQUI ESTÁ O SININHO DE NOTIFICAÇÕES --- */}
+                <NotificationBell />
+                
+                <div className="h-8 w-px bg-slate-200/50 hidden sm:block"></div>
+
+                <Link to="/perfil" className="flex items-center gap-4 hover:opacity-80 transition-opacity cursor-pointer">
+                    <div className="text-right hidden sm:block">
+                        <p className="text-sm font-bold text-slate-800 leading-tight">{userName}</p>
+                        <p className="text-[10px] font-black text-[#7C69AF] uppercase tracking-widest">{userCargo || 'Colaborador'}</p>
+                    </div>
+                    
+                    <div className="w-12 h-12 rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-sm shadow-xl shadow-purple-900/20 border-2 border-white overflow-hidden">
+                        {userPhoto ? (
+                          <img src={userPhoto} alt="Perfil" className="w-full h-full object-cover" />
+                        ) : (
+                          userName.substring(0, 2).toUpperCase()
+                        )}
+                    </div>
+                </Link>
+            </div>
         </header>
         
         {/* CONTEÚDO DAS PÁGINAS */}

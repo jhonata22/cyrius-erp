@@ -6,6 +6,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from django.conf import settings
 from django.conf.urls.static import static
+from core import views as core_views
 
 # 1. ADICIONE O IMPORT AQUI
 from core.views import (
@@ -56,6 +57,7 @@ router.register(r'fornecedores', FornecedorViewSet)
 router.register(r'estoque/produtos', ProdutoViewSet, basename='produtos') 
 router.register(r'estoque/movimentacoes', MovimentacaoEstoqueViewSet, basename='movimentacoes')
 router.register(r'contratos', ContratoViewSet)
+router.register(r'notificacoes', core_views.NotificacaoViewSet, basename='notificacao')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -4,7 +4,7 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, 
     Fornecedor, Produto, MovimentacaoEstoque,
-    OrdemServico, ItemServico, AnexoServico, ContratoCliente, DespesaRecorrente
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente, DespesaRecorrente, Notificacao
 )
 
 # =====================================================
@@ -222,3 +222,8 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'tecnico_responsavel': {'required': False, 'allow_null': True},
             'ativo': {'required': False, 'allow_null': True} 
         }
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notificacao
+        fields = '__all__'

@@ -17,14 +17,17 @@ from .permissions import IsSocio, IsGestor, IsFuncionario
 from core.services.estoque import processar_movimentacao_estoque
 from core.services.chamado import finalizar_chamado
 from core.services import financeiro as financeiro_service
-from core.services import servico as servico_service # <--- NOVO SERVIÇO
+from core.services import servico as servico_service
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 # --- MODELS ---
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Chamado, ChamadoTecnico, LancamentoFinanceiro,
     Ativo, Fornecedor, Produto, MovimentacaoEstoque, FechamentoFinanceiro,
-    OrdemServico, ItemServico, AnexoServico, ContratoCliente, LancamentoFinanceiro, DespesaRecorrente
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente, LancamentoFinanceiro, DespesaRecorrente, Notificacao
 )
 
 # --- SERIALIZERS ---
@@ -34,7 +37,7 @@ from .serializers import (
     EquipeSerializer, ChamadoSerializer, ChamadoTecnicoSerializer,
     LancamentoFinanceiroSerializer, AtivoSerializer,
     FornecedorSerializer, ProdutoSerializer, MovimentacaoEstoqueSerializer,
-    OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, ContratoClienteSerializer
+    OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, ContratoClienteSerializer, NotificacaoSerializer
 )
 
 def add_months(sourcedate, months):
@@ -106,7 +109,7 @@ class AtivoViewSet(OptimizedQuerySetMixin, viewsets.ModelViewSet):
 class EquipeViewSet(viewsets.ModelViewSet):
     queryset = Equipe.objects.all()
     serializer_class = EquipeSerializer
-    permission_classes = [IsGestor]
+    permission_classes = [IsFuncionario]
 
     @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -554,3 +557,22 @@ class ItemServicoViewSet(viewsets.ModelViewSet):
         if instance.os.status in ['CONCLUIDO', 'CANCELADO', 'FINALIZADO']:
              raise ValidationError("Não é possível remover itens de uma OS já finalizada.")
         instance.delete()
+
+class NotificacaoViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificacaoSerializer
+
+    def get_queryset(self):
+        # Cada usuário só vê as suas
+        return Notificacao.objects.filter(destinatario=self.request.user)
+
+    @action(detail=True, methods=['patch'])
+    def marcar_como_lida(self, request, pk=None):
+        notificacao = self.get_object()
+        notificacao.lida = True
+        notificacao.save()
+        return Response({'status': 'ok'})
+        
+    @action(detail=False, methods=['patch'])
+    def marcar_todas_lidas(self, request):
+        self.get_queryset().update(lida=True)
+        return Response({'status': 'ok'})
