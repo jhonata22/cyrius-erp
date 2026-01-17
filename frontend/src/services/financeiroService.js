@@ -35,6 +35,11 @@ const financeiroService = {
     const response = await api.post('/financeiro/baixar-lote/', { ids });
     return response.data;
   },
+
+  processarRecorrencias: async () => {
+    const response = await api.post('/financeiro/processar-recorrencias/');
+    return response.data;
+  }
 };
 
 export default financeiroService;

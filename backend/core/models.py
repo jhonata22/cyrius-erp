@@ -1,3 +1,4 @@
+import uuid  # <--- ADICIONADO
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -72,7 +73,7 @@ class Equipe(models.Model):
         TECNICO = 'TECNICO', 'Técnico'
         GESTOR = 'GESTOR', 'Gestor'
         SOCIO = 'SOCIO', 'Sócio'
-        ESTAGIARIO = 'ESTAGIARIO', 'Estagiário' # <--- ADICIONADO
+        ESTAGIARIO = 'ESTAGIARIO', 'Estagiário'
 
     usuario = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
     nome = models.CharField(max_length=100)
@@ -97,19 +98,12 @@ class Equipe(models.Model):
 # =====================================================
 
 class ContratoCliente(models.Model):
-    """
-    Tabela para armazenar PDFs de contratos.
-    Relacionamento: 1 Cliente pode ter N Contratos.
-    """
     cliente = models.ForeignKey(
         'Cliente', 
         on_delete=models.CASCADE, 
-        related_name='contratos' # Importante: O front espera 'contratos' na lista de clientes
+        related_name='contratos'
     )
-    
-    # O upload_to organiza os arquivos na pasta media/contratos/ano/mes
     arquivo = models.FileField(upload_to='contratos/%Y/%m/') 
-    
     descricao = models.CharField(max_length=200, verbose_name="Descrição do Contrato")
     data_upload = models.DateTimeField(auto_now_add=True)
 
@@ -117,7 +111,7 @@ class ContratoCliente(models.Model):
         db_table = 'TB_CONTRATO_CLIENTE'
         verbose_name = 'Contrato'
         verbose_name_plural = 'Contratos'
-        ordering = ['-data_upload'] # Mais recentes primeiro
+        ordering = ['-data_upload']
 
     def __str__(self):
         return f"Contrato {self.descricao} - {self.cliente}"
@@ -131,8 +125,6 @@ class Ativo(models.Model):
         MONITOR = 'MONITOR', 'Monitor'
         PERIFERICO = 'PERIFERICO', 'Periférico/Outro'
 
-    # Blindagem: Se o cliente sair, talvez queiramos manter o histórico do ativo, 
-    # mas aqui manteremos CASCADE pois ativos pertencem fisicamente ao cliente.
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='ativos')
     nome = models.CharField(max_length=100)
     tipo = models.CharField(max_length=20, choices=TipoAtivo.choices)
@@ -149,6 +141,7 @@ class Ativo(models.Model):
     class Meta: 
         db_table = 'TB_ATIVO'
         verbose_name = 'Ativo/Hardware'
+        verbose_name_plural = 'Ativos'
         ordering = ['nome']
 
     def __str__(self): return f"{self.nome} ({self.tipo})"
@@ -165,7 +158,6 @@ class DocumentacaoTecnica(TimeStampedModel):
 # =====================================================
 # 4. CHAMADOS
 # =====================================================
-# ... (imports anteriores mantidos)
 
 class Chamado(TimeStampedModel):
     class Status(models.TextChoices):
@@ -206,7 +198,7 @@ class Chamado(TimeStampedModel):
     
     data_agendamento = models.DateTimeField(null=True, blank=True)
     
-    # Custos (com default 0 para evitar erro de cálculo)
+    # Custos
     custo_ida = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_volta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_transporte = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -226,7 +218,7 @@ class Chamado(TimeStampedModel):
         return self.protocolo or f"ID {self.pk}"
 
     def save(self, *args, **kwargs):
-        # 1. Tratamento seguro de custos (evita erro se for None)
+        # 1. Tratamento seguro de custos
         ida = float(self.custo_ida or 0)
         volta = float(self.custo_volta or 0)
         self.custo_transporte = ida + volta
@@ -234,13 +226,11 @@ class Chamado(TimeStampedModel):
         # 2. Geração de Protocolo
         if not self.protocolo:
             hoje = timezone.now().strftime('%Y%m%d')
-            # Pega o último protocolo que começa com a data de hoje
             ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('-protocolo').first()
             
             sequencia = 1
             if ultimo and ultimo.protocolo:
                 try:
-                    # Extrai os últimos 3 dígitos: 20250101[001]
                     sequencia = int(ultimo.protocolo[-3:]) + 1
                 except ValueError:
                     sequencia = 1
@@ -292,18 +282,41 @@ class LancamentoFinanceiro(TimeStampedModel):
         CUSTO_TEC = 'CUSTO_TEC', 'Custo Operacional Técnico'
         DESPESA = 'DESPESA', 'Despesa Administrativa'
         COMPRA = 'COMPRA', 'Compra de Estoque'
+        SALARIO = 'SALARIO', 'Salário/Pessoal'
+        IMPOSTO = 'IMPOSTO', 'Impostos'
+        OUTRO = 'OUTRO', 'Outro'
 
-    # Blindagem: NUNCA apaga financeiro se o cliente for deletado. Use PROTECT.
+    # NOVAS OPÇÕES DE PAGAMENTO (Enum)
+    FORMA_PAGAMENTO_CHOICES = [
+        ('BOLETO', 'Boleto'),
+        ('CREDITO', 'Cartão de Crédito'),
+        ('DEBITO', 'Cartão de Débito'),
+        ('PIX', 'PIX'),
+        ('DINHEIRO', 'Dinheiro'),
+        ('TRANSFERENCIA', 'Transferência'),
+    ]
+
+    # Campos principais
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, null=True, blank=True)
     tecnico = models.ForeignKey(Equipe, on_delete=models.SET_NULL, null=True, blank=True)
+    fornecedor = models.ForeignKey('Fornecedor', on_delete=models.SET_NULL, null=True, blank=True, related_name='lancamentos')
+    
     descricao = models.CharField(max_length=150)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
+    
     status = models.CharField(max_length=20, choices=StatusFinanceiro.choices, default=StatusFinanceiro.PENDENTE)
     tipo_lancamento = models.CharField(max_length=20, choices=[('ENTRADA', 'Entrada'), ('SAIDA', 'Saída')])
     categoria = models.CharField(max_length=20, choices=Categoria.choices, default=Categoria.DESPESA)
+    
     data_vencimento = models.DateField()
     data_pagamento = models.DateField(null=True, blank=True)
-    fornecedor = models.ForeignKey('Fornecedor', on_delete=models.SET_NULL, null=True, blank=True, related_name='lancamentos')
+    observacao = models.TextField(blank=True, null=True)
+
+    # --- CAMPOS NOVOS PARA PARCELAMENTO ---
+    forma_pagamento = models.CharField(max_length=20, choices=FORMA_PAGAMENTO_CHOICES, default='DINHEIRO')
+    parcela_atual = models.IntegerField(default=1)
+    total_parcelas = models.IntegerField(default=1)
+    grupo_parcelamento = models.UUIDField(null=True, blank=True, help_text="ID único para agrupar parcelas de uma mesma venda")
 
     class Meta: 
         db_table = 'TB_LANCAMENTO_FINANCEIRO'
@@ -316,7 +329,31 @@ class LancamentoFinanceiro(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.full_clean()
+        # Atualiza status automático se não for PAGO
+        if self.status != self.StatusFinanceiro.PAGO:
+            if self.data_vencimento < timezone.now().date():
+                self.status = self.StatusFinanceiro.ATRASADO
+            else:
+                self.status = self.StatusFinanceiro.PENDENTE
         super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.descricao} - {self.get_tipo_lancamento_display()}"
+
+# --- NOVO MODELO: RECORRÊNCIA ---
+class DespesaRecorrente(models.Model):
+    descricao = models.CharField(max_length=255)
+    valor = models.DecimalField(max_digits=10, decimal_places=2)
+    categoria = models.CharField(max_length=20, choices=LancamentoFinanceiro.Categoria.choices, default='DESPESA')
+    dia_vencimento = models.IntegerField(help_text="Dia do mês que vence (1-31)")
+    
+    ativo = models.BooleanField(default=True)
+    ultima_geracao = models.DateField(null=True, blank=True, help_text="Data em que foi gerada a última cobrança")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recorrente: {self.descricao} (Dia {self.dia_vencimento})"
 
 class FechamentoFinanceiro(models.Model):
     ano = models.PositiveIntegerField()
@@ -328,13 +365,11 @@ class FechamentoFinanceiro(models.Model):
 # =====================================================
 # 6. ESTOQUE
 # =====================================================
-# No arquivo backend/core/models.py
 
 class Fornecedor(models.Model):
     razao_social = models.CharField(max_length=100)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     
-    # NOVOS CAMPOS PARA CONTATO:
     contato_nome = models.CharField(max_length=100, null=True, blank=True)
     telefone = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
@@ -346,6 +381,7 @@ class Fornecedor(models.Model):
 
     def __str__(self): 
         return self.razao_social
+
 class Produto(TimeStampedModel):
     nome = models.CharField(max_length=100)
     estoque_minimo = models.PositiveIntegerField(default=2)
@@ -372,7 +408,6 @@ class MovimentacaoEstoque(models.Model):
         ('SAIDA', 'Saída'),
     ]
     
-    # Blindagem: Não permite apagar um produto se ele já teve movimentação.
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name='movimentacoes')
     tipo_movimento = models.CharField(max_length=10, choices=TIPO_CHOICES)
     quantidade = models.IntegerField()
@@ -398,7 +433,7 @@ class MovimentacaoEstoque(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-        # =====================================================
+# =====================================================
 # 7. MÓDULO DE SERVIÇOS (ORDEM DE SERVIÇO / PROJETOS)
 # =====================================================
 
@@ -438,14 +473,13 @@ class OrdemServico(TimeStampedModel):
 
     # Faturamento (Entradas)
     valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    # valor_pecas -> Calculado via soma dos itens (property)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     ativo = models.ForeignKey(
-        'Ativo',  # Use string 'Ativo' caso a classe Ativo esteja definida abaixo desta
+        'Ativo',
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
-        related_name='historico_os', # Nome diferente do Chamado para não dar conflito
+        related_name='historico_os',
         help_text="Equipamento vinculado a esta OS")
     
     class Meta:
@@ -459,22 +493,16 @@ class OrdemServico(TimeStampedModel):
 
     @property
     def total_pecas(self):
-        # Soma o valor de todas as peças vinculadas a esta OS
         return self.itens.aggregate(total=Sum(models.F('quantidade') * models.F('preco_venda')))['total'] or 0
 
     @property
     def valor_total_geral(self):
-        # Mão de Obra + Peças - Desconto
         pecas = self.total_pecas
         mo = self.valor_mao_de_obra
         desc = self.desconto
         return (pecas + mo) - desc
 
 class ItemServico(models.Model):
-    """
-    Tabela de ligação: Peças usadas em uma OS.
-    Ao salvar aqui, o sistema deve (no futuro via service) baixar do Estoque.
-    """
     os = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT)
     quantidade = models.PositiveIntegerField(default=1)
@@ -492,9 +520,6 @@ class ItemServico(models.Model):
         return self.quantidade * self.preco_venda
 
 class AnexoServico(models.Model):
-    """
-    Arquivos anexados: NFs, Orçamentos, Fotos Antes/Depois.
-    """
     class TipoArquivo(models.TextChoices):
         NOTA_FISCAL = 'NF', 'Nota Fiscal'
         ORCAMENTO = 'ORCAMENTO', 'Orçamento PDF'

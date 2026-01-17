@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, DollarSign, AlertTriangle, Building2, TrendingUp, RefreshCw, 
-  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2, Printer
+  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2, Printer, CreditCard
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -39,14 +39,27 @@ export default function Financeiro() {
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // --- ATUALIZAÇÃO DO STATE DO FORMULÁRIO ---
   const [form, setForm] = useState({
-    descricao: '', valor: '', tipo_lancamento: 'ENTRADA', 
-    categoria: 'DESPESA', data_vencimento: '', cliente: ''
+    descricao: '', 
+    valor: '', 
+    tipo_lancamento: 'ENTRADA', 
+    categoria: 'DESPESA', 
+    data_vencimento: '', 
+    cliente: '',
+    // Novos campos
+    forma_pagamento: 'DINHEIRO',
+    total_parcelas: 1
   });
 
   const carregarDados = async () => {
     try {
       setLoading(true);
+
+      // 1. Processa Recorrências antes de buscar (Garante que Aluguel/Internet do mês apareçam)
+      await financeiroService.processarRecorrencias().catch(err => console.log("Sem recorrências novas"));
+
       const [dadosFin, dadosCli, stats] = await Promise.all([
         financeiroService.listar(),
         clienteService.listar(),
@@ -55,7 +68,7 @@ export default function Financeiro() {
       
       setTodosLancamentos(dadosFin); 
 
-      // --- NOVA LÓGICA DE FILTRO DO EXTRATO ---
+      // --- LÓGICA DE FILTRO DO EXTRATO ---
       const mesSelecionado = parseInt(filtroData.mes);
       const anoSelecionado = parseInt(filtroData.ano);
 
@@ -192,18 +205,14 @@ export default function Financeiro() {
       }
   };
 
-  // --- NOVA FUNÇÃO: IMPRIMIR ---
   const handleImprimir = () => {
     const periodo = `${filtroData.mes}/${filtroData.ano}`;
-    const dados = extratoExibicao.sort((a,b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)); // Ordena cronológico para relatório
-    
-    // Calcula totais para o rodapé do PDF
+    const dados = extratoExibicao.sort((a,b) => new Date(a.data_vencimento) - new Date(b.data_vencimento)); 
     let totalEnt = 0;
     let totalSai = 0;
 
     const printWindow = window.open('', '', 'height=600,width=800');
     
-    // HTML do Relatório
     printWindow.document.write('<html><head><title>Relatório Financeiro</title>');
     printWindow.document.write(`
         <style>
@@ -228,9 +237,7 @@ export default function Financeiro() {
         </style>
     `);
     printWindow.document.write('</head><body>');
-    
     printWindow.document.write(`<h1>Relatório Financeiro</h1><p class="sub">Período: ${periodo}</p>`);
-    
     printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Cliente</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
     
     dados.forEach(item => {
@@ -251,7 +258,6 @@ export default function Financeiro() {
     });
     
     printWindow.document.write('</tbody></table>');
-    
     const saldo = totalEnt - totalSai;
     printWindow.document.write(`
         <div class="resumo-box">
@@ -262,15 +268,10 @@ export default function Financeiro() {
             </div>
         </div>
     `);
-
     printWindow.document.write('</body></html>');
     printWindow.document.close();
     printWindow.focus();
-    // Pequeno timeout para garantir carregamento de estilos
-    setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-    }, 250);
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
   };
 
   const handleGerarFaturas = async () => {
@@ -288,7 +289,11 @@ export default function Financeiro() {
     try {
       await financeiroService.criar(form);
       setIsModalOpen(false);
-      setForm({ descricao: '', valor: '', tipo_lancamento: 'ENTRADA', categoria: 'DESPESA', data_vencimento: '', cliente: '' });
+      setForm({ 
+          descricao: '', valor: '', tipo_lancamento: 'ENTRADA', 
+          categoria: 'DESPESA', data_vencimento: '', cliente: '',
+          forma_pagamento: 'DINHEIRO', total_parcelas: 1
+      });
       carregarDados();
     } catch { alert("Erro ao salvar."); }
   };
@@ -329,7 +334,7 @@ export default function Financeiro() {
               />
            </div>
 
-           {/* --- BOTÃO IMPRIMIR NOVO --- */}
+           {/* --- BOTÃO IMPRIMIR --- */}
            <button onClick={handleImprimir} className="bg-white border-2 border-slate-200 text-slate-600 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all">
              <Printer size={16}/> Imprimir
            </button>
@@ -542,17 +547,81 @@ export default function Financeiro() {
         </div>
       )}
 
-      {/* MODAL MANTIDO */}
+      {/* MODAL MANTIDO E ATUALIZADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
                 <form onSubmit={handleSalvar} className="space-y-5">
-                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label><input required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none focus:ring-4 focus:ring-purple-500/5" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></div>
-                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label><input required type="number" step="0.01" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></div><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Operação</label><select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.tipo_lancamento} onChange={e => setForm({...form, tipo_lancamento: e.target.value})}><option value="ENTRADA">Receita (+)</option><option value="SAIDA">Despesa (-)</option></select></div></div>
-                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label><select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}><option value="DESPESA">Geral</option><option value="SERVICO">Serviço</option><option value="COMPRA">Estoque</option></select></div><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vencimento</label><input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.data_vencimento} onChange={e => setForm({...form, data_vencimento: e.target.value})} /></div></div>
-                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vincular Cliente</label><select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.cliente} onChange={e => setForm({...form, cliente: e.target.value})}><option value="">Nenhum (Lançamento Avulso)</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}</select></div>
+                    
+                    {/* Descrição */}
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+                        <input required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none focus:ring-4 focus:ring-purple-500/5" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} />
+                    </div>
+
+                    {/* Linha: Valor e Parcelas */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor Total (R$)</label>
+                            <input required type="number" step="0.01" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nº Parcelas</label>
+                            <input type="number" min="1" max="60" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.total_parcelas} onChange={e => setForm({...form, total_parcelas: e.target.value})} />
+                        </div>
+                    </div>
+
+                    {/* Linha: Operação e Forma de Pagamento */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Operação</label>
+                            <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.tipo_lancamento} onChange={e => setForm({...form, tipo_lancamento: e.target.value})}>
+                                <option value="ENTRADA">Receita (+)</option>
+                                <option value="SAIDA">Despesa (-)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pagamento</label>
+                            <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.forma_pagamento} onChange={e => setForm({...form, forma_pagamento: e.target.value})}>
+                                <option value="DINHEIRO">Dinheiro</option>
+                                <option value="PIX">PIX</option>
+                                <option value="BOLETO">Boleto</option>
+                                <option value="CREDITO">Cartão Crédito</option>
+                                <option value="DEBITO">Cartão Débito</option>
+                                <option value="TRANSFERENCIA">Transferência</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Linha: Categoria e Vencimento */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
+                            <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
+                                <option value="DESPESA">Geral</option>
+                                <option value="SERVICO">Serviço</option>
+                                <option value="COMPRA">Estoque</option>
+                                <option value="IMPOSTO">Impostos</option>
+                                <option value="SALARIO">Pessoal</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vencimento (1ª Parc)</label>
+                            <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none" value={form.data_vencimento} onChange={e => setForm({...form, data_vencimento: e.target.value})} />
+                        </div>
+                    </div>
+
+                    {/* Linha: Cliente */}
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vincular Cliente</label>
+                        <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.cliente} onChange={e => setForm({...form, cliente: e.target.value})}>
+                            <option value="">Nenhum (Lançamento Avulso)</option>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                        </select>
+                    </div>
+
                     <button type="submit" className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black shadow-xl shadow-purple-900/20 active:scale-95 transition-all mt-4">Confirmar Lançamento</button>
                 </form>
             </div>

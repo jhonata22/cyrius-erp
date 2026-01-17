@@ -6,6 +6,9 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from datetime import date, timedelta
+import uuid
+import calendar
 
 # --- IMPORTAÇÕES DAS PERMISSÕES ---
 from .permissions import IsSocio, IsGestor, IsFuncionario
@@ -21,7 +24,7 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Chamado, ChamadoTecnico, LancamentoFinanceiro,
     Ativo, Fornecedor, Produto, MovimentacaoEstoque, FechamentoFinanceiro,
-    OrdemServico, ItemServico, AnexoServico, ContratoCliente
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente, LancamentoFinanceiro, DespesaRecorrente
 )
 
 # --- SERIALIZERS ---
@@ -33,6 +36,14 @@ from .serializers import (
     FornecedorSerializer, ProdutoSerializer, MovimentacaoEstoqueSerializer,
     OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, ContratoClienteSerializer
 )
+
+def add_months(sourcedate, months):
+    """Adiciona meses a uma data sem quebrar em anos bissextos"""
+    month = sourcedate.month - 1 + months
+    year = sourcedate.year + month // 12
+    month = month % 12 + 1
+    day = min(sourcedate.day, calendar.monthrange(year,month)[1])
+    return date(year, month, day)
 
 # --- MIXIN DE OTIMIZAÇÃO ---
 class OptimizedQuerySetMixin:
@@ -187,24 +198,93 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     queryset = LancamentoFinanceiro.objects.all().select_related('cliente')
     serializer_class = LancamentoFinanceiroSerializer
-    permission_classes = [IsSocio] 
 
+# --- 1. OVERRIDE DO CREATE (COM TRAVA DE SEGURANÇA) ---
+    def create(self, request, *args, **kwargs):
+        dados = request.data.copy()
+        
+        # BLINDAGEM 1: Cliente vazio vira None
+        if dados.get('cliente') == "":
+            dados['cliente'] = None
+
+        try:
+            total_parcelas = int(dados.get('total_parcelas', 1))
+        except (ValueError, TypeError):
+            total_parcelas = 1
+        
+        # BLINDAGEM 2: Trava de Segurança Anti-Loop
+        # Impede que o sistema tente criar 2026 parcelas se o usuário digitar o ano no campo errado
+        if total_parcelas > 60:
+            return Response(
+                {'erro': f'Segurança: Não é permitido criar mais de 60 parcelas de uma vez. Você tentou criar {total_parcelas}.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Se for à vista (1x), segue o fluxo normal
+        if total_parcelas <= 1:
+            serializer = self.get_serializer(data=dados)
+            try:
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'erro': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # LÓGICA DE PARCELAMENTO
+        try:
+            print(f"DEBUG PARCELAS: Iniciando criação de {total_parcelas} parcelas...") # Veja isso no terminal
+            
+            valor_total = float(dados.get('valor'))
+            valor_parcela = valor_total / total_parcelas
+            data_inicial = date.fromisoformat(dados.get('data_vencimento'))
+            grupo_id = uuid.uuid4()
+            cliente_id = dados.get('cliente') if dados.get('cliente') else None
+            
+            # Validação prévia de data para não travar no meio
+            if data_inicial.year > 2030: # Exemplo de trava de ano absurdo
+                 return Response({'erro': 'Ano de vencimento muito distante.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            lancamentos_criados = []
+
+            for i in range(total_parcelas):
+                nova_data = add_months(data_inicial, i)
+                
+                print(f"Criando parcela {i+1} para {nova_data}...") # Debug
+                
+                novo_lancamento = LancamentoFinanceiro(
+                    descricao=f"{dados.get('descricao')} ({i+1}/{total_parcelas})",
+                    valor=valor_parcela,
+                    tipo_lancamento=dados.get('tipo_lancamento'),
+                    categoria=dados.get('categoria'),
+                    forma_pagamento=dados.get('forma_pagamento', 'DINHEIRO'),
+                    data_vencimento=nova_data,
+                    status=dados.get('status', 'PENDENTE'),
+                    cliente_id=cliente_id,
+                    parcela_atual=i+1,
+                    total_parcelas=total_parcelas,
+                    grupo_parcelamento=grupo_id,
+                    observacao=dados.get('observacao', '')
+                )
+                novo_lancamento.save()
+                lancamentos_criados.append(novo_lancamento)
+
+            return Response(
+                {'mensagem': f'{total_parcelas} parcelas geradas com sucesso!'}, 
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            print(f"ERRO CRÍTICO NO BACKEND: {str(e)}")
+            return Response({'erro': f"Erro ao processar: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
     @action(detail=False, methods=['get'])
     def estatisticas(self, request):
-        # 1. Pega os parâmetros da URL (enviados pelo React)
         mes = request.query_params.get('mes')
         ano = request.query_params.get('ano')
-
-        # 2. Converte para Inteiro (segurança básica)
         try:
             mes = int(mes) if mes else None
             ano = int(ano) if ano else None
         except ValueError:
             mes = None
             ano = None
-
-        # 3. Passa os filtros para o serviço
-        # Agora o serviço saberá separar "Acumulado" de "Período"
         return Response(financeiro_service.calcular_estatisticas_financeiras(mes, ano))
 
     @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
@@ -214,15 +294,40 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='baixar-lote')
     def baixar_lote(self, request):
         ids = request.data.get('ids', [])
-        
         updated = LancamentoFinanceiro.objects.filter(id__in=ids).update(
             status='PAGO', 
             data_pagamento=timezone.now().date()
         )
-        
         return Response({'mensagem': f'{updated} lançamentos baixados com sucesso!'})
 
-# =====================================================
+    @action(detail=False, methods=['post'], url_path='processar-recorrencias')
+    def processar_recorrencias(self, request):
+        hoje = date.today()
+        recorrencias = DespesaRecorrente.objects.filter(ativo=True)
+        gerados = 0
+        for rec in recorrencias:
+            if not rec.ultima_geracao or (rec.ultima_geracao.month != hoje.month or rec.ultima_geracao.year != hoje.year):
+                try:
+                    data_venc = date(hoje.year, hoje.month, rec.dia_vencimento)
+                except ValueError:
+                    ultimo_dia = calendar.monthrange(hoje.year, hoje.month)[1]
+                    data_venc = date(hoje.year, hoje.month, ultimo_dia)
+                
+                LancamentoFinanceiro.objects.create(
+                    descricao=f"{rec.descricao} (Ref. {hoje.month}/{hoje.year})",
+                    valor=rec.valor,
+                    tipo_lancamento='SAIDA',
+                    categoria=rec.categoria,
+                    data_vencimento=data_venc,
+                    status='PENDENTE',
+                    forma_pagamento='BOLETO',
+                    observacao='Gerado automaticamente via Módulo de Recorrência'
+                )
+                rec.ultima_geracao = hoje
+                rec.save()
+                gerados += 1
+        return Response({'mensagem': f'Processamento concluído. {gerados} novas despesas recorrentes geradas.'})
+
 # 6. ESTOQUE
 # =====================================================
 

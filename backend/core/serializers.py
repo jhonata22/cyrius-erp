@@ -4,7 +4,7 @@ from .models import (
     Cliente, ContatoCliente, ProvedorInternet, ContaEmail, DocumentacaoTecnica,
     Equipe, Ativo, Chamado, ChamadoTecnico, LancamentoFinanceiro, 
     Fornecedor, Produto, MovimentacaoEstoque,
-    OrdemServico, ItemServico, AnexoServico, ContratoCliente
+    OrdemServico, ItemServico, AnexoServico, ContratoCliente, DespesaRecorrente
 )
 
 # =====================================================
@@ -113,6 +113,11 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LancamentoFinanceiro
+        fields = '__all__'
+    
+class DespesaRecorrenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DespesaRecorrente
         fields = '__all__'
 
 # =====================================================
