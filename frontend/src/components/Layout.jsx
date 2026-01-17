@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench // <--- Ícone Novo para Serviços
+  Wrench
 } from 'lucide-react';
 import authService from '../services/authService';
 
@@ -37,9 +37,10 @@ export default function Layout({ children }) {
   const userPhoto = localStorage.getItem('user_photo');
   const userCargo = localStorage.getItem('cargo');
 
-  // Função para verificar permissão (com proteção contra Maiúsculas/Minúsculas)
+  // Função para verificar permissão
   const temPermissao = (cargosPermitidos) => {
     if (!userCargo) return false;
+    // Normaliza para maiúsculas para evitar erros (ex: 'tecnico' vs 'TECNICO')
     return cargosPermitidos.includes(userCargo.toUpperCase());
   };
 
@@ -70,33 +71,35 @@ export default function Layout({ children }) {
             Menu
           </p>
           <ul>
-            {/* TODOS TÊM ACESSO */}
+            {/* --- ACESSO GERAL --- */}
             <SidebarItem icon={LayoutDashboard} text="Dashboard" to="/" isExpanded={isExpanded} />
             <SidebarItem icon={Ticket} text="Chamados" to="/chamados" isExpanded={isExpanded} />
             
-            {/* NOVO MÓDULO: SERVIÇOS / PROJETOS */}
-            {/* Estagiário NÃO vê. Técnico, Gestor e Sócio veem. */}
-            {temPermissao(['TECNICO', 'GESTOR', 'SOCIO']) && (
+            {/* --- SÓCIOS E TÉCNICOS --- */}
+            {/* Aqui liberamos o módulo de Serviços para ambos */}
+            {temPermissao(['SOCIO', 'TECNICO']) && (
                 <SidebarItem icon={Wrench} text="Serviços & Lab" to="/servicos" isExpanded={isExpanded} />
             )}
 
-            <SidebarItem icon={Briefcase} text="Clientes" to="/clientes" isExpanded={isExpanded} />
+            {/* --- APENAS SÓCIOS --- */}
+            {temPermissao(['SOCIO']) && (
+              <>
+                <SidebarItem icon={Briefcase} text="Clientes" to="/clientes" isExpanded={isExpanded} />
+                <SidebarItem icon={DollarSign} text="Financeiro" to="/financeiro" isExpanded={isExpanded} />
+              </>
+            )}
+
+            {/* --- DOCUMENTAÇÃO E ESTOQUE (ACESSO GERAL OU AJUSTE CONFORME NECESSÁRIO) --- */}
             <SidebarItem icon={BookOpen} text="Documentação" to="/documentacao" isExpanded={isExpanded} />
             <SidebarItem icon={Package} text="Estoque" to="/inventario" isExpanded={isExpanded} />
             
-            {/* APENAS SÓCIOS */}
-            {temPermissao(['SOCIO']) && (
-                <SidebarItem icon={DollarSign} text="Financeiro" to="/financeiro" isExpanded={isExpanded} />
-            )}
-
             <div className="my-6 border-t border-white/5"></div>
             
-            {/* SÓCIOS E GESTORES */}
+            {/* --- SÓCIOS E GESTORES --- */}
             {temPermissao(['SOCIO', 'GESTOR']) && (
                 <SidebarItem icon={Users} text="Equipe" to="/equipe" isExpanded={isExpanded} />
             )}
             
-            {/* TODOS */}
             <SidebarItem icon={Settings} text="Configurações" to="/config" isExpanded={isExpanded} />
           </ul>
         </nav>

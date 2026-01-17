@@ -311,6 +311,8 @@ class LancamentoFinanceiro(TimeStampedModel):
     data_vencimento = models.DateField()
     data_pagamento = models.DateField(null=True, blank=True)
     observacao = models.TextField(blank=True, null=True)
+    arquivo_1 = models.FileField(upload_to='financeiro/comprovantes/%Y/%m/', null=True, blank=True)
+    arquivo_2 = models.FileField(upload_to='financeiro/comprovantes/%Y/%m/', null=True, blank=True)
 
     # --- CAMPOS NOVOS PARA PARCELAMENTO ---
     forma_pagamento = models.CharField(max_length=20, choices=FORMA_PAGAMENTO_CHOICES, default='DINHEIRO')

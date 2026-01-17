@@ -56,7 +56,7 @@ function App() {
       <Route path="/ativos/:id" element={<RotaProtegida><AtivoDetalhes /></RotaProtegida>} />
       <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
       <Route path="/chamados/:id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
-      <Route path="/clientes" element={<RotaProtegida><Clientes /></RotaProtegida>} />
+      
       
       {/* A documentação é aberta a todos, mas a aba CONTRATOS é protegida internamente */}
       <Route path="/documentacao" element={<RotaProtegida><Documentacao /></RotaProtegida>} />
@@ -92,6 +92,7 @@ function App() {
             <Financeiro />
         </RotaProtegida>
       } />
+      <Route path="/clientes" element={<RotaProtegida allowedRoles={['SOCIO']}><Clientes /></RotaProtegida>} />
 
       {/* Rota Padrão para 404 - Redireciona para home */}
       <Route path="*" element={<Navigate to="/" replace />} />

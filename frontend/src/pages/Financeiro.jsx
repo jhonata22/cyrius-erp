@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, DollarSign, AlertTriangle, Building2, TrendingUp, RefreshCw, 
-  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2, Printer, CreditCard
+  Truck, PieChart as PieIcon, Check, X, Wallet, ArrowUpRight, Search, Calendar, Trash2, Printer, CreditCard, CheckSquare, Paperclip, FileText
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
 } from 'recharts';
 
+// Ajuste o caminho se necessário, mas mantendo o padrão da pasta services
 import financeiroService from '../services/financeiroService';
 import clienteService from '../services/clienteService';
 
@@ -14,14 +15,17 @@ export default function Financeiro() {
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
   // Dados
-  const [todosLancamentos, setTodosLancamentos] = useState([]); // Todos (para inadimplencia)
-  const [lancamentosFiltrados, setLancamentosFiltrados] = useState([]); // Extrato (Mês + Pendências Passadas)
+  const [todosLancamentos, setTodosLancamentos] = useState([]); 
+  const [lancamentosFiltrados, setLancamentosFiltrados] = useState([]); 
   const [clientes, setClientes] = useState([]);
   
   // Estados de Interface
   const [loading, setLoading] = useState(true);
   const [gerandoFaturas, setGerandoFaturas] = useState(false);
-  const [buscaExtrato, setBuscaExtrato] = useState(''); // Campo de busca
+  const [buscaExtrato, setBuscaExtrato] = useState(''); 
+
+  // Seleção Múltipla
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const [filtroData, setFiltroData] = useState({
     mes: new Date().getMonth() + 1,
@@ -40,7 +44,7 @@ export default function Financeiro() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // --- ATUALIZAÇÃO DO STATE DO FORMULÁRIO ---
+  // Form State
   const [form, setForm] = useState({
     descricao: '', 
     valor: '', 
@@ -48,16 +52,16 @@ export default function Financeiro() {
     categoria: 'DESPESA', 
     data_vencimento: '', 
     cliente: '',
-    // Novos campos
     forma_pagamento: 'DINHEIRO',
-    total_parcelas: 1
+    total_parcelas: 1,
+    arquivo_1: null,
+    arquivo_2: null
   });
 
   const carregarDados = async () => {
     try {
       setLoading(true);
 
-      // 1. Processa Recorrências antes de buscar (Garante que Aluguel/Internet do mês apareçam)
       await financeiroService.processarRecorrencias().catch(err => console.log("Sem recorrências novas"));
 
       const [dadosFin, dadosCli, stats] = await Promise.all([
@@ -68,7 +72,7 @@ export default function Financeiro() {
       
       setTodosLancamentos(dadosFin); 
 
-      // --- LÓGICA DE FILTRO DO EXTRATO ---
+      // Filtro do Extrato
       const mesSelecionado = parseInt(filtroData.mes);
       const anoSelecionado = parseInt(filtroData.ano);
 
@@ -77,23 +81,20 @@ export default function Financeiro() {
          const anoItem = parseInt(anoStr);
          const mesItem = parseInt(mesStr);
 
-         // 1. É do mês/ano selecionado?
          const ehDoMes = mesItem === mesSelecionado && anoItem === anoSelecionado;
-
-         // 2. É pendente antigo? (Arrasta para o mês atual)
          const ehPendenteAntigo = (l.status === 'PENDENTE' || l.status === 'ATRASADO') && 
                                   ((anoItem < anoSelecionado) || (anoItem === anoSelecionado && mesItem < mesSelecionado));
 
          return ehDoMes || ehPendenteAntigo;
       });
 
-      // ORDENAÇÃO: Vencimento
       listaParaExtrato.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
 
       setLancamentosFiltrados(listaParaExtrato);
       setClientes(dadosCli);
       
       if (stats) setDadosDashboard(stats);
+      setSelectedIds([]);
 
     } catch (error) {
       console.error("Erro ao carregar:", error);
@@ -104,9 +105,8 @@ export default function Financeiro() {
 
   useEffect(() => { carregarDados(); }, [filtroData]);
 
-  // --- LÓGICA DE DADOS COMPUTADOS (MEMO) ---
+  // --- DADOS COMPUTADOS ---
   
-  // 1. INADIMPLENTES AGRUPADOS
   const inadimplentesAgrupados = useMemo(() => {
       const hoje = new Date();
       hoje.setHours(0,0,0,0);
@@ -148,7 +148,9 @@ export default function Financeiro() {
                   ...item,
                   isGroup: false,
                   ids_reais: [item.id],
-                  valor: parseFloat(item.valor)
+                  valor: parseFloat(item.valor),
+                  arquivo_1: item.arquivo_1, // Importante passar arquivo
+                  arquivo_2: item.arquivo_2
               });
           }
       });
@@ -156,7 +158,6 @@ export default function Financeiro() {
       return listaFinal.sort((a, b) => new Date(a.isGroup ? a.data_mais_antiga : a.data_vencimento) - new Date(b.isGroup ? b.data_mais_antiga : b.data_vencimento));
   }, [todosLancamentos]);
 
-  // 2. Serviços do Mês
   const servicosMes = useMemo(() => {
       return todosLancamentos.filter(l => {
           const [ano, mes] = l.data_vencimento.split('-');
@@ -167,7 +168,6 @@ export default function Financeiro() {
       });
   }, [todosLancamentos, filtroData]);
 
-  // 3. Extrato Filtrado pela Busca
   const extratoExibicao = useMemo(() => {
       if (!buscaExtrato) return lancamentosFiltrados;
       const termo = buscaExtrato.toLowerCase();
@@ -178,7 +178,47 @@ export default function Financeiro() {
   }, [lancamentosFiltrados, buscaExtrato]);
 
 
-  // --- AÇÕES ---
+  // --- FUNÇÕES ---
+
+  const handleToggleSelect = (id) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(item => item !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === extratoExibicao.length) {
+      setSelectedIds([]); 
+    } else {
+      setSelectedIds(extratoExibicao.map(l => l.id)); 
+    }
+  };
+
+  const handleBaixarMultiplo = async () => {
+    if (selectedIds.length === 0) return;
+    const pendentesSelecionados = extratoExibicao.filter(l => selectedIds.includes(l.id) && (l.status === 'PENDENTE' || l.status === 'ATRASADO'));
+    
+    if (pendentesSelecionados.length === 0) {
+       alert("Os itens selecionados já estão pagos ou não são elegíveis.");
+       setSelectedIds([]);
+       return;
+    }
+
+    const total = pendentesSelecionados.reduce((acc, curr) => acc + parseFloat(curr.valor), 0);
+    
+    if (!window.confirm(`Confirma a baixa de ${pendentesSelecionados.length} lançamentos?\nValor Total: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`)) return;
+
+    try {
+        await financeiroService.baixarEmLote(pendentesSelecionados.map(p => p.id));
+        alert("Baixa realizada com sucesso!");
+        carregarDados(); 
+    } catch (error) {
+        alert("Erro ao realizar baixa múltipla.");
+    }
+  };
+
   const handleConfirmarPagamento = async (item) => {
     const valor = parseFloat(item.valor) || 0;
     const msg = item.isGroup 
@@ -195,12 +235,11 @@ export default function Financeiro() {
   };
 
   const handleExcluir = async (id) => {
-      if (!window.confirm("Tem certeza que deseja EXCLUIR este lançamento? Essa ação não pode ser desfeita.")) return;
+      if (!window.confirm("Tem certeza que deseja EXCLUIR este lançamento?")) return;
       try {
           await financeiroService.excluir(id); 
           carregarDados();
       } catch (error) {
-          console.error(error);
           alert("Erro ao excluir lançamento.");
       }
   };
@@ -216,62 +255,37 @@ export default function Financeiro() {
     printWindow.document.write('<html><head><title>Relatório Financeiro</title>');
     printWindow.document.write(`
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
-            h1 { text-align: center; color: #302464; font-size: 24px; margin-bottom: 5px; }
-            p.sub { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
+            body { font-family: sans-serif; padding: 20px; color: #333; }
             table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th { background-color: #f3f4f6; color: #302464; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
-            td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-            tr:nth-child(even) { background-color: #f9fafb; }
+            th { background-color: #f3f4f6; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
+            td { padding: 10px; border-bottom: 1px solid #ddd; }
             .valor { font-weight: bold; text-align: right; }
-            .entrada { color: #059669; }
-            .saida { color: #dc2626; }
-            .status-tag { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
-            .PAGO { background: #ecfdf5; color: #059669; }
-            .PENDENTE { background: #fffbeb; color: #d97706; }
-            .ATRASADO { background: #fef2f2; color: #dc2626; }
-            .resumo-box { margin-top: 30px; display: flex; justify-content: flex-end; }
-            .resumo-table { width: 300px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-            .resumo-row { display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-            .resumo-total { background: #302464; color: white; font-weight: bold; border: none; }
+            .entrada { color: green; } .saida { color: red; }
         </style>
     `);
     printWindow.document.write('</head><body>');
-    printWindow.document.write(`<h1>Relatório Financeiro</h1><p class="sub">Período: ${periodo}</p>`);
-    printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Cliente</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
+    printWindow.document.write(`<h1>Relatório Financeiro - ${periodo}</h1>`);
+    printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
     
     dados.forEach(item => {
         const valor = parseFloat(item.valor);
         if(item.tipo_lancamento === 'ENTRADA') totalEnt += valor; else totalSai += valor;
-        
         printWindow.document.write(`
             <tr>
                 <td>${new Date(item.data_vencimento).toLocaleDateString('pt-BR')}</td>
                 <td>${item.descricao}</td>
-                <td>${item.nome_cliente || '-'}</td>
-                <td><span class="status-tag ${item.status}">${item.status}</span></td>
+                <td>${item.status}</td>
                 <td class="valor ${item.tipo_lancamento === 'ENTRADA' ? 'entrada' : 'saida'}">
-                    ${item.tipo_lancamento === 'SAIDA' ? '-' : ''}R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                    R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                 </td>
             </tr>
         `);
     });
     
     printWindow.document.write('</tbody></table>');
-    const saldo = totalEnt - totalSai;
-    printWindow.document.write(`
-        <div class="resumo-box">
-            <div class="resumo-table">
-                <div class="resumo-row"><span>Total Receitas</span><span class="entrada">R$ ${totalEnt.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                <div class="resumo-row"><span>Total Despesas</span><span class="saida">R$ ${totalSai.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                <div class="resumo-row resumo-total"><span>Saldo Líquido</span><span>R$ ${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-            </div>
-        </div>
-    `);
-    printWindow.document.write('</body></html>');
+    printWindow.document.write(`<h3>Saldo: R$ ${(totalEnt - totalSai).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3></body></html>`);
     printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+    printWindow.print();
   };
 
   const handleGerarFaturas = async () => {
@@ -287,12 +301,26 @@ export default function Financeiro() {
   const handleSalvar = async (e) => {
     e.preventDefault();
     try {
-      await financeiroService.criar(form);
+      const data = new FormData();
+      data.append('descricao', form.descricao);
+      data.append('valor', form.valor);
+      data.append('tipo_lancamento', form.tipo_lancamento);
+      data.append('categoria', form.categoria);
+      data.append('data_vencimento', form.data_vencimento);
+      data.append('forma_pagamento', form.forma_pagamento);
+      data.append('total_parcelas', form.total_parcelas);
+      if (form.cliente) data.append('cliente', form.cliente);
+      
+      if (form.arquivo_1) data.append('arquivo_1', form.arquivo_1);
+      if (form.arquivo_2) data.append('arquivo_2', form.arquivo_2);
+
+      await financeiroService.criar(data);
       setIsModalOpen(false);
       setForm({ 
           descricao: '', valor: '', tipo_lancamento: 'ENTRADA', 
           categoria: 'DESPESA', data_vencimento: '', cliente: '',
-          forma_pagamento: 'DINHEIRO', total_parcelas: 1
+          forma_pagamento: 'DINHEIRO', total_parcelas: 1,
+          arquivo_1: null, arquivo_2: null
       });
       carregarDados();
     } catch { alert("Erro ao salvar."); }
@@ -334,7 +362,6 @@ export default function Financeiro() {
               />
            </div>
 
-           {/* --- BOTÃO IMPRIMIR --- */}
            <button onClick={handleImprimir} className="bg-white border-2 border-slate-200 text-slate-600 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all">
              <Printer size={16}/> Imprimir
            </button>
@@ -357,7 +384,6 @@ export default function Financeiro() {
         <div className="space-y-8">
             {/* LINHA 1: KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* SALDO ACUMULADO */}
                 <div className="bg-[#302464] p-6 rounded-[2rem] border border-[#302464] shadow-xl shadow-purple-900/30">
                     <p className="text-[10px] font-black text-[#A696D1] uppercase tracking-widest mb-3">Caixa Total (Acumulado)</p>
                     <div className="flex items-end justify-between">
@@ -365,7 +391,6 @@ export default function Financeiro() {
                         <div className="p-2 bg-white/10 text-white rounded-xl"><Wallet size={20}/></div>
                     </div>
                 </div>
-                {/* RESULTADO DO MÊS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Resultado do Mês</p>
                     <div className="flex items-end justify-between">
@@ -375,7 +400,6 @@ export default function Financeiro() {
                         </div>
                     </div>
                 </div>
-                {/* RECEITA DO MÊS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Entradas (Mês)</p>
                     <div className="flex items-end justify-between">
@@ -383,7 +407,6 @@ export default function Financeiro() {
                         <div className="p-2 bg-purple-50 text-[#7C69AF] rounded-xl"><TrendingUp size={20}/></div>
                     </div>
                 </div>
-                {/* CONTRATOS ATIVOS */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Contratos Ativos</p>
                     <div className="flex items-end justify-between">
@@ -441,7 +464,7 @@ export default function Financeiro() {
                 </div>
             </div>
 
-            {/* NOVA SEÇÃO: SERVIÇOS E INADIMPLÊNCIA (AGRUPADO) */}
+            {/* SERVIÇOS E INADIMPLÊNCIA */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 {/* SERVIÇOS DO MÊS */}
@@ -457,6 +480,13 @@ export default function Financeiro() {
                                 <div>
                                     <p className="font-bold text-slate-700 text-sm">{serv.descricao}</p>
                                     <p className="text-[10px] font-black text-slate-400 uppercase">{new Date(serv.data_vencimento).toLocaleDateString()} • {serv.nome_cliente || 'Avulso'}</p>
+                                    
+                                    {/* EXIBIÇÃO DE ANEXOS NOS SERVIÇOS */}
+                                    <div className="flex gap-2 mt-1">
+                                        {serv.arquivo_1 && <a href={serv.arquivo_1} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform"><Paperclip size={12}/></a>}
+                                        {serv.arquivo_2 && <a href={serv.arquivo_2} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform"><Paperclip size={12}/></a>}
+                                    </div>
+
                                 </div>
                                 <div className="text-right">
                                     <span className="font-black text-emerald-600">R$ {parseFloat(serv.valor).toFixed(2)}</span>
@@ -484,7 +514,15 @@ export default function Financeiro() {
                                     {divida.isGroup ? (
                                         <p className="text-[10px] font-black text-red-500 bg-red-100 px-2 py-0.5 rounded-md w-fit mt-1 uppercase">{divida.qtd} Faturas em Aberto</p>
                                     ) : (
-                                        <p className="text-[10px] font-black text-red-400 uppercase">{divida.descricao}</p>
+                                        <>
+                                            <p className="text-[10px] font-black text-red-400 uppercase">{divida.descricao}</p>
+                                            
+                                            {/* EXIBIÇÃO DE ANEXOS NA INADIMPLENCIA */}
+                                            <div className="flex gap-2 mt-1">
+                                                {divida.arquivo_1 && <a href={divida.arquivo_1} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:scale-110 transition-transform"><Paperclip size={12}/></a>}
+                                                {divida.arquivo_2 && <a href={divida.arquivo_2} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:scale-110 transition-transform"><Paperclip size={12}/></a>}
+                                            </div>
+                                        </>
                                     )}
                                     <p className="text-[10px] text-slate-400 font-bold mt-1">Desde: {new Date(divida.isGroup ? divida.data_mais_antiga : divida.data_vencimento).toLocaleDateString()}</p>
                                 </div>
@@ -506,26 +544,68 @@ export default function Financeiro() {
       {activeTab === 'LISTA' && (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
              
-             {/* BARRA DE BUSCA */}
-             <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-                <Search size={20} className="text-slate-300" />
-                <input 
-                    type="text" 
-                    placeholder="Buscar por descrição, cliente ou valor..." 
-                    className="w-full font-bold text-slate-600 outline-none placeholder:text-slate-300"
-                    value={buscaExtrato}
-                    onChange={(e) => setBuscaExtrato(e.target.value)}
-                />
+             {/* BARRA DE BUSCA + AÇÕES EM LOTE */}
+             <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                    <Search size={20} className="text-slate-300" />
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por descrição, cliente ou valor..." 
+                        className="w-full font-bold text-slate-600 outline-none placeholder:text-slate-300"
+                        value={buscaExtrato}
+                        onChange={(e) => setBuscaExtrato(e.target.value)}
+                    />
+                </div>
+                
+                {/* BOTÃO DE BAIXA MÚLTIPLA */}
+                {selectedIds.length > 0 && (
+                    <button 
+                        onClick={handleBaixarMultiplo}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 animate-in fade-in slide-in-from-right-5"
+                    >
+                        <CheckSquare size={16} /> Baixar ({selectedIds.length})
+                    </button>
+                )}
              </div>
 
              <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th></tr>
+                    <tr>
+                        <th className="p-6 w-14">
+                            <input 
+                                type="checkbox" 
+                                className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
+                                checked={extratoExibicao.length > 0 && selectedIds.length === extratoExibicao.length}
+                                onChange={handleSelectAll}
+                            />
+                        </th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
+                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                     {extratoExibicao.map(lanc => (
-                        <tr key={lanc.id} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="p-6"><div className="font-black text-slate-800">{lanc.descricao}</div><div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div></td>
+                        <tr key={lanc.id} className={`group transition-colors ${selectedIds.includes(lanc.id) ? 'bg-purple-50/50' : 'hover:bg-slate-50/50'}`}>
+                            <td className="p-6">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
+                                    checked={selectedIds.includes(lanc.id)}
+                                    onChange={() => handleToggleSelect(lanc.id)}
+                                />
+                            </td>
+                            <td className="p-6">
+                                <div className="font-black text-slate-800">{lanc.descricao}</div>
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
+                                
+                                {/* EXIBIÇÃO DE ANEXOS NA LISTA */}
+                                <div className="flex gap-2 mt-2">
+                                    {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
+                                    {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
+                                </div>
+                            </td>
                             <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
                             <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
                             <td className="p-6 text-right">
@@ -540,14 +620,14 @@ export default function Financeiro() {
                         </tr>
                     ))}
                     {extratoExibicao.length === 0 && (
-                        <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado.</td></tr>
+                        <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado.</td></tr>
                     )}
                 </tbody>
              </table>
         </div>
       )}
 
-      {/* MODAL MANTIDO E ATUALIZADO */}
+      {/* MODAL MANTIDO (IGUAL AO ANTERIOR, MAS INCLUÍDO PARA COMPLETUDE) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
@@ -555,13 +635,11 @@ export default function Financeiro() {
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
                 <form onSubmit={handleSalvar} className="space-y-5">
                     
-                    {/* Descrição */}
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
                         <input required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464] outline-none focus:ring-4 focus:ring-purple-500/5" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} />
                     </div>
 
-                    {/* Linha: Valor e Parcelas */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor Total (R$)</label>
@@ -573,7 +651,6 @@ export default function Financeiro() {
                         </div>
                     </div>
 
-                    {/* Linha: Operação e Forma de Pagamento */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Operação</label>
@@ -595,7 +672,6 @@ export default function Financeiro() {
                         </div>
                     </div>
 
-                    {/* Linha: Categoria e Vencimento */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
@@ -613,13 +689,31 @@ export default function Financeiro() {
                         </div>
                     </div>
 
-                    {/* Linha: Cliente */}
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vincular Cliente</label>
                         <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.cliente} onChange={e => setForm({...form, cliente: e.target.value})}>
                             <option value="">Nenhum (Lançamento Avulso)</option>
                             {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
                         </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-50 p-3 rounded-2xl">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                <Paperclip size={10} className="inline mr-1"/> Anexo 1 (PDF)
+                            </label>
+                            <input type="file" accept="application/pdf" className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:bg-[#302464] file:text-white file:font-bold hover:file:bg-[#7C69AF]"
+                                onChange={e => setForm({...form, arquivo_1: e.target.files[0]})} 
+                            />
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-2xl">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                <Paperclip size={10} className="inline mr-1"/> Anexo 2 (PDF)
+                            </label>
+                            <input type="file" accept="application/pdf" className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:bg-[#302464] file:text-white file:font-bold hover:file:bg-[#7C69AF]"
+                                onChange={e => setForm({...form, arquivo_2: e.target.files[0]})} 
+                            />
+                        </div>
                     </div>
 
                     <button type="submit" className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black shadow-xl shadow-purple-900/20 active:scale-95 transition-all mt-4">Confirmar Lançamento</button>

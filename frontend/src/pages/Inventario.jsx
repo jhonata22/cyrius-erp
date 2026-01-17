@@ -49,7 +49,7 @@ export default function Inventario() {
     if (activeTab === 'PRODUTOS') return produtos.filter(p => p.nome.toLowerCase().includes(b));
     if (activeTab === 'FORNECEDORES') return fornecedores.filter(f => f.razao_social.toLowerCase().includes(b));
     return [...historico].sort((a, b) => new Date(b.data_movimento) - new Date(a.data_movimento));
-  }, [busca, activeTab, produtos, fornecedores, historico]);  
+  }, [busca, activeTab, produtos, fornecedores, historico]);   
 
   const openModal = (type, data = null) => {
     setModalType(type);
@@ -57,7 +57,6 @@ export default function Inventario() {
       setEditId(data?.id || null);
       setFormData(data || { nome: '', categoria: 'HARDWARE', estoque_minimo: 2, preco_venda_sugerido: '' });
     } else if (type === 'MOVIMENTO') {
-      // Inicia com valores padrão para evitar erro de uncontrolled component
       setFormData({ 
           tipo_movimento: 'ENTRADA', 
           produto: '', 
@@ -66,7 +65,9 @@ export default function Inventario() {
           fornecedor: '', 
           cliente: '', 
           numero_serial: '', 
-          arquivo: null 
+          arquivo_1: null, 
+          arquivo_2: null,
+          total_parcelas: 1 
       });
     } else if (type === 'FORNECEDOR') {
       setFormData({ razao_social: '', telefone: '' });
@@ -96,12 +97,10 @@ export default function Inventario() {
         return alert("Erro: Selecione o CLIENTE para gerar o financeiro da venda.");
     }
     if (formData.tipo_movimento === 'ENTRADA' && !formData.fornecedor) {
-        // Apenas aviso, pois pode ser ajuste de estoque sem fornecedor
         if(!window.confirm("Sem fornecedor selecionado. O financeiro de compra não será gerado detalhadamente. Continuar?")) return;
     }
 
     const data = new FormData();
-    // Garante que todos os campos vão para o FormData
     data.append('produto', formData.produto);
     data.append('tipo_movimento', formData.tipo_movimento);
     data.append('quantidade', formData.quantidade);
@@ -109,7 +108,15 @@ export default function Inventario() {
     if (formData.cliente) data.append('cliente', formData.cliente);
     if (formData.fornecedor) data.append('fornecedor', formData.fornecedor);
     if (formData.numero_serial) data.append('numero_serial', formData.numero_serial);
-    if (formData.arquivo) data.append('arquivo', formData.arquivo);
+    
+    // ANEXOS
+    if (formData.arquivo_1) data.append('arquivo_1', formData.arquivo_1);
+    if (formData.arquivo_2) data.append('arquivo_2', formData.arquivo_2);
+    
+    // PARCELAS
+    if (formData.tipo_movimento === 'SAIDA' && formData.total_parcelas) {
+        data.append('total_parcelas', formData.total_parcelas);
+    }
 
     try {
       await estoqueService.registrarMovimento(data);
@@ -123,7 +130,7 @@ export default function Inventario() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 pb-20">
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
         <div><h1 className="text-3xl font-black text-slate-800 tracking-tight">Estoque</h1><div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div></div>
@@ -145,78 +152,76 @@ export default function Inventario() {
 
       {loading ? <div className="py-20 text-center text-[#7C69AF] font-black uppercase tracking-widest text-[10px] animate-pulse">Sincronizando Estoque...</div> : (
         <>
-{activeTab === 'PRODUTOS' && (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-    <div onClick={() => openModal('PRODUTO')} className="border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center p-6 hover:border-[#7C69AF] hover:bg-purple-50/30 cursor-pointer transition-all group min-h-[160px]">
-      <Plus className="text-slate-300 group-hover:text-[#7C69AF]" size={32} />
-      <span className="mt-2 font-black text-slate-400 group-hover:text-[#302464] uppercase tracking-widest text-[9px]">Novo Item</span>
-    </div>
-    
-    {filteredData.map(prod => (
-      <div key={prod.id} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden">
-        <div className="flex justify-between items-start mb-4">
-          <div className={`p-3 rounded-2xl ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-[#302464]'}`}>
-            <Package size={24} />
-          </div>
-          <div className="text-right">
-            <span className={`text-2xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>
-              {prod.estoque_atual}
-            </span>
-            <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p>
-          </div>
-        </div>
-
-        <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
-        
-        {/* EXIBIÇÃO DO PREÇO SUGERIDO - ADICIONADO AQUI */}
-        <div className="mt-2 flex items-center gap-1.5">
-            <p className="text-[12px] font-black text-slate-400 uppercase tracking-tighter">Preço sugerido:</p>
-            <p className="text-xs font-black text-emerald-600">
-                {prod.preco_venda_sugerido ? `R$ ${parseFloat(prod.preco_venda_sugerido).toFixed(2)}` : 'R$ 0,00'}
-            </p>
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{prod.categoria}</span>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={(e) => { e.stopPropagation(); openModal('PRODUTO', prod); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl">
-                <Edit size={14} />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Excluir?")) estoqueService.excluirProduto(prod.id).then(carregarDados)}} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl">
-                <Trash2 size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
-          {activeTab === 'HISTORICO' && (
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
-                  <tr><th className="p-6 text-center">Tipo</th><th className="p-6">Produto</th><th className="p-6">Origem/Destino</th><th className="p-6 text-center">Qtd</th><th className="p-6 text-center">Data</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filteredData.map(hist => (
-                    <tr key={hist.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-6 text-center"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${hist.tipo_movimento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{hist.tipo_movimento}</span></td>
-                      <td className="p-6"><p className="font-bold text-slate-700">{hist.nome_produto}</p><p className="text-[9px] font-mono text-slate-400">{hist.numero_serial || 'S/N'}</p></td>
-                      <td className="p-6 text-slate-500 font-bold">{hist.nome_cliente || hist.nome_fornecedor || 'Interno'}</td>
-                      <td className="p-6 text-center font-black text-slate-700">{hist.quantidade}</td>
-                      <td className="p-6 text-center text-slate-400 font-mono text-[10px]">{new Date(hist.data_movimento).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* TAB PRODUTOS */}
+        {activeTab === 'PRODUTOS' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div onClick={() => openModal('PRODUTO')} className="border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center p-6 hover:border-[#7C69AF] hover:bg-purple-50/30 cursor-pointer transition-all group min-h-[160px]">
+              <Plus className="text-slate-300 group-hover:text-[#7C69AF]" size={32} />
+              <span className="mt-2 font-black text-slate-400 group-hover:text-[#302464] uppercase tracking-widest text-[9px]">Novo Item</span>
             </div>
-          )}
-
-          {activeTab === 'FORNECEDORES' && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div onClick={() => openModal('FORNECEDOR')} className="border-2 border-dashed border-slate-200 rounded-[2rem] p-6 flex items-center justify-center hover:border-[#7C69AF] cursor-pointer text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] gap-2 transition-all">
-                   <Plus size={20}/> Novo Fornecedor
+            {filteredData.map(prod => (
+              <div key={prod.id} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div className={`p-3 rounded-2xl ${prod.estoque_atual <= prod.estoque_minimo ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-[#302464]'}`}>
+                    <Package size={24} />
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-2xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>{prod.estoque_atual}</span>
+                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p>
+                  </div>
                 </div>
+                <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
+                <div className="mt-2 flex items-center gap-1.5">
+                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-tighter">Preço sugerido:</p>
+                    <p className="text-xs font-black text-emerald-600">{prod.preco_venda_sugerido ? `R$ ${parseFloat(prod.preco_venda_sugerido).toFixed(2)}` : 'R$ 0,00'}</p>
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{prod.categoria}</span>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); openModal('PRODUTO', prod); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"><Edit size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Excluir?")) estoqueService.excluirProduto(prod.id).then(carregarDados)}} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* TAB HISTÓRICO */}
+        {activeTab === 'HISTORICO' && (
+              <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
+               <table className="w-full text-left text-xs">
+                 <thead className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
+                   <tr><th className="p-6 text-center">Tipo</th><th className="p-6">Produto</th><th className="p-6">Origem/Destino</th><th className="p-6 text-center">Qtd</th><th className="p-6 text-center">Data</th></tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-50">
+                   {filteredData.map(hist => (
+                     <tr key={hist.id} className="hover:bg-slate-50/50 transition-colors">
+                       <td className="p-6 text-center"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${hist.tipo_movimento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{hist.tipo_movimento}</span></td>
+                       <td className="p-6">
+                           <p className="font-bold text-slate-700">{hist.nome_produto}</p>
+                           <p className="text-[9px] font-mono text-slate-400">{hist.numero_serial || 'S/N'}</p>
+                           
+                           {/* AQUI ESTÁ A NOVIDADE: Visualizar anexos no histórico */}
+                           <div className="flex gap-2 mt-1">
+                                {hist.arquivo_1 && <a href={hist.arquivo_1} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 1</a>}
+                                {hist.arquivo_2 && <a href={hist.arquivo_2} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 2</a>}
+                           </div>
+                       </td>
+                       <td className="p-6 text-slate-500 font-bold">{hist.nome_cliente || hist.nome_fornecedor || 'Interno'}</td>
+                       <td className="p-6 text-center font-black text-slate-700">{hist.quantidade}</td>
+                       <td className="p-6 text-center text-slate-400 font-mono text-[10px]">{new Date(hist.data_movimento).toLocaleDateString()}</td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+        )}
+
+        {/* TAB FORNECEDORES */}
+        {activeTab === 'FORNECEDORES' && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div onClick={() => openModal('FORNECEDOR')} className="border-2 border-dashed border-slate-200 rounded-[2rem] p-6 flex items-center justify-center hover:border-[#7C69AF] cursor-pointer text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] gap-2 transition-all"><Plus size={20}/> Novo Fornecedor</div>
                 {filteredData.map(forn => (
                     <div key={forn.id} onClick={() => navigate(`/fornecedores/${forn.id}`)} className="group bg-white p-6 rounded-[2rem] border border-slate-100 flex items-center justify-between shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative">
                         <div className="relative z-10">
@@ -227,7 +232,7 @@ export default function Inventario() {
                     </div>
                 ))}
             </div>
-          )}
+        )}
         </>
       )}
 
@@ -278,20 +283,55 @@ export default function Inventario() {
                         </select>
                     </div>
                   ) : (
-                    <div className="animate-in slide-in-from-right-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Destino (Venda)</label>
-                        <select required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value})}>
-                          <option value="">Selecione o cliente...</option>
-                          {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
-                        </select>
+                    <div className="animate-in slide-in-from-right-2 grid grid-cols-3 gap-4">
+                        <div className="col-span-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Destino</label>
+                            <select required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value})}>
+                              <option value="">Selecione o cliente...</option>
+                              {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
+                            </select>
+                        </div>
+                        <div className="col-span-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nº Parcelas</label>
+                            <input type="number" min="1" max="60" required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" 
+                                value={formData.total_parcelas} onChange={e => setFormData({...formData, total_parcelas: e.target.value})}
+                            />
+                        </div>
                     </div>
                   )}
 
+                  {/* NOVO BLOCO DE ANEXOS */}
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-3 rounded-2xl">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                              <Paperclip size={10} className="inline mr-1"/> Anexo 1 (PDF)
+                          </label>
+                          <input type="file" accept="application/pdf" className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:bg-[#302464] file:text-white file:font-bold hover:file:bg-[#7C69AF]"
+                              onChange={e => setFormData({...formData, arquivo_1: e.target.files[0]})} 
+                          />
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-2xl">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                              <Paperclip size={10} className="inline mr-1"/> Anexo 2 (PDF)
+                          </label>
+                          <input type="file" accept="application/pdf" className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:bg-[#302464] file:text-white file:font-bold hover:file:bg-[#7C69AF]"
+                              onChange={e => setFormData({...formData, arquivo_2: e.target.files[0]})} 
+                          />
+                      </div>
+                  </div>
+
                   <div className="pt-4 border-t border-slate-50 flex justify-between items-center text-xs font-bold text-slate-500">
                       <span>Total Financeiro:</span>
-                      <span className={formData.tipo_movimento === 'ENTRADA' ? 'text-red-500' : 'text-emerald-600'}>
-                         R$ {((formData.quantidade || 0) * (formData.preco_unitario || 0)).toFixed(2)}
-                      </span>
+                      <div className="text-right">
+                          <div className={formData.tipo_movimento === 'ENTRADA' ? 'text-red-500' : 'text-emerald-600'}>
+                             R$ {((formData.quantidade || 0) * (formData.preco_unitario || 0)).toFixed(2)}
+                          </div>
+                          {formData.tipo_movimento === 'SAIDA' && formData.total_parcelas > 1 && (
+                              <div className="text-[9px] text-slate-400 mt-1">
+                                  {formData.total_parcelas}x de R$ {(((formData.quantidade || 0) * (formData.preco_unitario || 0)) / formData.total_parcelas).toFixed(2)}
+                              </div>
+                          )}
+                      </div>
                   </div>
 
                   <button type="submit" className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all mt-4">
@@ -302,7 +342,7 @@ export default function Inventario() {
         </div>
       )}
 
-      {/* MODAL PRODUTO / FORNECEDOR (MANTIDO IGUAL) */}
+      {/* MODAL PRODUTO / FORNECEDOR */}
       {(modalType === 'PRODUTO' || modalType === 'FORNECEDOR') && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative">
@@ -312,8 +352,6 @@ export default function Inventario() {
                 </h3>
                 
                 <form onSubmit={modalType === 'PRODUTO' ? handleSalvarProduto : (e) => { e.preventDefault(); estoqueService.criarFornecedor(formData).then(carregarDados); setModalType(null); }} className="space-y-4">
-                    {/* ... (INPUTS DO PRODUTO E FORNECEDOR - MANTIDOS PARA ECONOMIZAR ESPAÇO NA RESPOSTA) ... */}
-                    {/* ... (COPIAR DO ARQUIVO ANTERIOR OS INPUTS DE PRODUTO/FORNECEDOR) ... */}
                     {modalType === 'PRODUTO' ? (
                       <>
                         <input required placeholder="Nome do Item" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
