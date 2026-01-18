@@ -22,9 +22,9 @@ environ.Env.read_env(os.path.join(BASE_DIR, '../.env'))
 SECRET_KEY = 'django-insecure-scld0#*x&=x1szn(vvfh77t=r)pamu0gaw$daa$^r8lhi4e)%d'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -119,7 +119,17 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+
+# Isso garante que, independente do .env, o Django usará a pasta static na raiz do projeto
+STATIC_ROOT = BASE_DIR / 'static'
+
+# Configuração para Uploads (Fotos de Perfil/Documentos)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Print para você ver no log do Docker se funcionou
+print(f"SISTEMA: Static Root configurado em: {STATIC_ROOT}")
 
 # Configuração do Redis
 CACHES = {

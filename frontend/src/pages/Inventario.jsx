@@ -92,12 +92,14 @@ export default function Inventario() {
         if(!window.confirm("O valor unitário está zerado. Isso não gerará lançamento no financeiro. Deseja continuar?")) return;
     }
 
-    // VALIDAÇÃO DE VÍNCULO
+    // VALIDAÇÃO DE VÍNCULO (SAÍDA)
     if (formData.tipo_movimento === 'SAIDA' && !formData.cliente) {
         return alert("Erro: Selecione o CLIENTE para gerar o financeiro da venda.");
     }
+
+    // --- ALTERAÇÃO AQUI: VALIDAÇÃO OBRIGATÓRIA DE FORNECEDOR (ENTRADA) ---
     if (formData.tipo_movimento === 'ENTRADA' && !formData.fornecedor) {
-        if(!window.confirm("Sem fornecedor selecionado. O financeiro de compra não será gerado detalhadamente. Continuar?")) return;
+        return alert("Erro: É OBRIGATÓRIO selecionar um FORNECEDOR para registrar uma entrada no estoque.");
     }
 
     const data = new FormData();
@@ -201,8 +203,6 @@ export default function Inventario() {
                        <td className="p-6">
                            <p className="font-bold text-slate-700">{hist.nome_produto}</p>
                            <p className="text-[9px] font-mono text-slate-400">{hist.numero_serial || 'S/N'}</p>
-                           
-                           {/* AQUI ESTÁ A NOVIDADE: Visualizar anexos no histórico */}
                            <div className="flex gap-2 mt-1">
                                 {hist.arquivo_1 && <a href={hist.arquivo_1} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 1</a>}
                                 {hist.arquivo_2 && <a href={hist.arquivo_2} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 2</a>}
@@ -276,8 +276,8 @@ export default function Inventario() {
 
                   {formData.tipo_movimento === 'ENTRADA' ? (
                     <div className="animate-in slide-in-from-left-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fornecedor Origem</label>
-                        <select className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none" value={formData.fornecedor} onChange={e => setFormData({...formData, fornecedor: e.target.value})}>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fornecedor Origem <span className="text-red-500">*</span></label>
+                        <select required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none" value={formData.fornecedor} onChange={e => setFormData({...formData, fornecedor: e.target.value})}>
                           <option value="">Selecione o fornecedor...</option>
                           {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
                         </select>

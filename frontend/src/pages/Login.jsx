@@ -11,7 +11,6 @@ export default function Login() {
   
   const navigate = useNavigate();
 
-  // Se o usuário já estiver logado, manda direto para a Home
   useEffect(() => {
     if (authService.isAuthenticated()) navigate('/');
   }, [navigate]);
@@ -27,20 +26,12 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // 1. Autentica e pega o Token
       const data = await authService.login(credentials);
       
-      // Salva o token imediatamente para as próximas requisições funcionarem
-      localStorage.setItem('token', data.access);
-      
-      // 2. Busca os dados do perfil para descobrir o CARGO
-      // O token salvo acima será usado automaticamente pelo axios interceptor (se configurado)
-      // ou pelo serviço.
       try {
         const perfil = await equipeService.getMe();
         
         localStorage.setItem('username', perfil.nome || credentials.username);
-        // SALVA O CARGO (Essencial para o sistema de permissões)
         localStorage.setItem('cargo', perfil.cargo); 
         
         // Se tiver foto, pode salvar também
@@ -48,10 +39,7 @@ export default function Login() {
 
       } catch (profileError) {
         console.warn("Não foi possível carregar o perfil completo (pode ser superuser sem equipe).", profileError);
-        // Fallback: Se der erro ao buscar perfil, salva apenas o username
         localStorage.setItem('username', credentials.username);
-        // Se for admin django puro, talvez não tenha cargo definido na tabela equipe, 
-        // então definimos um padrão ou deixamos vazio.
         localStorage.setItem('cargo', '');
       }
       
@@ -76,8 +64,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex bg-[#F4F6F9] font-sans">
-      
-      {/* LADO ESQUERDO: Branding (Oculto em mobile) */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/90 to-slate-900/95 z-10"></div>
         <img 
@@ -97,8 +83,6 @@ export default function Login() {
           </p>
         </div>
       </div>
-
-      {/* LADO DIREITO: Form de Login */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
           

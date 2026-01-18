@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Monitor, Cpu, Layers, HardDrive, 
   Trash2, Smartphone, Save, Globe, 
-  Printer, Info, History, ExternalLink, Calendar, 
+  Printer, Info, History, Calendar, 
   Wrench, FileText, CheckCircle2
 } from 'lucide-react';
 import QRCode from "react-qr-code"; 
@@ -28,15 +28,11 @@ export default function AtivoDetalhes() {
     try {
       setLoadingAtivo(true);
       
-      // Busca dados do Ativo
       const dadosAtivo = await ativoService.buscarPorId(id);
       
-      // Atualiza estados
       setAtivo(dadosAtivo);
-      // CLONE os dados para o editData para evitar referência direta
       setEditData({ ...dadosAtivo });
 
-      // Busca históricos em segundo plano (não trava a tela se falhar)
       Promise.allSettled([
         chamadoService.listar({ ativo: id }),
         servicoService.listar({ ativo: id })
@@ -58,28 +54,20 @@ export default function AtivoDetalhes() {
   // --- AÇÃO: SALVAR (ATUALIZAR) ---
   const handleSalvar = async () => {
     try {
-      // 1. Limpeza do Payload (O Segredo para não dar erro 400/500)
-      // Removemos campos que o Django não aceita de volta ou que são read-only
       const payload = { ...editData };
 
-      // Se 'cliente' ou 'equipe' vieram como objeto (ex: {id:1, nome: 'X'}),
-      // transformamos apenas no ID para enviar ao backend.
       if (payload.cliente && typeof payload.cliente === 'object') {
           payload.cliente = payload.cliente.id;
       }
       
-      // Remove campos automáticos que não devem ser enviados
       delete payload.id;
       delete payload.created_at;
       delete payload.updated_at;
-      delete payload.historico_servicos; // Relação reversa que pode vir do backend
+      delete payload.historico_servicos; 
       delete payload.historico_os;
 
-      // 2. Envia
       await ativoService.atualizar(id, payload);
       alert("✅ Ficha técnica atualizada com sucesso!");
-      
-      // 3. Recarrega para garantir sincronia
       carregarDados();
 
     } catch (error) {
@@ -96,10 +84,10 @@ export default function AtivoDetalhes() {
       try {
           await ativoService.excluir(id);
           alert("Ativo removido com sucesso.");
-          navigate(-1); // Volta para a tela anterior
+          navigate(-1); 
       } catch (error) {
           console.error("Erro ao excluir:", error);
-          alert("Erro ao excluir. Verifique se existem chamados vinculados a este ativo (o sistema protege contra exclusão acidental).");
+          alert("Erro ao excluir. Verifique se existem chamados vinculados a este ativo.");
       }
   };
 
@@ -133,60 +121,64 @@ export default function AtivoDetalhes() {
     printWindow.document.close();
   };
 
-  // Se estiver carregando, mostra skeleton ou loading
   if (loadingAtivo) return <div className="p-20 text-center text-[#7C69AF] font-black animate-pulse uppercase tracking-widest text-[10px]">Lendo Hardware...</div>;
   
-  // Se terminou de carregar e não tem ativo, mostra erro
   if (!ativo) return <div className="p-20 text-center text-red-500 font-bold">Ativo não localizado.</div>;
 
   const qrValue = window.location.href; 
 
   return (
-    <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500 px-4 md:px-0">
       
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all group">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all group self-start md:self-auto">
           <div className="p-2 bg-white rounded-xl shadow-sm group-hover:shadow-md border border-slate-100 transition-all"><ArrowLeft size={16} /></div>
           Voltar para Lista
         </button>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full md:w-auto">
             <button 
                 onClick={handleExcluir} 
-                className="group flex items-center gap-2 px-4 py-3 bg-white text-red-500 rounded-2xl border border-red-50 hover:bg-red-50 transition-all shadow-sm"
+                className="flex-1 md:flex-none group flex items-center justify-center gap-2 px-4 py-3 bg-white text-red-500 rounded-2xl border border-red-50 hover:bg-red-50 transition-all shadow-sm"
             >
                 <Trash2 size={18} className="group-hover:scale-110 transition-transform" /> 
-                <span className="hidden sm:inline text-xs font-bold uppercase">Excluir</span>
+                <span className="text-xs font-bold uppercase">Excluir</span>
             </button>
             <button 
                 onClick={handleSalvar} 
-                className="bg-[#302464] hover:bg-[#7C69AF] text-white px-8 py-3 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all active:scale-95 hover:shadow-purple-900/40"
+                className="flex-[2] md:flex-none bg-[#302464] hover:bg-[#7C69AF] text-white px-8 py-3 rounded-2xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all active:scale-95 hover:shadow-purple-900/40"
             >
               <Save size={18} /> Salvar Ficha
             </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
         
         {/* === COLUNA ESQUERDA (IDENTIFICAÇÃO) === */}
-        <div className="lg:col-span-4 space-y-6 sticky top-6">
+        {/* sticky apenas em LG para não quebrar no mobile */}
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
           
           {/* CARD PRINCIPAL (QR) */}
-          <div className="bg-gradient-to-b from-[#302464] to-[#1e1641] p-8 rounded-[2.5rem] text-white shadow-2xl shadow-purple-900/30 text-center relative overflow-hidden group">
+          <div className="bg-gradient-to-b from-[#302464] to-[#1e1641] p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-white shadow-2xl shadow-purple-900/30 text-center relative overflow-hidden group">
              <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#7C69AF] opacity-10 rounded-full blur-3xl"></div>
              
-             <div className="bg-white p-4 rounded-[1.5rem] mx-auto mb-6 w-fit shadow-lg transform group-hover:scale-105 transition-transform duration-500 ease-out">
-                <div className="w-32 h-32">
-                    <QRCode id="qrcode-svg" value={qrValue} size={256} style={{ height: "auto", maxWidth: "100%", width: "100%" }} viewBox={`0 0 256 256`} />
-                </div>
+             {/* Container QR Code Responsivo */}
+             <div className="bg-white p-4 rounded-[1.5rem] mx-auto mb-6 shadow-lg transform group-hover:scale-105 transition-transform duration-500 ease-out w-full max-w-[200px] aspect-square flex items-center justify-center">
+                <QRCode 
+                    id="qrcode-svg" 
+                    value={qrValue} 
+                    size={256} 
+                    style={{ height: "auto", maxWidth: "100%", width: "100%" }} 
+                    viewBox={`0 0 256 256`} 
+                />
              </div>
 
              <button onClick={handleImprimirEtiqueta} className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white backdrop-blur-sm transition-all shadow-lg" title="Imprimir Etiqueta">
                 <Printer size={18} />
              </button>
 
-             <h2 className="text-xl font-black tracking-tight">{editData.nome}</h2>
+             <h2 className="text-xl font-black tracking-tight break-words">{editData.nome}</h2>
              <p className="text-[#A696D1] text-[10px] font-black uppercase tracking-[0.2em] mt-2 mb-6 border border-[#A696D1]/30 rounded-full py-1 px-3 inline-block bg-[#302464]/50 backdrop-blur-md">
                 {editData.tipo}
              </p>
@@ -214,7 +206,7 @@ export default function AtivoDetalhes() {
         <div className="lg:col-span-8 space-y-6">
           
           {/* HARDWARE INFO */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                 <Cpu size={16} className="text-[#7C69AF]"/> Configuração de Hardware
             </h3>
@@ -243,12 +235,12 @@ export default function AtivoDetalhes() {
           </div>
 
           {/* ACESSO REMOTO E LOCAL */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                 <Globe size={16} className="text-[#7C69AF]"/> Acesso & Credenciais
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 <div className="p-6 bg-red-50 rounded-3xl border border-red-100 hover:shadow-lg hover:shadow-red-500/10 transition-all">
                     <label className="text-[9px] font-black text-red-400 uppercase tracking-widest block mb-2">ID AnyDesk (Principal)</label>
                     <input className="w-full bg-white px-4 py-3 rounded-xl border-none outline-none font-black text-xl text-red-600 shadow-sm placeholder:text-red-200" value={editData.anydesk_id || ''} onChange={e => setEditData({...editData, anydesk_id: e.target.value})} placeholder="000 000 000"/>
@@ -270,109 +262,109 @@ export default function AtivoDetalhes() {
 
                 <div className="md:col-span-2 flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <Info size={20} className="text-[#7C69AF]"/>
-                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed uppercase tracking-widest flex items-center gap-2">
-                        IP LOCAL: <input className="bg-transparent border-b border-slate-300 focus:border-[#7C69AF] font-black text-[#302464] outline-none w-32 px-2" value={editData.ip_local || ''} onChange={e => setEditData({...editData, ip_local: e.target.value})} placeholder="192.168..."/>
+                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed uppercase tracking-widest flex items-center gap-2 w-full">
+                        IP LOCAL: <input className="bg-transparent border-b border-slate-300 focus:border-[#7C69AF] font-black text-[#302464] outline-none w-full md:w-32 px-2" value={editData.ip_local || ''} onChange={e => setEditData({...editData, ip_local: e.target.value})} placeholder="192.168..."/>
                     </p>
                 </div>
             </div>
           </div>
 
           {/* === HISTÓRICO UNIFICADO (COM ABAS) === */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
-             
-             {/* BARRA DE ABAS */}
-             <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2">
-                 <button 
-                    onClick={() => setActiveTab('TICKETS')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'TICKETS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
-                 >
-                    <History size={16} className={activeTab === 'TICKETS' ? 'text-[#7C69AF]' : 'text-slate-300'} /> 
-                    Tickets / Chamados 
-                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoChamados.length}</span>
-                 </button>
+          <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
+              
+              {/* BARRA DE ABAS */}
+              <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2 overflow-x-auto no-scrollbar">
+                  <button 
+                     onClick={() => setActiveTab('TICKETS')}
+                     className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'TICKETS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
+                  >
+                     <History size={16} className={activeTab === 'TICKETS' ? 'text-[#7C69AF]' : 'text-slate-300'} /> 
+                     Tickets / Chamados 
+                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoChamados.length}</span>
+                  </button>
 
-                 <button 
-                    onClick={() => setActiveTab('OS')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'OS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
-                 >
-                    <Wrench size={16} className={activeTab === 'OS' ? 'text-amber-500' : 'text-slate-300'} /> 
-                    Ordens de Serviço
-                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoOS.length}</span>
-                 </button>
-             </div>
+                  <button 
+                     onClick={() => setActiveTab('OS')}
+                     className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'OS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
+                  >
+                     <Wrench size={16} className={activeTab === 'OS' ? 'text-amber-500' : 'text-slate-300'} /> 
+                     Ordens de Serviço
+                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoOS.length}</span>
+                  </button>
+              </div>
 
-             {/* CONTEÚDO DA ABA */}
-             <div className="p-8">
-                
-                {/* LISTA DE CHAMADOS */}
-                {activeTab === 'TICKETS' && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {historicoChamados.length === 0 ? (
-                            <div className="text-center py-10 opacity-50"><History size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem chamados registrados.</p></div>
-                        ) : (
-                            historicoChamados.map(ticket => (
-                                <div key={ticket.id} onClick={() => navigate(`/chamados/${ticket.id}`)} className="group flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-purple-100 hover:shadow-xl hover:shadow-purple-900/5 cursor-pointer transition-all">
-                                    <div className="flex items-center gap-5">
-                                        <div className={`p-4 rounded-2xl ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                            {ticket.status === 'FINALIZADO' ? <CheckCircle2 size={20} /> : <History size={20} />}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{ticket.titulo}</h4>
-                                            <div className="flex items-center gap-3 mt-1.5">
-                                                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(ticket.created_at).toLocaleDateString()}</span>
-                                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{ticket.prioridade}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                            {ticket.status.replace('_', ' ')}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+              {/* CONTEÚDO DA ABA */}
+              <div className="p-6 md:p-8">
+                 
+                 {/* LISTA DE CHAMADOS */}
+                 {activeTab === 'TICKETS' && (
+                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                         {historicoChamados.length === 0 ? (
+                             <div className="text-center py-10 opacity-50"><History size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem chamados registrados.</p></div>
+                         ) : (
+                             historicoChamados.map(ticket => (
+                                 <div key={ticket.id} onClick={() => navigate(`/chamados/${ticket.id}`)} className="group flex flex-col md:flex-row items-start md:items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-purple-100 hover:shadow-xl hover:shadow-purple-900/5 cursor-pointer transition-all gap-4">
+                                     <div className="flex items-center gap-5">
+                                         <div className={`p-4 rounded-2xl shrink-0 ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                             {ticket.status === 'FINALIZADO' ? <CheckCircle2 size={20} /> : <History size={20} />}
+                                         </div>
+                                         <div>
+                                             <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{ticket.titulo}</h4>
+                                             <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                                                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(ticket.created_at).toLocaleDateString()}</span>
+                                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{ticket.prioridade}</span>
+                                             </div>
+                                         </div>
+                                     </div>
+                                     <div className="self-end md:self-center">
+                                         <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                             {ticket.status.replace('_', ' ')}
+                                         </span>
+                                     </div>
+                                 </div>
+                             ))
+                         )}
+                     </div>
+                 )}
 
-                {/* LISTA DE O.S. */}
-                {activeTab === 'OS' && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {historicoOS.length === 0 ? (
-                            <div className="text-center py-10 opacity-50"><Wrench size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem O.S. vinculadas.</p></div>
-                        ) : (
-                            historicoOS.map(os => (
-                                <div key={os.id} onClick={() => navigate(`/servicos/${os.id}`)} className="group flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-amber-100 hover:shadow-xl hover:shadow-amber-900/5 cursor-pointer transition-all">
-                                    <div className="flex items-center gap-5">
-                                        <div className="p-4 rounded-2xl bg-[#302464] text-white shadow-lg shadow-purple-900/20">
-                                            <FileText size={20} />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{os.titulo}</h4>
-                                            <div className="flex items-center gap-3 mt-1.5">
-                                                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(os.created_at || os.data_entrada).toLocaleDateString()}</span>
-                                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{os.tipo}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <span className="text-[10px] font-black text-[#302464] bg-purple-50 px-2 py-1 rounded-lg">OS #{String(os.id).padStart(4, '0')}</span>
-                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${
-                                            os.status === 'CONCLUIDO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                                            os.status === 'AGUARDANDO_PECA' ? 'bg-red-50 text-red-600 border-red-100' : 
-                                            'bg-amber-50 text-amber-600 border-amber-100'
-                                        }`}>
-                                            {os.status.replace('_', ' ')}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
-             </div>
+                 {/* LISTA DE O.S. */}
+                 {activeTab === 'OS' && (
+                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                         {historicoOS.length === 0 ? (
+                             <div className="text-center py-10 opacity-50"><Wrench size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem O.S. vinculadas.</p></div>
+                         ) : (
+                             historicoOS.map(os => (
+                                 <div key={os.id} onClick={() => navigate(`/servicos/${os.id}`)} className="group flex flex-col md:flex-row items-start md:items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-amber-100 hover:shadow-xl hover:shadow-amber-900/5 cursor-pointer transition-all gap-4">
+                                     <div className="flex items-center gap-5">
+                                         <div className="p-4 rounded-2xl bg-[#302464] text-white shadow-lg shadow-purple-900/20 shrink-0">
+                                             <FileText size={20} />
+                                         </div>
+                                         <div>
+                                             <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{os.titulo}</h4>
+                                             <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                                                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(os.created_at || os.data_entrada).toLocaleDateString()}</span>
+                                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{os.tipo}</span>
+                                             </div>
+                                         </div>
+                                     </div>
+                                     <div className="self-end md:self-center flex flex-col items-end gap-2">
+                                         <span className="text-[10px] font-black text-[#302464] bg-purple-50 px-2 py-1 rounded-lg">OS #{String(os.id).padStart(4, '0')}</span>
+                                         <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${
+                                             os.status === 'CONCLUIDO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                                             os.status === 'AGUARDANDO_PECA' ? 'bg-red-50 text-red-600 border-red-100' : 
+                                             'bg-amber-50 text-amber-600 border-amber-100'
+                                         }`}>
+                                             {os.status.replace('_', ' ')}
+                                         </span>
+                                     </div>
+                                 </div>
+                             ))
+                         )}
+                     </div>
+                 )}
+              </div>
           </div>
 
         </div>

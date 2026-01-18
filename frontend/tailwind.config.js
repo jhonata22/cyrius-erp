@@ -9,8 +9,8 @@ export default {
       colors: {
         // Nova Identidade Cyrius baseada na imagem
         cyrius: {
-          dark: '#302464',    // Roxo Profundo (Base do Menu e Ondas)
-          primary: '#7C69AF', // Violeta Vibrante (Destaque e Botões)
+          dark: '#723EBE',    // Roxo Profundo (Base do Menu e Ondas)
+          primary: '#7235ce', // Violeta Vibrante (Destaque e Botões)
           light: '#A696D1',   // Lavanda Suave (Ícones e Detalhes)
         },
         // Mantemos cores semânticas de status ajustadas ao tom do sistema
