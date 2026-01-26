@@ -1,34 +1,31 @@
-# Node (Frontend)
+
+node_modules/
 frontend/node_modules/
 frontend/dist/
 .eslintcache
 
-# Python (Backend)
+__pycache__/
+*.py[cod]
+*$py.class
 backend/__pycache__/
-backend/*.pyc
-backend/db.sqlite3
-backend/.env
-backend/chamados/migations/*
-backend/chamados/management/
-backend/clientes/migations/*
-backend/clientes/management/
-Backend/contratos/*
-backend/docs_estoque/*
-backend/equipe/migrations/*
-backend/estoque/migrations/*
-backend/estoque/management/
-backend/financeiro/migrations/*
-backend/fotos_equipe/*
-backend/infra/migations/*
-backend/infra/management/
-backend/media/*
-backend/servicos/migrations/*
-backend/servicos_docs/*
+backend/*/__pycache__/
 
-# Docker & Sistema
-.DS_Store
-*.log
+
+backend/db.sqlite3
+
 
 .env
-backend/docs_estoque/*.pdf
-backend/*
+backend/.env
+
+backend/media/
+backend/fotos_equipe/
+backend/docs_estoque/
+backend/servicos_docs/
+backend/infra/docs/
+
+*/migrations/__pycache__/
+
+.DS_Store
+Thumbs.db
+*.log
+logs/
