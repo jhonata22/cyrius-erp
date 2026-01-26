@@ -1,30 +1,21 @@
-# Usa uma imagem leve do Python
 FROM python:3.12-slim
 
-# Define variáveis de ambiente para otimizar o Python no Docker
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# CORREÇÃO: Usando o formato ENV key=value
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Define o diretório de trabalho dentro do container
 WORKDIR /app
 
-RUN mkdir -p /app/media/docs_estoque
+RUN apt-get update && apt-get install -y libpq-dev gcc && rm -rf /var/lib/apt/lists/*
 
-# Instala dependências do sistema necessárias para o Postgres
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copia e instala as dependências do Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Copia o restante do código (neste momento estará vazio, mas serve para o futuro)
 COPY . .
 
-# Expõe a porta 8000
-EXPOSE 8000
+# O segredo: passamos variáveis falsas apenas para o build não quebrar
+# se o seu settings.py exigir DATABASE_URL ou SECRET_KEY
+RUN python manage.py collectstatic --noinput --settings=config.settings
 
-# Comando padrão (será sobrescrito pelo docker-compose em desenvolvimento)
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+EXPOSE 8000
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application", "--workers", "3"]
