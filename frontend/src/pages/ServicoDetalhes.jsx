@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
   AlertTriangle, Truck, Download, Printer, QrCode,
-  Edit // <--- IMPORT NOVO
+  Edit, Monitor // <--- IMPORT NOVO (Monitor)
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
@@ -23,7 +23,7 @@ export default function ServicoDetalhes() {
   const [modalItemOpen, setModalItemOpen] = useState(false);
   const [modalAnexoOpen, setModalAnexoOpen] = useState(false);
 
-  // Forms dos Modais (ATUALIZADO: Inclui ID para edição)
+  // Forms dos Modais
   const [itemForm, setItemForm] = useState({ id: null, produto: '', quantidade: 1 });
   const [anexoForm, setAnexoForm] = useState({ arquivo: null, tipo: 'FOTO', descricao: '' });
 
@@ -105,7 +105,6 @@ export default function ServicoDetalhes() {
     }
   };
 
-  // --- AÇÃO 1: ADICIONAR OU EDITAR ITEM ---
   const handleAdicionarItem = async (e) => {
     e.preventDefault();
     if (!itemForm.produto) return;
@@ -116,32 +115,27 @@ export default function ServicoDetalhes() {
       const payload = {
         produto: itemForm.produto,
         quantidade: itemForm.quantidade,
-        preco_venda: prodSelecionado ? prodSelecionado.preco_venda_sugerido : 0 // Mantém preço se achar
+        preco_venda: prodSelecionado ? prodSelecionado.preco_venda_sugerido : 0 
       };
 
       if (itemForm.id) {
-        // MODO EDIÇÃO
-        // Certifique-se que seu service tenha o método atualizarItem (PUT/PATCH)
         await servicoService.atualizarItem(itemForm.id, payload);
       } else {
-        // MODO CRIAÇÃO
         await servicoService.adicionarItem(id, payload);
       }
 
       setModalItemOpen(false);
-      setItemForm({ id: null, produto: '', quantidade: 1 }); // Reseta
+      setItemForm({ id: null, produto: '', quantidade: 1 }); 
       carregarDados();
     } catch (error) {
       alert("Erro ao salvar item: " + (error.response?.data?.erro || "Verifique o estoque."));
     }
   };
 
-  // --- NOVA AÇÃO: EXCLUIR ITEM ---
   const handleExcluirItem = async (itemId) => {
     if(!window.confirm("Tem certeza que deseja remover este item?")) return;
 
     try {
-        // Certifique-se que seu service tenha o método removerItem (DELETE)
         await servicoService.removerItem(itemId); 
         carregarDados();
     } catch (error) {
@@ -149,11 +143,10 @@ export default function ServicoDetalhes() {
     }
   };
 
-  // --- HELPER: ABRIR MODAL PARA EDIÇÃO ---
   const abrirEdicao = (item) => {
     setItemForm({
         id: item.id,
-        produto: item.produto, // Assumindo que o back retorna o ID do produto neste campo ou em produto_id
+        produto: item.produto, 
         quantidade: item.quantidade
     });
     setModalItemOpen(true);
@@ -173,7 +166,6 @@ export default function ServicoDetalhes() {
     }
   };
 
-  // --- FUNÇÕES DE IMPRESSÃO ---
   const imprimirOS = () => {
     const totalGeral = (parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0);
     const logoHtml = `<img src="/logo.png" alt="CYRIUS" style="max-height: 200px;" />`; 
@@ -212,6 +204,7 @@ export default function ServicoDetalhes() {
               <div>
                 <p><strong>Cliente:</strong> ${os.nome_cliente}</p>
                 <p><strong>Técnico:</strong> ${os.nome_tecnico || 'Não atribuído'}</p>
+                ${os.nome_ativo ? `<p><strong>Ativo:</strong> ${os.nome_ativo}</p>` : ''} 
               </div>
               <div>
                 <p><strong>Tipo:</strong> ${os.tipo}</p>
@@ -322,6 +315,19 @@ export default function ServicoDetalhes() {
                     </span>
                 </div>
                 <p className="text-slate-400 font-bold text-sm mt-1">{os.nome_cliente} • {os.titulo}</p>
+                
+                {/* --- AQUI: MENÇÃO AO ATIVO --- */}
+                {os.ativo && (
+                    <div 
+                        onClick={() => navigate(`/ativos/${os.ativo}`)}
+                        className="flex items-center gap-2 mt-2 text-[#7C69AF] hover:text-[#302464] bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg w-fit cursor-pointer transition-colors border border-purple-100 group"
+                    >
+                        <Monitor size={14} className="group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-black uppercase tracking-wide">
+                            {os.nome_ativo || 'Ver Ativo Vinculado'}
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
 
@@ -399,7 +405,6 @@ export default function ServicoDetalhes() {
                                     <p className="text-xs text-slate-400 font-bold">{item.quantidade}x {formatMoney(item.preco_venda)}</p>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <p className="font-black text-[#302464]">{formatMoney(item.subtotal)}</p>
                                     
                                     {/* BOTÕES DE AÇÃO (EDITAR / EXCLUIR) */}
                                     {!isLocked && (

@@ -15,6 +15,7 @@ class Cliente(TimeStampedModel):
         CONTRATO = 'CONTRATO', 'Contrato'
         AVULSO = 'AVULSO', 'Avulso'
 
+    foto = models.ImageField(upload_to='clientes_fotos/', null=True, blank=True)
     razao_social = models.CharField(max_length=100)
     cpf = models.CharField(max_length=11, null=True, blank=True)
     cnpj = models.CharField(max_length=18, null=True, blank=True)

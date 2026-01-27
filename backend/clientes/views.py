@@ -21,7 +21,7 @@ class OptimizedQuerySetMixin:
         return qs
 
 class ClienteViewSet(viewsets.ModelViewSet):
-    queryset = Cliente.objects.all()
+    queryset = Cliente.objects.all().order_by('-id')
     serializer_class = ClienteSerializer
     permission_classes = [IsFuncionario] # Ajuste conforme suas regras (IsFuncionario)
 

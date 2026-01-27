@@ -1,0 +1,63 @@
+# Nome do arquivo: docker-compose.dev.yml
+# docker-compose.dev.yml (Ajuste na parte do DB)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cyrius-db-dev
+    environment:
+      # AGORA ELE LÊ DO SEU .ENV
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      # Ajustamos o teste também para usar a variável
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:7-alpine
+    container_name: cyrius-redis-dev
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    container_name: cyrius-backend-dev
+    # Mágica do DEV: Monta sua pasta local dentro do container
+    # Assim que você salva o arquivo .py, o servidor reinicia sozinho!
+    volumes:
+      - ./backend:/app
+      - static_volume_dev:/app/static
+      - ./media_volume:/app/media
+    env_file: .env
+    # Usa o servidor de desenvolvimento do Django (mais verboso para erros)
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000" # Acesso direto à API se precisar
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # No modo DEV, compilamos o front localmente a cada subida
+  nginx:
+    build: ./frontend
+    container_name: cyrius-frontend-dev
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - static_volume_dev:/app/static
+      - ./media_volume:/app/media
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data_dev:
+  media_volume_dev:
+  static_volume_dev:

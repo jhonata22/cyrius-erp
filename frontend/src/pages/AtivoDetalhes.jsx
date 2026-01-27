@@ -4,11 +4,10 @@ import {
   ArrowLeft, Monitor, Cpu, Layers, HardDrive, 
   Trash2, Smartphone, Save, Globe, 
   Printer, Info, History, Calendar, 
-  Wrench, FileText, CheckCircle2
+  Wrench, FileText, CheckCircle2, X, Plus, AlertTriangle, Truck
 } from 'lucide-react';
 import QRCode from "react-qr-code"; 
 import ativoService from '../services/ativoService';
-// chamadoService removido do carregamento pois os dados já vêm no Ativo
 import servicoService from '../services/servicoService'; 
 
 export default function AtivoDetalhes() {
@@ -28,23 +27,13 @@ export default function AtivoDetalhes() {
     try {
       setLoadingAtivo(true);
       
-      // 1. Busca dados do Ativo
-      // Graças ao SerializerMethodField no backend, isso já traz os chamados filtrados
       const dadosAtivo = await ativoService.buscarPorId(id);
       
-      // Atualiza estados principais
       setAtivo(dadosAtivo);
-      
-      // Prepara dados para edição
       setEditData({ ...dadosAtivo });
 
-      // --- CORREÇÃO PRINCIPAL AQUI ---
-      // Não fazemos mais 'chamadoService.listar()', pois isso buscava todos os chamados.
-      // Usamos a lista que veio "aninhada" dentro do ativo, que é 100% segura.
       setHistoricoChamados(dadosAtivo.historico_servicos || []);
 
-      // Busca apenas as Ordens de Serviço (OS) separadamente
-      // (Mantido separado caso o serializer de Ativo não inclua OS ainda)
       try {
         const osResults = await servicoService.listar({ ativo: id });
         setHistoricoOS(osResults);
@@ -65,26 +54,22 @@ export default function AtivoDetalhes() {
   // --- AÇÃO: SALVAR (ATUALIZAR) ---
   const handleSalvar = async () => {
     try {
-      // 1. Limpeza do Payload
       const payload = { ...editData };
 
       if (payload.cliente && typeof payload.cliente === 'object') {
           payload.cliente = payload.cliente.id;
       }
       
-      // Remove campos que não devem ser enviados de volta
       delete payload.id;
       delete payload.created_at;
       delete payload.updated_at;
-      delete payload.historico_servicos; // Importante remover para não pesar o request
+      delete payload.historico_servicos; 
       delete payload.historico_os;
       delete payload.nome_cliente;
 
-      // 2. Envia
       await ativoService.atualizar(id, payload);
       alert("✅ Ficha técnica atualizada com sucesso!");
       
-      // 3. Recarrega para garantir sincronia
       carregarDados();
 
     } catch (error) {
@@ -101,7 +86,7 @@ export default function AtivoDetalhes() {
       try {
           await ativoService.excluir(id);
           alert("Ativo removido com sucesso.");
-          navigate(-1); // Volta para a tela anterior
+          navigate(-1); 
       } catch (error) {
           console.error("Erro ao excluir:", error);
           alert("Erro ao excluir. Verifique se existem chamados vinculados a este ativo.");
@@ -145,15 +130,16 @@ export default function AtivoDetalhes() {
   const qrValue = window.location.href; 
 
   return (
-    <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
+    // AJUSTE: Adicionado px-4 para não colar na borda em mobile
+    <div className="max-w-7xl mx-auto pb-20 px-4 md:px-8 animate-in fade-in duration-500">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all group">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all group w-full sm:w-auto justify-center sm:justify-start">
           <div className="p-2 bg-white rounded-xl shadow-sm group-hover:shadow-md border border-slate-100 transition-all"><ArrowLeft size={16} /></div>
           Voltar para Lista
         </button>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full sm:w-auto justify-center sm:justify-end">
             <button 
                 onClick={handleExcluir} 
                 className="group flex items-center gap-2 px-4 py-3 bg-white text-red-500 rounded-2xl border border-red-50 hover:bg-red-50 transition-all shadow-sm"
@@ -173,7 +159,10 @@ export default function AtivoDetalhes() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* === COLUNA ESQUERDA (IDENTIFICAÇÃO) === */}
-        <div className="lg:col-span-4 space-y-6 sticky top-6">
+        {/* AJUSTE: Mudado 'sticky top-6' para 'lg:sticky lg:top-6'. 
+            Isso faz com que o sticky só funcione em telas grandes (Desktop). 
+            Em mobile, ele rola normalmente. */}
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
           
           {/* CARD PRINCIPAL (QR) */}
           <div className="bg-gradient-to-b from-[#302464] to-[#1e1641] p-8 rounded-[2.5rem] text-white shadow-2xl shadow-purple-900/30 text-center relative overflow-hidden group">
@@ -217,7 +206,7 @@ export default function AtivoDetalhes() {
         <div className="lg:col-span-8 space-y-6">
           
           {/* HARDWARE INFO */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                 <Cpu size={16} className="text-[#7C69AF]"/> Configuração de Hardware
             </h3>
@@ -246,7 +235,7 @@ export default function AtivoDetalhes() {
           </div>
 
           {/* ACESSO REMOTO E LOCAL */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+          <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                 <Globe size={16} className="text-[#7C69AF]"/> Acesso & Credenciais
             </h3>
@@ -282,7 +271,7 @@ export default function AtivoDetalhes() {
 
           {/* === HISTÓRICO UNIFICADO (COM ABAS) === */}
           <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
-             
+              
              {/* BARRA DE ABAS */}
              <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2">
                  <button 
@@ -290,7 +279,8 @@ export default function AtivoDetalhes() {
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'TICKETS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
                  >
                     <History size={16} className={activeTab === 'TICKETS' ? 'text-[#7C69AF]' : 'text-slate-300'} /> 
-                    Tickets / Chamados 
+                    <span className="hidden sm:inline">Tickets / Chamados</span>
+                    <span className="sm:hidden">Tickets</span>
                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoChamados.length}</span>
                  </button>
 
@@ -299,13 +289,14 @@ export default function AtivoDetalhes() {
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'OS' ? 'bg-white shadow-md text-[#302464]' : 'text-slate-400 hover:bg-white/50'}`}
                  >
                     <Wrench size={16} className={activeTab === 'OS' ? 'text-amber-500' : 'text-slate-300'} /> 
-                    Ordens de Serviço
+                    <span className="hidden sm:inline">Ordens de Serviço</span>
+                    <span className="sm:hidden">O.S.</span>
                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{historicoOS.length}</span>
                  </button>
              </div>
 
              {/* CONTEÚDO DA ABA */}
-             <div className="p-8">
+             <div className="p-4 md:p-8">
                 
                 {/* LISTA DE CHAMADOS */}
                 {activeTab === 'TICKETS' && (
@@ -314,13 +305,14 @@ export default function AtivoDetalhes() {
                             <div className="text-center py-10 opacity-50"><History size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem chamados registrados.</p></div>
                         ) : (
                             historicoChamados.map(ticket => (
-                                <div key={ticket.id} onClick={() => navigate(`/chamados/${ticket.id}`)} className="group flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-purple-100 hover:shadow-xl hover:shadow-purple-900/5 cursor-pointer transition-all">
+                                // AJUSTE: Flex-col em mobile para não quebrar layout
+                                <div key={ticket.id} onClick={() => navigate(`/chamados/${ticket.id}`)} className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-purple-100 hover:shadow-xl hover:shadow-purple-900/5 cursor-pointer transition-all gap-4 sm:gap-0">
                                     <div className="flex items-center gap-5">
                                         <div className={`p-4 rounded-2xl ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
                                             {ticket.status === 'FINALIZADO' ? <CheckCircle2 size={20} /> : <History size={20} />}
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{ticket.titulo}</h4>
+                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors line-clamp-1">{ticket.titulo}</h4>
                                             <div className="flex items-center gap-3 mt-1.5">
                                                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(ticket.created_at).toLocaleDateString()}</span>
                                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
@@ -328,8 +320,8 @@ export default function AtivoDetalhes() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                    <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border w-full sm:w-auto text-center ${ticket.status === 'FINALIZADO' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
                                             {ticket.status.replace('_', ' ')}
                                         </span>
                                     </div>
@@ -346,13 +338,14 @@ export default function AtivoDetalhes() {
                             <div className="text-center py-10 opacity-50"><Wrench size={48} className="mx-auto text-slate-200 mb-2"/><p className="text-slate-400 font-bold text-xs uppercase">Sem O.S. vinculadas.</p></div>
                         ) : (
                             historicoOS.map(os => (
-                                <div key={os.id} onClick={() => navigate(`/servicos/${os.id}`)} className="group flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-amber-100 hover:shadow-xl hover:shadow-amber-900/5 cursor-pointer transition-all">
+                                // AJUSTE: Flex-col em mobile para não quebrar layout
+                                <div key={os.id} onClick={() => navigate(`/servicos/${os.id}`)} className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-amber-100 hover:shadow-xl hover:shadow-amber-900/5 cursor-pointer transition-all gap-4 sm:gap-0">
                                     <div className="flex items-center gap-5">
                                         <div className="p-4 rounded-2xl bg-[#302464] text-white shadow-lg shadow-purple-900/20">
                                             <FileText size={20} />
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors">{os.titulo}</h4>
+                                            <h4 className="font-black text-slate-700 text-sm group-hover:text-[#302464] transition-colors line-clamp-1">{os.titulo}</h4>
                                             <div className="flex items-center gap-3 mt-1.5">
                                                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> {new Date(os.created_at || os.data_entrada).toLocaleDateString()}</span>
                                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
@@ -360,9 +353,9 @@ export default function AtivoDetalhes() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <span className="text-[10px] font-black text-[#302464] bg-purple-50 px-2 py-1 rounded-lg">OS #{String(os.id).padStart(4, '0')}</span>
-                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border ${
+                                    <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
+                                        <span className="text-[10px] font-black text-[#302464] bg-purple-50 px-2 py-1 rounded-lg w-full sm:w-auto text-center">OS #{String(os.id).padStart(4, '0')}</span>
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border w-full sm:w-auto text-center ${
                                             os.status === 'CONCLUIDO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                                             os.status === 'AGUARDANDO_PECA' ? 'bg-red-50 text-red-600 border-red-100' : 
                                             'bg-amber-50 text-amber-600 border-amber-100'

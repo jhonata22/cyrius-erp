@@ -17,7 +17,7 @@ const clienteService = {
   },
 
   atualizar: async (id, payload) => {
-    const response = await api.put(`/clientes/${id}/`, payload);
+    const response = await api.patch(`/clientes/${id}/`, payload);
     return response.data;
   },
 

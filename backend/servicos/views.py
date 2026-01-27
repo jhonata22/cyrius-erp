@@ -69,14 +69,12 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             return Response(OrdemServicoSerializer(os_atualizada).data)
         
         except ValidationError as e:
-            # Captura erro de saldo 0.0 ou casas decimais no financeiro
+            # Retorna o erro formatado para o React exibir bonito
             return Response({"erro": self._format_validation_error(e)}, status=400)
         
         except Exception as e:
-            traceback.print_exc() # Log no terminal para debug
-            return Response({"erro": f"Erro interno no servidor: {str(e)}"}, status=500)
-
-    @action(detail=True, methods=['post'], url_path='anexar')
+            traceback.print_exc() # Mantemos esse log de erro interno pois é útil
+            return Response({"erro": f"Erro interno no servidor: {str(e)}"}, status=500)    @action(detail=True, methods=['post'], url_path='anexar')
     def anexar_arquivo(self, request, pk=None):
         os = self.get_object()
         arquivo = request.FILES.get('arquivo')
@@ -98,8 +96,6 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             return e.message_dict  # Retorna dicionário: {'campo': ['erro']}
         return e.messages[0] if e.messages else str(e) # Retorna string amigável
 
-
-# --- CRUDs Adicionais ---
 
 class ItemServicoViewSet(viewsets.ModelViewSet):
     queryset = ItemServico.objects.all()

@@ -1,7 +1,7 @@
 import api from './api';
 
 const chamadoService = {
-  // LISTAR: Mantido para a tela de listagem (Chamados.jsx) com paginação
+  // LISTAR GERAL: Mantido para a tela de listagem principal
   listar: async (pagina = 1, dataInicio = '', dataFim = '', status = '') => {
     const params = new URLSearchParams({
       page: pagina,
@@ -9,9 +9,26 @@ const chamadoService = {
       data_fim: dataFim,
       status: status
     });
+    // Remove params vazios para não sujar a URL
+    if (!dataInicio) params.delete('data_inicio');
+    if (!dataFim) params.delete('data_fim');
+    if (!status) params.delete('status');
+
     const response = await api.get(`/chamados/?${params.toString()}`);
     return response.data; // Retorna { count, next, results: [] }
   },
+
+  // --- NOVO MÉTODO: LISTAR POR CLIENTE (Usado na Documentação) ---
+  listarPorCliente: async (clienteId, pagina = 1) => {
+    const response = await api.get('/chamados/', {
+        params: {
+            cliente: clienteId, // O Backend deve filtrar por ?cliente=ID
+            page: pagina
+        }
+    });
+    return response.data;
+  },
+  // ---------------------------------------------------------------
 
   buscarPorId: async (id) => {
     const response = await api.get(`/chamados/${id}/`);
@@ -29,6 +46,7 @@ const chamadoService = {
   
   atualizar: async (id, dados) => {
     const payload = { ...dados };
+    // Verifica se data_agendamento é válida antes de converter
     if (payload.data_agendamento && payload.data_agendamento.length > 10) {
       payload.data_agendamento = new Date(payload.data_agendamento).toISOString();
     }
@@ -44,18 +62,11 @@ const chamadoService = {
     return response.data;
   },
 
-  // ESTATÍSTICAS DO DASHBOARD (Refatorado para a nova rota do Backend)
+  // ESTATÍSTICAS DO DASHBOARD
   getDashboardStats: async (mesAno) => {
-    /**
-     * mesAno chega como "2026-01".
-     * Chamamos a nova action @action estatisticas do Django.
-     * Isso ignora a paginação e traz os dados reais de todo o mês.
-     */
     const response = await api.get('/chamados/estatisticas/', {
       params: { mes: mesAno }
     });
-    
-    // Agora retornamos os dados exatamente como o Django envia
     return response.data; 
   }
 };

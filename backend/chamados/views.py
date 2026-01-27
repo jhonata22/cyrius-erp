@@ -31,6 +31,7 @@ class ChamadoViewSet(viewsets.ModelViewSet):
         data_inicio = self.request.query_params.get('data_inicio')
         data_fim = self.request.query_params.get('data_fim')
         status_filtro = self.request.query_params.get('status')
+        cliente_id = self.request.query_params.get('cliente')
 
         if data_inicio and data_fim:
             queryset = queryset.filter(data_abertura__date__range=[data_inicio, data_fim])
@@ -41,6 +42,10 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 
         if status_filtro:
             queryset = queryset.filter(status=status_filtro)
+        if cliente_id:
+            queryset = queryset.filter(cliente_id=cliente_id)
+
+        
             
         return queryset
 

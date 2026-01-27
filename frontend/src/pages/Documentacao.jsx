@@ -5,13 +5,15 @@ import {
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, 
   Search, BookOpen, X, ChevronRight, CheckCircle2, 
   AlertTriangle, Info, MapPin, Plus, Trash2, Eye, EyeOff,
-  FileText, Download, UploadCloud // <--- NOVOS ÍCONES
+  FileText, Download, UploadCloud, 
+  History, Calendar, ChevronLeft, Camera
 } from 'lucide-react';
 
 // SERVIÇOS
 import clienteService from '../services/clienteService';
 import documentacaoService from '../services/documentacaoService';
 import equipeService from '../services/equipeService';
+import chamadoService from '../services/chamadoService';
 
 export default function Documentacao() {
   const { id } = useParams();
@@ -25,6 +27,13 @@ export default function Documentacao() {
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
   
+  // --- NOVOS ESTADOS PARA O HISTÓRICO ---
+  const [historicoChamados, setHistoricoChamados] = useState([]);
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
+  const [totalHistorico, setTotalHistorico] = useState(0);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  // ---------------------------------------
+
   const [currentUser, setCurrentUser] = useState(null);
   const [visiblePasswords, setVisiblePasswords] = useState({});
     
@@ -38,7 +47,6 @@ export default function Documentacao() {
     estrutura_servidores: '',
     rotina_backup: '',
     pontos_fracos_melhorias: ''
-    // contrato: removido daqui pois agora é uma lista de arquivos
   });
 
   const togglePassword = (type, itemId) => {
@@ -88,6 +96,47 @@ export default function Documentacao() {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
+  // --- Carregar Histórico de Chamados (Paginado) ---
+  useEffect(() => {
+    if (activeTab === 'historico' && id) {
+        const fetchHistorico = async () => {
+            setLoadingHistorico(true);
+            try {
+                const response = await chamadoService.listarPorCliente(id, paginaHistorico);
+                setHistoricoChamados(response.results || []); 
+                setTotalHistorico(response.count || 0);
+            } catch (error) {
+                console.error("Erro ao carregar histórico", error);
+            } finally {
+                setLoadingHistorico(false);
+            }
+        };
+        fetchHistorico();
+    }
+  }, [activeTab, id, paginaHistorico]);
+  
+  // --- FUNÇÃO NOVA: ATUALIZAR FOTO ---
+  const handleUpdateFoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('foto', file);
+
+      // Envia apenas a foto via PATCH
+      const clienteAtualizado = await clienteService.atualizar(id, formData);
+      
+      // Atualiza o estado local imediatamente
+      setCliente(prev => ({ ...prev, foto: clienteAtualizado.foto }));
+      alert("Foto do perfil atualizada!");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao atualizar foto.");
+    }
+  };
+  // -----------------------------------
+
   const handleSalvarTextos = async () => {
     try {
       const payload = { cliente: parseInt(id), ...textos };
@@ -106,19 +155,14 @@ export default function Documentacao() {
       let url = '';
       let payload;
 
-      // Lógica específica para Contrato (Upload de Arquivo)
       if (modalAberto === 'contrato') {
-        url = '/contratos/'; // Endpoint imaginário para contratos
-        
-        // Para envio de arquivo, usamos FormData
+        url = '/contratos/';
         const formData = new FormData();
         formData.append('cliente', id);
-        formData.append('arquivo', formTemp.arquivo); // O arquivo PDF
+        formData.append('arquivo', formTemp.arquivo);
         formData.append('descricao', formTemp.descricao);
-        
         payload = formData;
       } else {
-        // Lógica padrão para JSON
         payload = { ...formTemp, cliente: parseInt(id) };
         if (modalAberto === 'contato') url = '/contatos/';
         if (modalAberto === 'provedor') url = '/provedores/';
@@ -149,6 +193,7 @@ export default function Documentacao() {
 
   const tabs = [
     { id: 'geral', label: 'Cadastro', icon: Building2 },
+    { id: 'historico', label: 'Histórico', icon: History },
     { id: 'rede', label: 'Rede', icon: Globe },
     { id: 'senhas', label: 'Emails', icon: Mail },
     { id: 'inventario', label: 'Ativos', icon: Monitor },
@@ -156,13 +201,20 @@ export default function Documentacao() {
     { id: 'consultoria', label: 'Consultoria', icon: TrendingUp },
   ];
 
-  // --- ALTERAÇÃO 1: RESTRIÇÃO APENAS PARA SÓCIO ---
   if (currentUser && currentUser.cargo === 'SOCIO') {
     tabs.push({ id: 'contrato', label: 'Contratos', icon: FileText });
   }
 
+  const STATUS_MAP = {
+    ABERTO: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    EM_ANDAMENTO: 'bg-blue-50 text-blue-600 border-blue-100',
+    PENDENTE: 'bg-amber-50 text-amber-600 border-amber-100',
+    FINALIZADO: 'bg-slate-50 text-slate-500 border-slate-100',
+    CANCELADO: 'bg-red-50 text-red-500 border-red-100',
+  };
+
+  // --- ALTERAÇÃO AQUI: LISTAGEM DE CLIENTES ---
   if (!id) {
-    // ... (Código da lista de clientes mantido igual, omitido para brevidade) ...
     const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
     return (
         <div className="animate-in fade-in duration-500">
@@ -178,7 +230,18 @@ export default function Documentacao() {
             {filtrados.map(cli => (
               <div key={cli.id} onClick={() => navigate(`/documentacao/${cli.id}`)} className="group bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="p-4 bg-slate-50 text-[#302464] rounded-2xl group-hover:bg-[#302464] group-hover:text-white transition-all"><Building2 size={24} /></div>
+                  
+                  {/* --- AQUI: LÓGICA DA FOTO NO CARD --- */}
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden transition-all shadow-sm
+                        ${cli.foto ? 'bg-white' : 'bg-slate-50 text-[#302464] group-hover:bg-[#302464] group-hover:text-white'}`}>
+                      {cli.foto ? (
+                          <img src={cli.foto} alt={cli.razao_social} className="w-full h-full object-cover" />
+                      ) : (
+                          <Building2 size={24} />
+                      )}
+                  </div>
+                  {/* ------------------------------------ */}
+
                   <div><h3 className="font-black text-slate-800">{cli.razao_social}</h3><span className="text-[9px] font-black uppercase text-slate-400">{cli.tipo_cliente}</span></div>
                 </div>
                 <div className="flex items-center justify-between text-slate-300 group-hover:text-[#7C69AF] transition-colors mt-4 pt-4 border-t border-slate-50">
@@ -196,10 +259,39 @@ export default function Documentacao() {
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
         
-      {/* HEADER CLIENTE */}
+      {/* HEADER CLIENTE (COM UPLOAD DE FOTO) */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-[#302464] rounded-2xl shadow-xl flex items-center justify-center text-white"><Building2 size={32} /></div>
+            
+            {/* --- ÁREA DA FOTO INTERATIVA --- */}
+            <div className="relative group">
+                <label className="cursor-pointer">
+                    <div className={`w-20 h-20 rounded-[1.5rem] shadow-xl flex items-center justify-center text-white overflow-hidden border-4 border-white relative transition-transform hover:scale-105
+                        ${cliente?.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#302464]'}`}>
+                        
+                        {/* Se tiver foto, mostra a imagem. Se não, mostra o ícone Building2 */}
+                        {cliente?.foto ? (
+                            <img src={cliente.foto} alt="Logo" className="w-full h-full object-cover" />
+                        ) : (
+                            <Building2 size={32} />
+                        )}
+
+                        {/* Overlay Escuro com Ícone de Câmera (Aparece no Hover) */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                            <Camera size={24} className="text-white" />
+                        </div>
+                    </div>
+                    {/* Input Invisível */}
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleUpdateFoto} 
+                    />
+                </label>
+            </div>
+            {/* ------------------------------- */}
+
             <div>
                 <h1 className="text-3xl font-black text-slate-800">{cliente?.razao_social}</h1>
                 <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-emerald-100 mt-1 inline-block">{cliente?.tipo_cliente}</span>
@@ -250,7 +342,84 @@ export default function Documentacao() {
             </div>
         )}
 
-        {/* ... (ABAS REDE, EMAILS, ATIVOS, SERVIDORES e CONSULTORIA mantidas iguais) ... */}
+        {/* --- NOVA ABA: HISTÓRICO DE CHAMADOS --- */}
+        {activeTab === 'historico' && (
+            <div className="space-y-6">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm min-h-[400px]">
+                    <h3 className="font-black text-[#302464] text-xs uppercase mb-8 flex items-center gap-2">
+                        <History size={16} /> Últimos Atendimentos
+                    </h3>
+
+                    {loadingHistorico ? (
+                        <div className="text-center py-20 text-slate-300 font-bold text-xs animate-pulse">Carregando histórico...</div>
+                    ) : historicoChamados.length === 0 ? (
+                        <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 font-bold text-xs">
+                            Nenhum chamado registrado para este cliente.
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {historicoChamados.map(chamado => (
+                                <div key={chamado.id} onClick={() => navigate(`/chamados/${chamado.id}`)} className="group flex flex-col md:flex-row items-start md:items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-purple-200 hover:shadow-lg cursor-pointer transition-all gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-3 rounded-2xl ${STATUS_MAP[chamado.status] || 'bg-slate-100 text-slate-500'}`}>
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[10px] font-black text-slate-300 uppercase">#{chamado.id}</span>
+                                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase border ${STATUS_MAP[chamado.status]}`}>
+                                                    {chamado.status.replace('_', ' ')}
+                                                </span>
+                                            </div>
+                                            <h4 className="font-bold text-slate-700 group-hover:text-[#302464] transition-colors line-clamp-1">{chamado.titulo}</h4>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end pl-14 md:pl-0">
+                                        <div className="text-right">
+                                            <p className="text-[9px] font-black text-slate-300 uppercase">Data</p>
+                                            <p className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                                                <Calendar size={12} className="text-[#A696D1]"/>
+                                                {new Date(chamado.created_at || chamado.data_abertura).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <ChevronRight size={18} className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* PAGINAÇÃO */}
+                    {totalHistorico > 10 && (
+                        <div className="flex justify-center items-center gap-6 mt-8 pt-6 border-t border-slate-50">
+                            <button 
+                                disabled={paginaHistorico === 1}
+                                onClick={() => setPaginaHistorico(p => Math.max(1, p - 1))}
+                                className="p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs font-black text-[#302464]">Página {paginaHistorico}</span>
+                                <span className="text-[9px] font-bold text-slate-400">de {Math.ceil(totalHistorico / 10)}</span>
+                            </div>
+
+                            <button 
+                                disabled={paginaHistorico * 10 >= totalHistorico}
+                                onClick={() => setPaginaHistorico(p => p + 1)}
+                                className="p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+        {/* ------------------------------------- */}
+
         {activeTab === 'rede' && (
              <div className="space-y-6">
              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -289,7 +458,6 @@ export default function Documentacao() {
          </div>
         )}
 
-        {/* ... (REPETIR O RESTO DAS ABAS EXISTENTES PARA MANTER O CODIGO COMPLETO) ... */}
         {activeTab === 'senhas' && (
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase flex items-center gap-2"><Mail size={16}/> Contas de Email</h3><button onClick={() => setModalAberto('email')} className="bg-[#302464] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase">+ Nova Conta</button></div>
@@ -358,8 +526,6 @@ export default function Documentacao() {
             </div>
         )}
 
-
-        {/* --- ALTERAÇÃO 2: NOVA ABA DE CONTRATOS (PDFs) --- */}
         {activeTab === 'contrato' && (
              <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden">
                 <div className="flex justify-between items-center mb-8">
@@ -418,7 +584,6 @@ export default function Documentacao() {
                 <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">Novo Registro</h3>
                 <form onSubmit={handleSalvarModal} className="space-y-4">
                     
-                    {/* ... (MODAIS EXISTENTES MANTIDOS) ... */}
                     {modalAberto === 'provedor' && (
                         <>
                             <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
@@ -463,7 +628,6 @@ export default function Documentacao() {
                         </>
                     )}
 
-                    {/* --- ALTERAÇÃO 3: INPUT DE UPLOAD PARA CONTRATO --- */}
                     {modalAberto === 'contrato' && (
                         <>
                             <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center">

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, MapPin, Calendar, FileText, Building2, 
-  User, ChevronRight, DollarSign, X, Info, Filter 
+  User, ChevronRight, DollarSign, X, Info, Filter, Camera 
 } from 'lucide-react';
 
 import clienteService from '../services/clienteService';
@@ -21,7 +21,8 @@ export default function Clientes() {
     endereco: '',
     tipo_cliente: 'CONTRATO',
     valor_contrato_mensal: '',
-    dia_vencimento: 5
+    dia_vencimento: 5,
+    foto: null // Novo campo para a foto
   });
 
   const carregarClientes = async () => {
@@ -52,21 +53,37 @@ export default function Clientes() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Novo handler para a foto
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setFormData(prev => ({ ...prev, foto: file }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        ...formData,
-        cnpj: formData.cpf_cnpj.length > 11 ? formData.cpf_cnpj : null,
-        cpf: formData.cpf_cnpj.length <= 11 ? formData.cpf_cnpj : null,
-        valor_contrato_mensal: parseFloat(formData.valor_contrato_mensal || 0),
-        dia_vencimento: parseInt(formData.dia_vencimento)
-      };
+      // Usando FormData para enviar arquivo
+      const payload = new FormData();
+      payload.append('razao_social', formData.razao_social);
+      payload.append('endereco', formData.endereco);
+      payload.append('tipo_cliente', formData.tipo_cliente);
+      payload.append('valor_contrato_mensal', formData.valor_contrato_mensal || 0);
+      payload.append('dia_vencimento', formData.dia_vencimento);
+      
+      if (formData.cpf_cnpj.length > 11) {
+          payload.append('cnpj', formData.cpf_cnpj);
+      } else {
+          payload.append('cpf', formData.cpf_cnpj);
+      }
+
+      if (formData.foto) {
+          payload.append('foto', formData.foto);
+      }
 
       await clienteService.criar(payload);
       
       setIsModalOpen(false);
-      setFormData({ razao_social: '', cpf_cnpj: '', endereco: '', tipo_cliente: 'CONTRATO', valor_contrato_mensal: '', dia_vencimento: 5 });
+      setFormData({ razao_social: '', cpf_cnpj: '', endereco: '', tipo_cliente: 'CONTRATO', valor_contrato_mensal: '', dia_vencimento: 5, foto: null });
       carregarClientes();
       alert("Cliente cadastrado com sucesso!");
     } catch (error) {
@@ -119,9 +136,14 @@ export default function Clientes() {
               </div>
 
               <div className="flex items-center gap-4 mb-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner
+                {/* Lógica para exibir foto ou inicial */}
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner overflow-hidden
                   ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'}`}>
-                  {cliente.razao_social.charAt(0).toUpperCase()}
+                   {cliente.foto ? (
+                       <img src={cliente.foto} alt={cliente.razao_social} className="w-full h-full object-cover" />
+                   ) : (
+                       cliente.razao_social.charAt(0).toUpperCase()
+                   )}
                 </div>
                 <div>
                   <h3 className="font-black text-slate-800 text-lg group-hover:text-[#7C69AF] transition-colors leading-tight">
@@ -173,6 +195,29 @@ export default function Clientes() {
             </h3>
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Campo de Upload de Foto */}
+              <div className="md:col-span-2 flex justify-center mb-4">
+                  <div className="relative group cursor-pointer w-24 h-24">
+                      <div className="w-full h-full rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
+                          {formData.foto ? (
+                              <img src={URL.createObjectURL(formData.foto)} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                              <Camera className="text-slate-400 group-hover:text-[#7C69AF] transition-colors" size={32} />
+                          )}
+                      </div>
+                      <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <div className="absolute bottom-0 right-0 bg-[#302464] text-white p-1 rounded-full shadow-lg">
+                          <Plus size={12} />
+                      </div>
+                  </div>
+              </div>
+
               <div className="md:col-span-2 space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social / Nome Completo</label>
                 <input 

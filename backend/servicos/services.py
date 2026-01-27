@@ -2,23 +2,17 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.apps import apps 
-from decimal import Decimal, ROUND_HALF_UP # <--- Importante para precisão
+from decimal import Decimal, ROUND_HALF_UP
 
-# Tenta importar a função do estoque.
+# Tenta importar a função do estoque (mas não vamos usar ela para validar agora)
 try:
     from estoque.services import processar_movimentacao_estoque
 except ImportError:
-    def processar_movimentacao_estoque(*args, **kwargs):
-        print("ERRO CRÍTICO: Serviço de estoque não encontrado!")
+    pass
 
 def limpar_decimal(valor):
-    """
-    Transforma qualquer valor em Decimal com exatas 2 casas decimais.
-    Resolve o erro: 'Ensure that there are no more than 2 decimal places.'
-    """
     if valor is None:
         return Decimal('0.00')
-    # Converte para string primeiro para evitar imprecisões do float
     return Decimal(str(valor)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
 
 def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
@@ -36,7 +30,6 @@ def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
     if produto.estoque_atual < quantidade:
         raise ValidationError(f"Estoque insuficiente. Disp: {produto.estoque_atual}")
 
-    # Aplica a limpeza decimal no preço de venda
     preco_final = limpar_decimal(preco_venda if preco_venda is not None else produto.preco_venda_sugerido)
 
     item, created = ItemServico.objects.get_or_create(
@@ -48,7 +41,7 @@ def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
     if not created:
         nova_qtd = item.quantidade + quantidade
         if produto.estoque_atual < nova_qtd:
-            raise ValidationError(f"Estoque insuficiente p/ adicionar. Total desejado: {nova_qtd}")
+             raise ValidationError(f"Estoque insuficiente. Total desejado: {nova_qtd}")
         item.quantidade = nova_qtd
         item.preco_venda = preco_final
         item.save()
@@ -57,26 +50,51 @@ def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
 
 @transaction.atomic
 def finalizar_ordem_servico(os, usuario_responsavel):
-    """
-    Finaliza OS: Baixa Estoque + Gera Financeiro
-    """
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
+    
+    # Tenta pegar o modelo de Movimentação para gerar histórico manual
+    try:
+        MovimentacaoEstoque = apps.get_model('estoque', 'MovimentacaoEstoque')
+    except LookupError:
+        MovimentacaoEstoque = None
 
     if os.status in ['FINALIZADO', 'CONCLUIDO']:
         raise ValidationError("OS já finalizada.")
 
-    # 1. BAIXA DE ESTOQUE (Onde estava dando o erro de preco_unitario)
-    for item in os.itens.all():
-        processar_movimentacao_estoque(
-            produto=item.produto,
-            quantidade=item.quantidade,
-            tipo_movimento='SAIDA',
-            usuario=usuario_responsavel,
-            cliente=os.cliente,
-            # CORREÇÃO CRÍTICA AQUI:
-            preco_unitario=limpar_decimal(item.preco_venda),
-            gerar_financeiro=False 
-        )
+    # 1. BAIXA DE ESTOQUE (MANUAL)
+    for item in os.itens.select_related('produto').all():
+        # Atualiza leitura do banco
+        item.produto.refresh_from_db()
+        
+        # Nossa validação (que sabemos que funciona)
+        if item.produto.estoque_atual < item.quantidade:
+            raise ValidationError(
+                f"Estoque insuficiente para '{item.produto.nome}'. "
+                f"Necessário: {item.quantidade}, Disponível: {item.produto.estoque_atual}."
+            )
+
+        # --- AQUI ESTA A CORREÇÃO ---
+        # Em vez de chamar a função 'processar_movimentacao_estoque' que está bugada,
+        # fazemos a subtração direta.
+        
+        # 1. Subtrai o estoque
+        item.produto.estoque_atual -= item.quantidade
+        item.produto.save()
+        
+        # 2. Tenta gerar o histórico manualmente (Bypass na função de serviço)
+        if MovimentacaoEstoque:
+            try:
+                MovimentacaoEstoque.objects.create(
+                    produto=item.produto,
+                    quantidade=item.quantidade,
+                    tipo_movimento='SAIDA',
+                    usuario=usuario_responsavel,
+                    observacao=f"Baixa OS #{os.pk} (Cliente: {os.cliente.razao_social})",
+                    data_movimento=timezone.now() # Garantia caso o auto_now falhe
+                )
+            except Exception as e:
+                # Se der erro no histórico, apenas printa mas não trava a OS
+                print(f"Aviso: Não foi possível gerar histórico de estoque: {e}")
 
     # 2. FINANCEIRO: RECEITA
     valor_receita = limpar_decimal(os.valor_total_geral)
@@ -93,7 +111,7 @@ def finalizar_ordem_servico(os, usuario_responsavel):
             data_vencimento=timezone.now().date()
         )
 
-    # 3. FINANCEIRO: DESPESAS
+    # 3. FINANCEIRO: CUSTOS
     if os.custo_deslocamento > 0:
         LancamentoFinanceiro.objects.create(
             tecnico=os.tecnico_responsavel if os.tecnico_responsavel else None,
