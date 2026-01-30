@@ -35,6 +35,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     provedores = ProvedorInternetSerializer(many=True, read_only=True)
     contas_email = ContaEmailSerializer(many=True, read_only=True)
     contratos = ContratoClienteSerializer(many=True, read_only=True)
+    nome_exibicao = serializers.SerializerMethodField()
     
     # CORREÇÃO: Sem many=True (Um cliente tem UM dossiê)
     documentacao_tecnica = DocumentacaoTecnicaSerializer(read_only=True)
@@ -42,3 +43,6 @@ class ClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cliente
         fields = '__all__'
+    def get_nome_exibicao(self, obj):
+        # A lógica inteligente fica aqui no backend
+        return obj.nome if obj.nome else obj.razao_social

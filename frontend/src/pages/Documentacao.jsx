@@ -5,7 +5,7 @@ import {
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, 
   Search, BookOpen, X, ChevronRight, CheckCircle2, 
   AlertTriangle, Info, MapPin, Plus, Trash2, Eye, EyeOff,
-  FileText, Download, UploadCloud, 
+  FileText, Download, UploadCloud, Pencil, // Adicionado Pencil
   History, Calendar, ChevronLeft, Camera
 } from 'lucide-react';
 
@@ -27,12 +27,11 @@ export default function Documentacao() {
   const [ativos, setAtivos] = useState([]);
   const [activeTab, setActiveTab] = useState('geral');
   
-  // --- NOVOS ESTADOS PARA O HISTÓRICO ---
+  // HISTÓRICO
   const [historicoChamados, setHistoricoChamados] = useState([]);
   const [paginaHistorico, setPaginaHistorico] = useState(1);
   const [totalHistorico, setTotalHistorico] = useState(0);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
-  // ---------------------------------------
 
   const [currentUser, setCurrentUser] = useState(null);
   const [visiblePasswords, setVisiblePasswords] = useState({});
@@ -48,6 +47,9 @@ export default function Documentacao() {
     rotina_backup: '',
     pontos_fracos_melhorias: ''
   });
+
+  // PERMISSÃO DE EDIÇÃO (Lápis)
+  const canEdit = currentUser && ['SOCIO', 'GESTOR'].includes(currentUser.cargo);
 
   const togglePassword = (type, itemId) => {
     setVisiblePasswords(prev => ({
@@ -96,7 +98,7 @@ export default function Documentacao() {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
-  // --- Carregar Histórico de Chamados (Paginado) ---
+  // Carregar Histórico
   useEffect(() => {
     if (activeTab === 'historico' && id) {
         const fetchHistorico = async () => {
@@ -115,7 +117,7 @@ export default function Documentacao() {
     }
   }, [activeTab, id, paginaHistorico]);
   
-  // --- FUNÇÃO NOVA: ATUALIZAR FOTO ---
+  // ATUALIZAR FOTO
   const handleUpdateFoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -123,11 +125,7 @@ export default function Documentacao() {
     try {
       const formData = new FormData();
       formData.append('foto', file);
-
-      // Envia apenas a foto via PATCH
       const clienteAtualizado = await clienteService.atualizar(id, formData);
-      
-      // Atualiza o estado local imediatamente
       setCliente(prev => ({ ...prev, foto: clienteAtualizado.foto }));
       alert("Foto do perfil atualizada!");
     } catch (error) {
@@ -135,7 +133,38 @@ export default function Documentacao() {
       alert("Erro ao atualizar foto.");
     }
   };
-  // -----------------------------------
+
+  // PREPARAR EDIÇÃO DO CLIENTE (Abre Modal com dados atuais)
+  const handlePreparaEdicaoCliente = () => {
+      setFormTemp({
+          nome: cliente.nome || '',
+          razao_social: cliente.razao_social || '',
+          endereco: cliente.endereco || ''
+      });
+      setModalAberto('editar_cliente');
+  };
+
+  // SALVAR EDIÇÃO DO CLIENTE
+  const handleSalvarEdicaoCliente = async (e) => {
+      e.preventDefault();
+      try {
+          // Usamos PATCH do clienteService (atualizar)
+          // Montamos o objeto apenas com os campos editáveis nesta tela
+          const payload = {
+              nome: formTemp.nome,
+              razao_social: formTemp.razao_social,
+              endereco: formTemp.endereco
+          };
+          
+          const clienteAtualizado = await clienteService.atualizar(id, payload);
+          setCliente(prev => ({ ...prev, ...clienteAtualizado }));
+          setModalAberto(null);
+          alert("Dados do cliente atualizados!");
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao atualizar dados do cliente.");
+      }
+  };
 
   const handleSalvarTextos = async () => {
     try {
@@ -213,9 +242,12 @@ export default function Documentacao() {
     CANCELADO: 'bg-red-50 text-red-500 border-red-100',
   };
 
-  // --- ALTERAÇÃO AQUI: LISTAGEM DE CLIENTES ---
+  // LISTAGEM DE CLIENTES
   if (!id) {
-    const filtrados = listaClientes.filter(c => c.razao_social.toLowerCase().includes(busca.toLowerCase()));
+    const filtrados = listaClientes.filter(c => 
+        (c.nome && c.nome.toLowerCase().includes(busca.toLowerCase())) ||
+        c.razao_social.toLowerCase().includes(busca.toLowerCase())
+    );
     return (
         <div className="animate-in fade-in duration-500">
           <header className="mb-10">
@@ -230,19 +262,19 @@ export default function Documentacao() {
             {filtrados.map(cli => (
               <div key={cli.id} onClick={() => navigate(`/documentacao/${cli.id}`)} className="group bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer">
                 <div className="flex items-center gap-4 mb-6">
-                  
-                  {/* --- AQUI: LÓGICA DA FOTO NO CARD --- */}
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden transition-all shadow-sm
                         ${cli.foto ? 'bg-white' : 'bg-slate-50 text-[#302464] group-hover:bg-[#302464] group-hover:text-white'}`}>
                       {cli.foto ? (
-                          <img src={cli.foto} alt={cli.razao_social} className="w-full h-full object-cover" />
+                          <img src={cli.foto} alt={cli.nome_exibicao} className="w-full h-full object-cover" />
                       ) : (
-                          <Building2 size={24} />
+                          (cli.nome_exibicao || cli.razao_social).charAt(0).toUpperCase()
                       )}
                   </div>
-                  {/* ------------------------------------ */}
-
-                  <div><h3 className="font-black text-slate-800">{cli.razao_social}</h3><span className="text-[9px] font-black uppercase text-slate-400">{cli.tipo_cliente}</span></div>
+                  <div>
+                    <h3 className="font-black text-slate-800 line-clamp-1">{cli.nome_exibicao || cli.razao_social}</h3>
+                    {cli.nome && <p className="text-[9px] text-slate-400 font-bold truncate">{cli.razao_social}</p>}
+                    <span className="text-[9px] font-black uppercase text-slate-400 mt-1 block">{cli.tipo_cliente}</span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-slate-300 group-hover:text-[#7C69AF] transition-colors mt-4 pt-4 border-t border-slate-50">
                     <span className="text-[10px] font-black uppercase tracking-widest">Abrir Dossiê</span><ChevronRight size={18} />
@@ -259,42 +291,46 @@ export default function Documentacao() {
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
         
-      {/* HEADER CLIENTE (COM UPLOAD DE FOTO) */}
+      {/* HEADER CLIENTE DETALHE */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-5">
             
-            {/* --- ÁREA DA FOTO INTERATIVA --- */}
             <div className="relative group">
                 <label className="cursor-pointer">
                     <div className={`w-20 h-20 rounded-[1.5rem] shadow-xl flex items-center justify-center text-white overflow-hidden border-4 border-white relative transition-transform hover:scale-105
                         ${cliente?.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#302464]'}`}>
                         
-                        {/* Se tiver foto, mostra a imagem. Se não, mostra o ícone Building2 */}
                         {cliente?.foto ? (
                             <img src={cliente.foto} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
-                            <Building2 size={32} />
+                            <span className="text-3xl font-black">{(cliente.nome || cliente.razao_social).charAt(0)}</span>
                         )}
 
-                        {/* Overlay Escuro com Ícone de Câmera (Aparece no Hover) */}
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
                             <Camera size={24} className="text-white" />
                         </div>
                     </div>
-                    {/* Input Invisível */}
                     <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
+                        type="file" accept="image/*" className="hidden" 
                         onChange={handleUpdateFoto} 
                     />
                 </label>
             </div>
-            {/* ------------------------------- */}
 
             <div>
-                <h1 className="text-3xl font-black text-slate-800">{cliente?.razao_social}</h1>
-                <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-emerald-100 mt-1 inline-block">{cliente?.tipo_cliente}</span>
+                {/* Exibe Nome Fantasia como principal, se houver */}
+                <h1 className="text-3xl font-black text-slate-800">
+                    {cliente?.nome || cliente?.razao_social}
+                </h1>
+                
+                {/* Se tiver Nome Fantasia, mostra Razão Social menor */}
+                {cliente?.nome && (
+                    <p className="text-sm font-bold text-slate-400">{cliente?.razao_social}</p>
+                )}
+
+                <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-emerald-100 mt-2 inline-block">
+                    {cliente?.tipo_cliente}
+                </span>
             </div>
         </div>
         <button onClick={() => navigate('/documentacao')} className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] uppercase tracking-widest transition-all">
@@ -317,12 +353,40 @@ export default function Documentacao() {
         {activeTab === 'geral' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                        <h3 className="font-black text-[#302464] text-xs uppercase mb-8">Informações Base</h3>
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative">
+                        <div className="flex justify-between items-center mb-8">
+                            <h3 className="font-black text-[#302464] text-xs uppercase">Informações Base</h3>
+                            
+                            {/* --- BOTÃO DE EDITAR (LÁPIS) --- */}
+                            {canEdit && (
+                                <button 
+                                    onClick={handlePreparaEdicaoCliente}
+                                    className="p-2 bg-slate-50 text-[#7C69AF] rounded-xl hover:bg-[#302464] hover:text-white transition-all shadow-sm"
+                                    title="Editar Dados do Cliente"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                            )}
+                            {/* ------------------------------- */}
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-slate-700">
-                            <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Razão Social</p><p className="font-bold">{cliente?.razao_social}</p></div>
-                            <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Documento</p><p className="font-mono">{cliente?.cnpj || cliente?.cpf}</p></div>
-                            <div className="md:col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Endereço</p><p className="font-bold flex items-center gap-2"><MapPin size={14} className="text-[#A696D1]"/> {cliente?.endereco}</p></div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Nome Fantasia / Apelido</p>
+                                <p className="font-bold text-lg text-[#302464]">{cliente?.nome || '---'}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Razão Social</p>
+                                <p className="font-bold">{cliente?.razao_social}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Documento</p>
+                                <p className="font-mono">{cliente?.cnpj || cliente?.cpf}</p>
+                            </div>
+                            <div className="md:col-span-2">
+                                <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Endereço</p>
+                                <p className="font-bold flex items-center gap-2"><MapPin size={14} className="text-[#A696D1]"/> {cliente?.endereco}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -342,7 +406,7 @@ export default function Documentacao() {
             </div>
         )}
 
-        {/* --- NOVA ABA: HISTÓRICO DE CHAMADOS --- */}
+        {/* ABA HISTÓRICO */}
         {activeTab === 'historico' && (
             <div className="space-y-6">
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm min-h-[400px]">
@@ -418,7 +482,6 @@ export default function Documentacao() {
                 </div>
             </div>
         )}
-        {/* ------------------------------------- */}
 
         {activeTab === 'rede' && (
              <div className="space-y-6">
@@ -581,65 +644,105 @@ export default function Documentacao() {
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative border border-white/20 max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <button onClick={() => { setModalAberto(null); setFormTemp({}); }} className="absolute top-8 right-8 text-slate-400 hover:text-red-500"><X size={24}/></button>
-                <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">Novo Registro</h3>
-                <form onSubmit={handleSalvarModal} className="space-y-4">
-                    
-                    {modalAberto === 'provedor' && (
-                        <>
-                            <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
-                            <input placeholder="Plano" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
-                            <input placeholder="IP Fixo (Opcional)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono text-slate-600" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
-                            
-                            <div className="grid grid-cols-2 gap-2">
-                                <input placeholder="Admin / PPPoE" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
-                                <input placeholder="Senha Link" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
-                            </div>
-                            <input placeholder="Telefone Suporte" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
-                        </>
-                    )}
+                <h3 className="font-black text-[#302464] text-xl mb-8 uppercase tracking-widest text-[10px]">
+                    {modalAberto === 'editar_cliente' ? 'Editar Dados do Cliente' : 'Novo Registro'}
+                </h3>
+                
+                {/* --- MODAL ESPECÍFICO PARA EDITAR CLIENTE --- */}
+                {modalAberto === 'editar_cliente' ? (
+                    <form onSubmit={handleSalvarEdicaoCliente} className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Fantasia / Apelido</label>
+                            <input 
+                                value={formTemp.nome} 
+                                onChange={e => setFormTemp({...formTemp, nome: e.target.value})} 
+                                className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#302464]"
+                                placeholder="Ex: Padaria do João"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social</label>
+                            <input 
+                                required
+                                value={formTemp.razao_social} 
+                                onChange={e => setFormTemp({...formTemp, razao_social: e.target.value})} 
+                                className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço</label>
+                            <input 
+                                required
+                                value={formTemp.endereco} 
+                                onChange={e => setFormTemp({...formTemp, endereco: e.target.value})} 
+                                className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold"
+                            />
+                        </div>
+                        <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-[#7C69AF] transition-all">
+                            Salvar Alterações
+                        </button>
+                    </form>
+                ) : (
+                    // --- MODAL PADRÃO PARA OUTROS REGISTROS ---
+                    <form onSubmit={handleSalvarModal} className="space-y-4">
+                        
+                        {modalAberto === 'provedor' && (
+                            <>
+                                <input required placeholder="Operadora" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome_operadora: e.target.value})} />
+                                <input placeholder="Plano" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, plano_contratado: e.target.value})} />
+                                <input placeholder="IP Fixo (Opcional)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono text-slate-600" onChange={e => setFormTemp({...formTemp, ip_fixo: e.target.value})} />
+                                
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input placeholder="Admin / PPPoE" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, usuario_pppoe: e.target.value})} />
+                                    <input placeholder="Senha Link" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-[#7C69AF]" onChange={e => setFormTemp({...formTemp, senha_pppoe: e.target.value})} />
+                                </div>
+                                <input placeholder="Telefone Suporte" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone_suporte: e.target.value})} />
+                            </>
+                        )}
 
-                    {modalAberto === 'email' && (
-                        <><input required type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, email: e.target.value})} /><input required placeholder="Senha" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} /></>
-                    )}
+                        {modalAberto === 'email' && (
+                            <><input required type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, email: e.target.value})} /><input required placeholder="Senha" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, senha: e.target.value})} /></>
+                        )}
 
-                    {modalAberto === 'contato' && (
-                        <>
-                            <input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
-                            <input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
-                            <input placeholder="Telefone / Celular" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
-                        </>
-                    )}
+                        {modalAberto === 'contato' && (
+                            <>
+                                <input required placeholder="Nome Completo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                                <input required placeholder="Cargo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, cargo: e.target.value})} />
+                                <input placeholder="Telefone / Celular" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, telefone: e.target.value})} />
+                            </>
+                        )}
 
-                    {modalAberto === 'ativo' && (
-                        <>
-                            <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
-                            <select required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-600 outline-none" onChange={e => setFormTemp({...formTemp, tipo: e.target.value})} defaultValue="">
-                                <option value="" disabled>Selecione o Tipo...</option>
-                                <option value="COMPUTADOR">Computador</option>
-                                <option value="SERVIDOR">Servidor</option>
-                                <option value="REDE">Rede / Switch / Roteador</option>
-                                <option value="IMPRESSORA">Impressora</option>
-                                <option value="MONITOR">Monitor</option>
-                                <option value="PERIFERICO">Periférico</option>
-                            </select>
-                            <input placeholder="Marca / Modelo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, marca_modelo: e.target.value})} />
-                            <div className="grid grid-cols-2 gap-2"><input placeholder="IP Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono" onChange={e => setFormTemp({...formTemp, ip_local: e.target.value})} /><input placeholder="AnyDesk ID" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-red-500" onChange={e => setFormTemp({...formTemp, anydesk_id: e.target.value})} /></div>
-                            <div className="grid grid-cols-2 gap-2"><input placeholder="Usuário Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, usuario_local: e.target.value})} /><input placeholder="Senha Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, senha_local: e.target.value})} /></div>
-                        </>
-                    )}
+                        {modalAberto === 'ativo' && (
+                            <>
+                                <input required placeholder="Nome do Dispositivo (Hostname)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, nome: e.target.value})} />
+                                <select required className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-600 outline-none" onChange={e => setFormTemp({...formTemp, tipo: e.target.value})} defaultValue="">
+                                    <option value="" disabled>Selecione o Tipo...</option>
+                                    <option value="COMPUTADOR">Computador</option>
+                                    <option value="SERVIDOR">Servidor</option>
+                                    <option value="REDE">Rede / Switch / Roteador</option>
+                                    <option value="IMPRESSORA">Impressora</option>
+                                    <option value="MONITOR">Monitor</option>
+                                    <option value="PERIFERICO">Periférico</option>
+                                </select>
+                                <input placeholder="Marca / Modelo" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, marca_modelo: e.target.value})} />
+                                <div className="grid grid-cols-2 gap-2"><input placeholder="IP Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold font-mono" onChange={e => setFormTemp({...formTemp, ip_local: e.target.value})} /><input placeholder="AnyDesk ID" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-red-500" onChange={e => setFormTemp({...formTemp, anydesk_id: e.target.value})} /></div>
+                                <div className="grid grid-cols-2 gap-2"><input placeholder="Usuário Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, usuario_local: e.target.value})} /><input placeholder="Senha Local" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs" onChange={e => setFormTemp({...formTemp, senha_local: e.target.value})} /></div>
+                            </>
+                        )}
 
-                    {modalAberto === 'contrato' && (
-                        <>
-                            <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selecione o PDF</p>
-                                <input required type="file" accept="application/pdf" className="w-full text-xs font-bold text-slate-500" onChange={e => setFormTemp({...formTemp, arquivo: e.target.files[0]})} />
-                            </div>
-                            <input required placeholder="Descrição (Ex: Contrato 2024)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, descricao: e.target.value})} />
-                        </>
-                    )}
+                        {modalAberto === 'contrato' && (
+                            <>
+                                <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selecione o PDF</p>
+                                    <input required type="file" accept="application/pdf" className="w-full text-xs font-bold text-slate-500" onChange={e => setFormTemp({...formTemp, arquivo: e.target.files[0]})} />
+                                </div>
+                                <input required placeholder="Descrição (Ex: Contrato 2024)" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" onChange={e => setFormTemp({...formTemp, descricao: e.target.value})} />
+                            </>
+                        )}
 
-                    <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-[#7C69AF] transition-all">Confirmar</button>
-                </form>
+                        <button type="submit" className="w-full py-5 bg-[#302464] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-[#7C69AF] transition-all">Confirmar</button>
+                    </form>
+                )}
             </div>
         </div>
       )}

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Search, MapPin, Calendar, FileText, Building2, 
-  User, ChevronRight, DollarSign, X, Info, Filter, Camera 
+  Plus, Search, MapPin, Calendar, Building2, 
+  ChevronRight, DollarSign, X, Camera, Store 
 } from 'lucide-react';
 
 import clienteService from '../services/clienteService';
@@ -14,15 +14,16 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Estado único para o formulário
+  // Estado do formulário atualizado com o campo 'nome'
   const [formData, setFormData] = useState({
+    nome: '', // Novo campo (Apelido/Fantasia)
     razao_social: '',
     cpf_cnpj: '',
     endereco: '',
     tipo_cliente: 'CONTRATO',
     valor_contrato_mensal: '',
     dia_vencimento: 5,
-    foto: null // Novo campo para a foto
+    foto: null
   });
 
   const carregarClientes = async () => {
@@ -39,10 +40,12 @@ export default function Clientes() {
 
   useEffect(() => { carregarClientes(); }, []);
 
-  // Filtro performático
+  // Filtro atualizado para buscar também pelo Nome Fantasia
   const clientesFiltrados = useMemo(() => {
+    const termo = busca.toLowerCase();
     return clientes.filter(c => 
-      c.razao_social.toLowerCase().includes(busca.toLowerCase()) ||
+      (c.nome && c.nome.toLowerCase().includes(termo)) || // Busca pelo nome
+      c.razao_social.toLowerCase().includes(termo) ||
       (c.cnpj && c.cnpj.includes(busca)) ||
       (c.cpf && c.cpf.includes(busca))
     );
@@ -53,7 +56,6 @@ export default function Clientes() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Novo handler para a foto
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setFormData(prev => ({ ...prev, foto: file }));
@@ -62,8 +64,10 @@ export default function Clientes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Usando FormData para enviar arquivo
       const payload = new FormData();
+      // Envia o Nome Fantasia se estiver preenchido
+      if (formData.nome) payload.append('nome', formData.nome);
+      
       payload.append('razao_social', formData.razao_social);
       payload.append('endereco', formData.endereco);
       payload.append('tipo_cliente', formData.tipo_cliente);
@@ -83,7 +87,17 @@ export default function Clientes() {
       await clienteService.criar(payload);
       
       setIsModalOpen(false);
-      setFormData({ razao_social: '', cpf_cnpj: '', endereco: '', tipo_cliente: 'CONTRATO', valor_contrato_mensal: '', dia_vencimento: 5, foto: null });
+      // Reseta o form incluindo o novo campo
+      setFormData({ 
+        nome: '', 
+        razao_social: '', 
+        cpf_cnpj: '', 
+        endereco: '', 
+        tipo_cliente: 'CONTRATO', 
+        valor_contrato_mensal: '', 
+        dia_vencimento: 5, 
+        foto: null 
+      });
       carregarClientes();
       alert("Cliente cadastrado com sucesso!");
     } catch (error) {
@@ -104,7 +118,7 @@ export default function Clientes() {
           <div className="relative flex-1 lg:w-80 group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
             <input 
-              type="text" placeholder="Buscar por nome ou documento..." 
+              type="text" placeholder="Buscar por nome, razão ou documento..." 
               value={busca} onChange={e => setBusca(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm"
             />
@@ -137,18 +151,27 @@ export default function Clientes() {
 
               <div className="flex items-center gap-4 mb-6">
                 {/* Lógica para exibir foto ou inicial */}
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner overflow-hidden
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner overflow-hidden shrink-0
                   ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'}`}>
                    {cliente.foto ? (
-                       <img src={cliente.foto} alt={cliente.razao_social} className="w-full h-full object-cover" />
+                       <img src={cliente.foto} alt={cliente.nome_exibicao} className="w-full h-full object-cover" />
                    ) : (
-                       cliente.razao_social.charAt(0).toUpperCase()
+                       // Usa o nome_exibicao para pegar a inicial correta
+                       (cliente.nome_exibicao || cliente.razao_social).charAt(0).toUpperCase()
                    )}
                 </div>
-                <div>
-                  <h3 className="font-black text-slate-800 text-lg group-hover:text-[#7C69AF] transition-colors leading-tight">
-                    {cliente.razao_social}
+                
+                <div className="min-w-0"> {/* min-w-0 evita que o texto estoure o flex container */}
+                  <h3 className="font-black text-slate-800 text-lg group-hover:text-[#7C69AF] transition-colors leading-tight truncate">
+                    {/* Exibe o Nome Fantasia preferencialmente, ou a Razão Social */}
+                    {cliente.nome_exibicao || cliente.razao_social}
                   </h3>
+                  
+                  {/* Se tiver Nome Fantasia, mostra a Razão Social embaixo menorzinha */}
+                  {cliente.nome && (
+                     <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{cliente.razao_social}</p>
+                  )}
+
                   <p className="text-[10px] font-mono text-slate-400 mt-1 uppercase font-bold">
                     {cliente.cnpj || cliente.cpf || 'Sem documento'}
                   </p>
@@ -218,12 +241,24 @@ export default function Clientes() {
                   </div>
               </div>
 
+              {/* NOVO CAMPO: Nome Fantasia */}
               <div className="md:col-span-2 space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social / Nome Completo</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                   <Store size={12} /> Nome Fantasia / Apelido
+                </label>
+                <input 
+                  name="nome" type="text" value={formData.nome} onChange={handleInputChange}
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-[#302464]"
+                  placeholder="Ex: Padaria do João (Como o cliente é conhecido)"
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social Completa</label>
                 <input 
                   name="razao_social" required type="text" value={formData.razao_social} onChange={handleInputChange}
-                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-[#302464]"
-                  placeholder="Ex: ACME Corporation LTDA"
+                  className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-600"
+                  placeholder="Ex: João da Silva ME - Documento Oficial"
                 />
               </div>
 

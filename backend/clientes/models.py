@@ -15,11 +15,13 @@ class Cliente(TimeStampedModel):
         CONTRATO = 'CONTRATO', 'Contrato'
         AVULSO = 'AVULSO', 'Avulso'
 
+    nome = models.CharField(max_length=100, null=True, blank=True, verbose_name="Nome Fantasia / Apelido")
     foto = models.ImageField(upload_to='clientes_fotos/', null=True, blank=True)
     razao_social = models.CharField(max_length=100)
     cpf = models.CharField(max_length=11, null=True, blank=True)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     endereco = models.CharField(max_length=150)
+
     
     # Financeiro do Cliente
     valor_contrato_mensal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -31,10 +33,10 @@ class Cliente(TimeStampedModel):
         db_table = 'TB_CLIENTE'
         verbose_name = 'Cliente'
         verbose_name_plural = 'Clientes'
-        ordering = ['razao_social']
+        ordering = ['nome', 'razao_social']
 
     def __str__(self):
-        return self.razao_social
+        return self.nome or self.razao_social
 
 # =====================================================
 # SUB-MODELOS (SATÉLITES)

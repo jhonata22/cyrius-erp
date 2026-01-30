@@ -108,3 +108,4 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
                 rec.save()
                 gerados += 1
         return Response({'mensagem': f'{gerados} recorrencias processadas.'})
+    

@@ -3,10 +3,33 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X // Adicionados Menu e X para o mobile
+  Wrench, Menu, X
 } from 'lucide-react';
 import authService from '../services/authService';
 import NotificationBell from './NotificationBell';
+
+// --- ESTILO DA BARRA DE ROLAGEM PERSONALIZADA ---
+// Isso garante que o scroll seja sutil e elegante, combinando com o tema roxo.
+const scrollbarStyle = `
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  /* Compatibilidade com Firefox */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+`;
 
 const SidebarItem = ({ icon: Icon, text, to, isExpanded, onClick }) => {
   const location = useLocation();
@@ -34,14 +57,13 @@ const SidebarItem = ({ icon: Icon, text, to, isExpanded, onClick }) => {
 
 export default function Layout({ children }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false); // Novo estado para mobile
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   
   const userName = authService.getLoggedUser() || 'Usuário';
   const userPhoto = localStorage.getItem('user_photo');
   const userCargo = localStorage.getItem('cargo');
 
-  // Fecha o menu mobile ao trocar de rota
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location]);
@@ -54,10 +76,13 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden">
       
-      {/* OVERLAY PARA MOBILE (Escurece o fundo quando o menu abre) */}
+      {/* Injeta o CSS da barra de rolagem */}
+      <style>{scrollbarStyle}</style>
+
+      {/* OVERLAY PARA MOBILE */}
       {isMobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -73,8 +98,7 @@ export default function Layout({ children }) {
           ${isExpanded ? 'md:w-64' : 'md:w-20'}
         `}
       >
-        {/* LOGO & BOTÃO FECHAR (MOBILE) */}
-        <div className="h-20 flex items-center justify-between px-6">
+        <div className="h-20 flex items-center justify-between px-6 shrink-0">
           <div className="text-2xl font-black text-white tracking-tighter flex items-center">
             <span className="text-[#A696D1]">C</span>
             <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0'}`}>
@@ -86,8 +110,9 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* MENU */}
-        <nav className="flex-1 px-4 py-4 overflow-y-auto no-scrollbar">
+        {/* MENU COM SCROLLBAR PERSONALIZADA */}
+        {/* Substituí 'no-scrollbar' por 'sidebar-scroll' e removi 'overflow-y-auto' padrão para garantir a aplicação da classe correta */}
+        <nav className="flex-1 px-4 py-4 overflow-y-auto sidebar-scroll">
           <p className={`px-2 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4 transition-opacity duration-300 ${(isExpanded || isMobileOpen) ? 'opacity-100' : 'opacity-0'}`}>
             Menu
           </p>
@@ -120,7 +145,7 @@ export default function Layout({ children }) {
         </nav>
 
         {/* LOGOUT */}
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-white/5 shrink-0">
           <button onClick={() => authService.logout()} className="flex items-center w-full px-4 py-3 text-sm font-bold text-white/40 hover:text-white hover:bg-red-500/20 rounded-xl transition-all group">
             <LogOut size={18} className="min-w-[18px]" />
             <span className={`ml-3 transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100' : 'opacity-0 w-0'}`}>Sair</span>
@@ -129,22 +154,21 @@ export default function Layout({ children }) {
       </aside>
 
       {/* ÁREA PRINCIPAL */}
-      <div className="flex-1 flex flex-col overflow-hidden w-full">
+      <div className="flex-1 flex flex-col overflow-hidden w-full relative">
         
-        {/* HEADER */}
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-10">
-            {/* BOTÃO HAMBÚRGUER (MOBILE) */}
-            <button 
-              className="p-2 mr-2 text-slate-600 md:hidden hover:bg-slate-100 rounded-lg"
-              onClick={() => setIsMobileOpen(true)}
-            >
-              <Menu size={24} />
-            </button>
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-10 shrink-0">
+            <div className="flex items-center">
+                <button 
+                  className="p-2 mr-4 text-slate-600 md:hidden hover:bg-slate-100 rounded-lg transition-colors"
+                  onClick={() => setIsMobileOpen(true)}
+                >
+                  <Menu size={24} />
+                </button>
 
-            {/* BUSCA (Escondida em telas muito pequenas) */}
-            <div className="relative flex-1 max-w-96 group hidden sm:block">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
-                <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-2.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm" />
+                <div className="relative flex-1 max-w-96 group hidden sm:block">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
+                    <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-2.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm" />
+                </div>
             </div>
             
             <div className="flex items-center gap-2 md:gap-5 ml-auto">
@@ -169,9 +193,8 @@ export default function Layout({ children }) {
         </header>
         
         {/* CONTEÚDO */}
-        <main className="flex-1 overflow-y-auto bg-[#F8FAFC]">
-          {/* Ajuste de padding: p-4 no mobile, p-8 no desktop */}
-          <div className="max-w-7xl mx-auto p-4 md:p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent hover:scrollbar-thumb-slate-400">
+          <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {children}
           </div>
         </main>
