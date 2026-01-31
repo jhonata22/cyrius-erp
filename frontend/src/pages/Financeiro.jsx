@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, Wallet, ArrowUpRight, TrendingUp, RefreshCw, 
   Truck, PieChart as PieIcon, Check, X, Search, Printer, 
-  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2, Filter
+  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2, Filter, 
+  MoreVertical // Ícone para menu mobile se necessário
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -101,11 +102,9 @@ export default function Financeiro() {
       }).sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento)); 
   }, [todosLancamentos, filtroData]);
 
-  // CORREÇÃO E IMPLEMENTAÇÃO DO FILTRO DE CATEGORIAS
   const extratoExibicao = useMemo(() => {
       let dados = lancamentosDoMes;
 
-      // 1. Filtro de Texto (Busca)
       if (buscaExtrato) {
           const termo = buscaExtrato.toLowerCase();
           dados = dados.filter(l => 
@@ -114,20 +113,18 @@ export default function Financeiro() {
           );
       }
 
-      // 2. Filtro de Categoria/Tipo (Novo)
       if (filtroCategoria !== 'TODOS') {
         if (filtroCategoria === 'ENTRADA') {
             dados = dados.filter(l => l.tipo_lancamento === 'ENTRADA');
         } else if (filtroCategoria === 'SAIDA') {
             dados = dados.filter(l => l.tipo_lancamento === 'SAIDA');
         } else {
-            // Filtra pela coluna 'categoria' do banco (ex: SERVICO, CONTRATO, IMPOSTO)
             dados = dados.filter(l => l.categoria === filtroCategoria);
         }
       }
 
       return dados;
-  }, [lancamentosDoMes, buscaExtrato, filtroCategoria]); // Adicionado filtroCategoria nas dependências
+  }, [lancamentosDoMes, buscaExtrato, filtroCategoria]);
 
   const inadimplentesAgrupados = useMemo(() => {
       const hoje = new Date();
@@ -340,7 +337,6 @@ export default function Financeiro() {
     } catch { alert("Erro ao salvar."); }
   };
 
-  // Definição das opções de Filtro Rápido
   const FILTROS_RAPIDOS = [
       { id: 'TODOS', label: 'Tudo' },
       { id: 'ENTRADA', label: 'Receitas (+)' },
@@ -602,7 +598,6 @@ export default function Financeiro() {
                     )}
                  </div>
 
-                 {/* NOVOS FILTROS RÁPIDOS DE CATEGORIA */}
                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
                     {FILTROS_RAPIDOS.map(filtro => (
                         <button
@@ -621,69 +616,139 @@ export default function Financeiro() {
                  </div>
              </div>
 
-             <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                        <th className="p-6 w-14">
-                            <input 
-                                type="checkbox" 
-                                className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
-                                checked={extratoExibicao.length > 0 && selectedIds.length === extratoExibicao.length}
-                                onChange={handleSelectAll}
-                            />
-                        </th>
-                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
-                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
-                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                    {extratoExibicao.map(lanc => (
-                        <tr key={lanc.id} className={`group transition-colors ${selectedIds.includes(lanc.id) ? 'bg-purple-50/50' : 'hover:bg-slate-50/50'}`}>
-                            <td className="p-6">
+             {/* ========== VERSÃO DESKTOP (TABELA) ========== */}
+             <div className="hidden md:block">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="p-6 w-14">
                                 <input 
                                     type="checkbox" 
                                     className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
-                                    checked={selectedIds.includes(lanc.id)}
-                                    onChange={() => handleToggleSelect(lanc.id)}
+                                    checked={extratoExibicao.length > 0 && selectedIds.length === extratoExibicao.length}
+                                    onChange={handleSelectAll}
                                 />
-                            </td>
-                            <td className="p-6">
-                                <div className="font-black text-slate-800">{lanc.descricao}</div>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="text-[10px] text-slate-400 flex items-center gap-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
-                                    <span className="text-[9px] font-bold text-slate-300 uppercase bg-slate-100 px-1.5 py-0.5 rounded">{lanc.categoria}</span>
-                                </div>
-                                
-                                <div className="flex gap-2 mt-2">
-                                    {lanc.comprovante && (
-                                        <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-100">
-                                            <CheckSquare size={10}/> Comprovante OS
-                                        </a>
-                                    )}
-                                    {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
-                                    {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
-                                </div>
-                            </td>
-                            <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
-                            <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
-                            <td className="p-6 text-right">
-                                <div className="flex items-center justify-end gap-4">
-                                    <div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                    <div className="flex flex-col gap-2">
-                                        {lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline">Baixar</button>}
-                                        <button onClick={() => handleExcluir(lanc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                            </td>
+                            </th>
+                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
+                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
+                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
                         </tr>
-                    ))}
-                    {extratoExibicao.length === 0 && (
-                        <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado para este filtro.</td></tr>
-                    )}
-                </tbody>
-             </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {extratoExibicao.map(lanc => (
+                            <tr key={lanc.id} className={`group transition-colors ${selectedIds.includes(lanc.id) ? 'bg-purple-50/50' : 'hover:bg-slate-50/50'}`}>
+                                <td className="p-6">
+                                    <input 
+                                        type="checkbox" 
+                                        className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
+                                        checked={selectedIds.includes(lanc.id)}
+                                        onChange={() => handleToggleSelect(lanc.id)}
+                                    />
+                                </td>
+                                <td className="p-6">
+                                    <div className="font-black text-slate-800">{lanc.descricao}</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="text-[10px] text-slate-400 flex items-center gap-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
+                                        <span className="text-[9px] font-bold text-slate-300 uppercase bg-slate-100 px-1.5 py-0.5 rounded">{lanc.categoria}</span>
+                                    </div>
+                                    
+                                    <div className="flex gap-2 mt-2">
+                                        {lanc.comprovante && (
+                                            <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-100">
+                                                <CheckSquare size={10}/> Comprovante OS
+                                            </a>
+                                        )}
+                                        {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
+                                        {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
+                                    </div>
+                                </td>
+                                <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
+                                <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
+                                <td className="p-6 text-right">
+                                    <div className="flex items-center justify-end gap-4">
+                                        <div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                        <div className="flex flex-col gap-2">
+                                            {lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline">Baixar</button>}
+                                            <button onClick={() => handleExcluir(lanc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {extratoExibicao.length === 0 && (
+                            <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado para este filtro.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+             </div>
+
+             {/* ========== VERSÃO MOBILE (CARDS) ========== */}
+             <div className="block md:hidden bg-slate-50 p-4 space-y-4">
+                 {extratoExibicao.map(lanc => (
+                    <div 
+                       key={lanc.id} 
+                       className={`p-4 rounded-2xl bg-white border shadow-sm transition-all 
+                                   ${selectedIds.includes(lanc.id) ? 'border-[#302464] ring-1 ring-[#302464]' : 'border-slate-100'}`}
+                       onClick={() => handleToggleSelect(lanc.id)}
+                    >
+                        <div className="flex justify-between items-start mb-3">
+                           <div>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${lanc.tipo_lancamento === 'ENTRADA' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                 {lanc.tipo_lancamento}
+                              </span>
+                              <h3 className="font-bold text-slate-800 mt-1 leading-tight">{lanc.descricao}</h3>
+                              <p className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
+                                 <Building2 size={10}/> {lanc.nome_cliente || 'Geral'}
+                              </p>
+                           </div>
+                           <div className="text-right">
+                              <p className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                 R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                              </p>
+                              <span className={`text-[9px] font-black uppercase ${lanc.status === 'PAGO' ? 'text-emerald-500' : lanc.status === 'PENDENTE' ? 'text-amber-500' : 'text-red-500'}`}>
+                                 {lanc.status}
+                              </span>
+                           </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                           <div className="text-[10px] font-bold text-slate-400">
+                              Venc: {new Date(lanc.data_vencimento).toLocaleDateString()}
+                           </div>
+                           
+                           <div className="flex items-center gap-3">
+                              {(lanc.arquivo_1 || lanc.arquivo_2 || lanc.comprovante) && (
+                                <Paperclip size={14} className="text-[#302464]" />
+                              )}
+                              
+                              {lanc.status === 'PENDENTE' && (
+                                <button 
+                                   onClick={(e) => { e.stopPropagation(); handleConfirmarPagamento(lanc); }}
+                                   className="bg-[#302464] text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest"
+                                >
+                                   Baixar
+                                </button>
+                              )}
+                              
+                              <button 
+                                 onClick={(e) => { e.stopPropagation(); handleExcluir(lanc.id); }}
+                                 className="text-slate-300 hover:text-red-500 p-1"
+                              >
+                                 <Trash2 size={16}/>
+                              </button>
+                           </div>
+                        </div>
+                    </div>
+                 ))}
+                 
+                 {extratoExibicao.length === 0 && (
+                    <div className="text-center py-10 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                       Nenhum registro encontrado.
+                    </div>
+                 )}
+             </div>
+
         </div>
       )}
 

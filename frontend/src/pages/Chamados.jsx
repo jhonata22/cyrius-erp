@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   AlertTriangle, ChevronRight, Search, Info, Monitor, Filter,
-  ChevronLeft, ChevronRight as ChevronRightIcon
+  ChevronLeft, ChevronRight as ChevronRightIcon, Lock // Adicionado Lock
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
@@ -73,7 +73,6 @@ export default function Chamados() {
         ativoService.listar()
       ]);
 
-      // Extração segura do objeto de paginação do Django
       const listaTratada = responseChamados?.results || (Array.isArray(responseChamados) ? responseChamados : []);
       setChamados(listaTratada);
       setTotalItens(responseChamados?.count || listaTratada.length || 0);
@@ -98,7 +97,12 @@ export default function Chamados() {
     return ativos.filter(a => (a.cliente === clienteId || a.cliente?.id === clienteId));
   }, [formData.cliente, ativos]);
 
-  // Pesquisa local na página atual (Blindada contra erros de tipo)
+  // Identifica o cliente selecionado para validar status
+  const clienteSelecionado = useMemo(() => {
+    if (!formData.cliente) return null;
+    return clientes.find(c => c.id === parseInt(formData.cliente));
+  }, [formData.cliente, clientes]);
+
   const chamadosFiltrados = useMemo(() => {
     if (!Array.isArray(chamados)) return [];
     const termo = busca.toLowerCase();
@@ -142,6 +146,12 @@ export default function Chamados() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.cliente) return alert("Selecione um cliente.");
+    
+    // === VALIDAÇÃO DE CLIENTE INATIVO ===
+    if (clienteSelecionado && !clienteSelecionado.ativo) {
+        return alert("Ação bloqueada: Cliente desativado.");
+    }
+
     if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
     try {
@@ -318,70 +328,85 @@ export default function Chamados() {
             </h2>
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
+                 <select 
+                    name="cliente" required value={formData.cliente} onChange={handleInputChange}
+                    className="w-full px-5 py-3.5 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 mt-2"
+                 >
+                    <option value="">Selecione...</option>
+                    {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social} {c.ativo ? '' : '(INATIVO)'}</option>)}
+                 </select>
+                 
+                 {/* === ALERTA DE CLIENTE DESATIVADO === */}
+                 {clienteSelecionado && !clienteSelecionado.ativo && (
+                     <div className="mt-4 bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-2">
+                        <Lock className="text-red-500 shrink-0 mt-0.5" size={20}/>
+                        <div>
+                            <h4 className="text-sm font-black text-red-600 uppercase">Cliente Desativado</h4>
+                            <p className="text-xs text-red-500 font-medium leading-relaxed">
+                                Esse cliente está temporariamente (ou não) desativado, por favor, contate seus superiores para mais detalhes.
+                            </p>
+                        </div>
+                     </div>
+                 )}
+              </div>
+
+              {/* Se o cliente estiver desativado, oculta/desabilita o resto do form ou apenas o botão?
+                  Optamos por manter o form visível mas bloquear o botão, conforme padrão UX */}
+
               {modalMode === 'VISITA' && (
                 <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 animate-in slide-in-from-top-2">
                   <div className="flex gap-4 items-center mb-6">
-                     <AlertTriangle className="text-[#A696D1]" size={24} />
-                     <h3 className="font-black text-[#302464] text-sm uppercase tracking-widest">Deslocamento</h3>
+                      <AlertTriangle className="text-[#A696D1]" size={24} />
+                      <h3 className="font-black text-[#302464] text-sm uppercase tracking-widest">Deslocamento</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                     <div className="sm:col-span-3">
-                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Data da Visita</label>
-                        <input 
-                          type="datetime-local" name="data_agendamento" required
-                          value={formData.data_agendamento} onChange={handleInputChange}
-                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464]"
-                        />
-                     </div>
-                     <div>
-                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Ida (R$)</label>
-                        <input 
-                          type="number" name="custo_ida" step="0.01" placeholder="0.00"
-                          value={formData.custo_ida} onChange={handleInputChange}
-                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
-                        />
-                     </div>
-                     <div>
-                        <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Volta (R$)</label>
-                        <input 
-                          type="number" name="custo_volta" step="0.01" placeholder="0.00"
-                          value={formData.custo_volta} onChange={handleInputChange}
-                          className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
-                        />
-                     </div>
-                     <div className="bg-[#302464] rounded-2xl flex flex-col items-center justify-center text-white">
-                        <p className="text-[8px] font-black uppercase tracking-widest opacity-50">Total</p>
-                        <p className="text-lg font-black">{custoEstimado.toFixed(2)}</p>
-                     </div>
+                      <div className="sm:col-span-3">
+                         <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Data da Visita</label>
+                         <input 
+                           type="datetime-local" name="data_agendamento" required
+                           value={formData.data_agendamento} onChange={handleInputChange}
+                           className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464]"
+                         />
+                      </div>
+                      <div>
+                         <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Ida (R$)</label>
+                         <input 
+                           type="number" name="custo_ida" step="0.01" placeholder="0.00"
+                           value={formData.custo_ida} onChange={handleInputChange}
+                           className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                         />
+                      </div>
+                      <div>
+                         <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Volta (R$)</label>
+                         <input 
+                           type="number" name="custo_volta" step="0.01" placeholder="0.00"
+                           value={formData.custo_volta} onChange={handleInputChange}
+                           className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                         />
+                      </div>
+                      <div className="bg-[#302464] rounded-2xl flex flex-col items-center justify-center text-white">
+                         <p className="text-[8px] font-black uppercase tracking-widest opacity-50">Total</p>
+                         <p className="text-lg font-black">{custoEstimado.toFixed(2)}</p>
+                      </div>
                   </div>
                 </div>
               )}
 
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
-                    <select 
-                    name="cliente" required value={formData.cliente} onChange={handleInputChange}
-                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700"
-                    >
-                    <option value="">Selecione...</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
-                    </select>
-                </div>
-
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
-                        <Monitor size={10} /> Ativo (Opcional)
-                    </label>
-                    <select 
+              <div className="md:col-span-2 space-y-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                     <Monitor size={10} /> Ativo (Opcional)
+                 </label>
+                 <select 
                     name="ativo" value={formData.ativo} onChange={handleInputChange}
                     disabled={!formData.cliente}
                     className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 disabled:opacity-50"
-                    >
+                 >
                     <option value="">Selecione...</option>
                     {ativosDoCliente.map(a => <option key={a.id} value={a.id}>{a.nome} ({a.tipo})</option>)}
-                    </select>
-                </div>
+                 </select>
               </div>
 
               <div className="md:col-span-2 space-y-1">
@@ -437,8 +462,19 @@ export default function Chamados() {
                 </div>
               </div>
 
-              <button type="submit" className="md:col-span-2 w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black text-lg shadow-2xl shadow-purple-900/20 active:scale-95 transition-all">
-                {modalMode === 'VISITA' ? 'Confirmar Agendamento' : 'Abrir Atendimento'}
+              <button 
+                type="submit" 
+                disabled={clienteSelecionado && !clienteSelecionado.ativo}
+                className={`md:col-span-2 w-full py-5 rounded-3xl font-black text-lg shadow-2xl transition-all
+                    ${clienteSelecionado && !clienteSelecionado.ativo 
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white shadow-purple-900/20 active:scale-95'
+                    }`}
+              >
+                {clienteSelecionado && !clienteSelecionado.ativo 
+                    ? 'Cliente Inativo - Bloqueado' 
+                    : (modalMode === 'VISITA' ? 'Confirmar Agendamento' : 'Abrir Atendimento')
+                }
               </button>
             </form>
           </div>

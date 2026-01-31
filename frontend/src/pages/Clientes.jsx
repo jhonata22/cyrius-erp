@@ -2,10 +2,34 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, MapPin, Calendar, Building2, 
-  ChevronRight, DollarSign, X, Camera, Store 
+  ChevronRight, DollarSign, X, Camera, Store, FileText 
 } from 'lucide-react';
 
 import clienteService from '../services/clienteService';
+
+// === FUNÇÕES AUXILIARES DE MÁSCARA ===
+const mascaraCPF = (value) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1');
+};
+
+const mascaraCNPJ = (value) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1');
+};
+
+const mascaraCEP = (value) => {
+  return value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
+};
 
 export default function Clientes() {
   const navigate = useNavigate();
@@ -13,17 +37,19 @@ export default function Clientes() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
 
-  // Estado do formulário atualizado com o campo 'nome'
   const [formData, setFormData] = useState({
-    nome: '', // Novo campo (Apelido/Fantasia)
+    nome: '', 
     razao_social: '',
     cpf_cnpj: '',
+    cep: '', 
     endereco: '',
     tipo_cliente: 'CONTRATO',
     valor_contrato_mensal: '',
     dia_vencimento: 5,
-    foto: null
+    foto: null,
+    ativo: true 
   });
 
   const carregarClientes = async () => {
@@ -40,20 +66,67 @@ export default function Clientes() {
 
   useEffect(() => { carregarClientes(); }, []);
 
-  // Filtro atualizado para buscar também pelo Nome Fantasia
   const clientesFiltrados = useMemo(() => {
     const termo = busca.toLowerCase();
     return clientes.filter(c => 
-      (c.nome && c.nome.toLowerCase().includes(termo)) || // Busca pelo nome
+      (c.nome && c.nome.toLowerCase().includes(termo)) || 
       c.razao_social.toLowerCase().includes(termo) ||
       (c.cnpj && c.cnpj.includes(busca)) ||
       (c.cpf && c.cpf.includes(busca))
     );
   }, [busca, clientes]);
 
+  // === HANDLERS ===
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // === CORREÇÃO AQUI: Limita a 14 dígitos ===
+  const handleDocChange = (e) => {
+    let rawValue = e.target.value.replace(/\D/g, '');
+    
+    // Impede que digite mais que 14 números (tamanho do CNPJ)
+    if (rawValue.length > 14) {
+        rawValue = rawValue.slice(0, 14);
+    }
+
+    let maskedValue = rawValue;
+
+    if (rawValue.length <= 11) {
+        maskedValue = mascaraCPF(rawValue);
+    } else {
+        maskedValue = mascaraCNPJ(rawValue);
+    }
+    
+    setFormData(prev => ({ ...prev, cpf_cnpj: maskedValue }));
+  };
+
+  // Handler para CEP com busca automática
+  const handleCepChange = async (e) => {
+    const valor = mascaraCEP(e.target.value);
+    setFormData(prev => ({ ...prev, cep: valor }));
+
+    // Se tiver 8 dígitos numéricos, busca na API
+    const cepLimpo = valor.replace(/\D/g, '');
+    if (cepLimpo.length === 8) {
+        setCepLoading(true);
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+            const data = await response.json();
+            if (!data.erro) {
+                setFormData(prev => ({
+                    ...prev,
+                    endereco: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
+                }));
+            }
+        } catch (error) {
+            console.error("Erro ao buscar CEP");
+        } finally {
+            setCepLoading(false);
+        }
+    }
   };
 
   const handleFileChange = (e) => {
@@ -65,19 +138,23 @@ export default function Clientes() {
     e.preventDefault();
     try {
       const payload = new FormData();
-      // Envia o Nome Fantasia se estiver preenchido
-      if (formData.nome) payload.append('nome', formData.nome);
       
+      payload.append('ativo', 'true'); 
+
+      if (formData.nome) payload.append('nome', formData.nome);
       payload.append('razao_social', formData.razao_social);
       payload.append('endereco', formData.endereco);
       payload.append('tipo_cliente', formData.tipo_cliente);
       payload.append('valor_contrato_mensal', formData.valor_contrato_mensal || 0);
       payload.append('dia_vencimento', formData.dia_vencimento);
       
-      if (formData.cpf_cnpj.length > 11) {
-          payload.append('cnpj', formData.cpf_cnpj);
+      // Limpa a máscara antes de enviar para verificar o tamanho real (apenas números)
+      const docLimpo = formData.cpf_cnpj.replace(/\D/g, '');
+
+      if (docLimpo.length > 11) {
+          payload.append('cnpj', docLimpo); // Envia apenas números
       } else {
-          payload.append('cpf', formData.cpf_cnpj);
+          payload.append('cpf', docLimpo); // Envia apenas números
       }
 
       if (formData.foto) {
@@ -87,17 +164,20 @@ export default function Clientes() {
       await clienteService.criar(payload);
       
       setIsModalOpen(false);
-      // Reseta o form incluindo o novo campo
+      
       setFormData({ 
         nome: '', 
         razao_social: '', 
         cpf_cnpj: '', 
+        cep: '',
         endereco: '', 
         tipo_cliente: 'CONTRATO', 
         valor_contrato_mensal: '', 
         dia_vencimento: 5, 
-        foto: null 
+        foto: null,
+        ativo: true
       });
+      
       carregarClientes();
       alert("Cliente cadastrado com sucesso!");
     } catch (error) {
@@ -143,35 +223,28 @@ export default function Clientes() {
               onClick={() => navigate(`/documentacao/${cliente.id}`)}
               className="group bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
             >
-              {/* Badge de Tipo */}
               <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest
                 ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}>
                 {cliente.tipo_cliente}
               </div>
 
               <div className="flex items-center gap-4 mb-6">
-                {/* Lógica para exibir foto ou inicial */}
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner overflow-hidden shrink-0
                   ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'}`}>
                    {cliente.foto ? (
                        <img src={cliente.foto} alt={cliente.nome_exibicao} className="w-full h-full object-cover" />
                    ) : (
-                       // Usa o nome_exibicao para pegar a inicial correta
                        (cliente.nome_exibicao || cliente.razao_social).charAt(0).toUpperCase()
                    )}
                 </div>
                 
-                <div className="min-w-0"> {/* min-w-0 evita que o texto estoure o flex container */}
+                <div className="min-w-0"> 
                   <h3 className="font-black text-slate-800 text-lg group-hover:text-[#7C69AF] transition-colors leading-tight truncate">
-                    {/* Exibe o Nome Fantasia preferencialmente, ou a Razão Social */}
                     {cliente.nome_exibicao || cliente.razao_social}
                   </h3>
-                  
-                  {/* Se tiver Nome Fantasia, mostra a Razão Social embaixo menorzinha */}
                   {cliente.nome && (
-                     <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{cliente.razao_social}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">{cliente.razao_social}</p>
                   )}
-
                   <p className="text-[10px] font-mono text-slate-400 mt-1 uppercase font-bold">
                     {cliente.cnpj || cliente.cpf || 'Sem documento'}
                   </p>
@@ -219,7 +292,6 @@ export default function Clientes() {
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Campo de Upload de Foto */}
               <div className="md:col-span-2 flex justify-center mb-4">
                   <div className="relative group cursor-pointer w-24 h-24">
                       <div className="w-full h-full rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
@@ -230,9 +302,7 @@ export default function Clientes() {
                           )}
                       </div>
                       <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={handleFileChange}
+                          type="file" accept="image/*" onChange={handleFileChange}
                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
                       <div className="absolute bottom-0 right-0 bg-[#302464] text-white p-1 rounded-full shadow-lg">
@@ -241,7 +311,6 @@ export default function Clientes() {
                   </div>
               </div>
 
-              {/* NOVO CAMPO: Nome Fantasia */}
               <div className="md:col-span-2 space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
                    <Store size={12} /> Nome Fantasia / Apelido
@@ -249,7 +318,7 @@ export default function Clientes() {
                 <input 
                   name="nome" type="text" value={formData.nome} onChange={handleInputChange}
                   className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-[#302464]"
-                  placeholder="Ex: Padaria do João (Como o cliente é conhecido)"
+                  placeholder="Ex: Padaria do João"
                 />
               </div>
 
@@ -258,16 +327,19 @@ export default function Clientes() {
                 <input 
                   name="razao_social" required type="text" value={formData.razao_social} onChange={handleInputChange}
                   className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-600"
-                  placeholder="Ex: João da Silva ME - Documento Oficial"
+                  placeholder="Ex: João da Silva ME"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CPF ou CNPJ</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                    <FileText size={10}/> CPF ou CNPJ
+                </label>
                 <input 
-                  name="cpf_cnpj" required type="text" value={formData.cpf_cnpj} onChange={handleInputChange}
+                  name="cpf_cnpj" required type="text" value={formData.cpf_cnpj} onChange={handleDocChange}
                   className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold"
-                  placeholder="Apenas números"
+                  placeholder="000.000.000-00"
+                  maxLength={18} // Limita ao tamanho do CNPJ formatado
                 />
               </div>
 
@@ -282,16 +354,32 @@ export default function Clientes() {
                 </select>
               </div>
 
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de Atendimento</label>
-                <div className="relative group">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
-                  <input 
-                    name="endereco" required type="text" value={formData.endereco} onChange={handleInputChange}
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-medium"
-                    placeholder="Rua, Número, Bairro, Cidade - UF"
-                  />
-                </div>
+              {/* === CEP e ENDEREÇO === */}
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
+                    <div className="relative">
+                        <input 
+                        name="cep" type="text" value={formData.cep} onChange={handleCepChange}
+                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold"
+                        placeholder="00000-000"
+                        maxLength={9}
+                        />
+                        {cepLoading && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Completo</label>
+                    <div className="relative group">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
+                        <input 
+                            name="endereco" required type="text" value={formData.endereco} onChange={handleInputChange}
+                            className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-medium"
+                            placeholder="Rua, Número, Bairro, Cidade - UF"
+                        />
+                    </div>
+                  </div>
               </div>
 
               {formData.tipo_cliente === 'CONTRATO' && (

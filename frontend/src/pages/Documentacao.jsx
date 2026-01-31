@@ -5,8 +5,8 @@ import {
   Server, TrendingUp, Phone, Mail, User, Globe, Shield, 
   Search, BookOpen, X, ChevronRight, CheckCircle2, 
   AlertTriangle, Info, MapPin, Plus, Trash2, Eye, EyeOff,
-  FileText, Download, UploadCloud, Pencil, // Adicionado Pencil
-  History, Calendar, ChevronLeft, Camera
+  FileText, Download, UploadCloud, Pencil, 
+  History, Calendar, ChevronLeft, Camera, Power // <--- Adicionado Power
 } from 'lucide-react';
 
 // SERVIÇOS
@@ -48,7 +48,7 @@ export default function Documentacao() {
     pontos_fracos_melhorias: ''
   });
 
-  // PERMISSÃO DE EDIÇÃO (Lápis)
+  // PERMISSÃO DE EDIÇÃO
   const canEdit = currentUser && ['SOCIO', 'GESTOR'].includes(currentUser.cargo);
 
   const togglePassword = (type, itemId) => {
@@ -117,6 +117,21 @@ export default function Documentacao() {
     }
   }, [activeTab, id, paginaHistorico]);
   
+  // ATUALIZAR STATUS (ATIVO/INATIVO)
+  const handleToggleAtivo = async () => {
+    if (!canEdit) return;
+    try {
+        const novoStatus = !cliente.ativo;
+        // Atualiza no backend
+        await clienteService.atualizar(id, { ativo: novoStatus });
+        // Atualiza no estado local visualmente
+        setCliente(prev => ({ ...prev, ativo: novoStatus }));
+    } catch (error) {
+        alert("Erro ao alterar status do cliente.");
+        console.error(error);
+    }
+  };
+
   // ATUALIZAR FOTO
   const handleUpdateFoto = async (e) => {
     const file = e.target.files[0];
@@ -134,7 +149,6 @@ export default function Documentacao() {
     }
   };
 
-  // PREPARAR EDIÇÃO DO CLIENTE (Abre Modal com dados atuais)
   const handlePreparaEdicaoCliente = () => {
       setFormTemp({
           nome: cliente.nome || '',
@@ -144,12 +158,9 @@ export default function Documentacao() {
       setModalAberto('editar_cliente');
   };
 
-  // SALVAR EDIÇÃO DO CLIENTE
   const handleSalvarEdicaoCliente = async (e) => {
       e.preventDefault();
       try {
-          // Usamos PATCH do clienteService (atualizar)
-          // Montamos o objeto apenas com os campos editáveis nesta tela
           const payload = {
               nome: formTemp.nome,
               razao_social: formTemp.razao_social,
@@ -273,7 +284,14 @@ export default function Documentacao() {
                   <div>
                     <h3 className="font-black text-slate-800 line-clamp-1">{cli.nome_exibicao || cli.razao_social}</h3>
                     {cli.nome && <p className="text-[9px] text-slate-400 font-bold truncate">{cli.razao_social}</p>}
-                    <span className="text-[9px] font-black uppercase text-slate-400 mt-1 block">{cli.tipo_cliente}</span>
+                    
+                    {/* Badge de Status na Listagem */}
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[9px] font-black uppercase text-slate-400">{cli.tipo_cliente}</span>
+                        {!cli.ativo && (
+                            <span className="text-[8px] font-black uppercase bg-red-100 text-red-500 px-1.5 py-0.5 rounded">Inativo</span>
+                        )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-slate-300 group-hover:text-[#7C69AF] transition-colors mt-4 pt-4 border-t border-slate-50">
@@ -298,7 +316,7 @@ export default function Documentacao() {
             <div className="relative group">
                 <label className="cursor-pointer">
                     <div className={`w-20 h-20 rounded-[1.5rem] shadow-xl flex items-center justify-center text-white overflow-hidden border-4 border-white relative transition-transform hover:scale-105
-                        ${cliente?.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#302464]'}`}>
+                        ${!cliente.ativo ? 'bg-slate-400 grayscale' : cliente?.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#302464]'}`}>
                         
                         {cliente?.foto ? (
                             <img src={cliente.foto} alt="Logo" className="w-full h-full object-cover" />
@@ -319,11 +337,11 @@ export default function Documentacao() {
 
             <div>
                 {/* Exibe Nome Fantasia como principal, se houver */}
-                <h1 className="text-3xl font-black text-slate-800">
+                <h1 className={`text-3xl font-black ${!cliente.ativo ? 'text-slate-400' : 'text-slate-800'}`}>
                     {cliente?.nome || cliente?.razao_social}
+                    {!cliente.ativo && <span className="text-red-400 text-sm ml-2 font-bold">(Inativo)</span>}
                 </h1>
                 
-                {/* Se tiver Nome Fantasia, mostra Razão Social menor */}
                 {cliente?.nome && (
                     <p className="text-sm font-bold text-slate-400">{cliente?.razao_social}</p>
                 )}
@@ -338,10 +356,17 @@ export default function Documentacao() {
         </button>
       </div>
 
-      {/* TABS */}
-      <div className="flex justify-center overflow-x-auto gap-2 p-1.5 bg-slate-200/50 rounded-2xl mb-8 no-scrollbar">
+      {/* TABS - MENU RESPONSIVO MELHORADO */}
+      <div className="flex md:justify-center justify-start overflow-x-auto gap-3 p-2 bg-slate-200/50 rounded-2xl mb-8 snap-x">
         {tabs.map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-[#302464] shadow-sm' : 'text-slate-500'}`}>
+          <button 
+            key={tab.id} 
+            onClick={() => setActiveTab(tab.id)} 
+            className={`
+                flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap snap-center shrink-0 
+                ${activeTab === tab.id ? 'bg-white text-[#302464] shadow-sm scale-105' : 'text-slate-500 hover:bg-white/50'}
+            `}
+          >
             <tab.icon size={14} /> {tab.label}
           </button>
         ))}
@@ -357,17 +382,44 @@ export default function Documentacao() {
                         <div className="flex justify-between items-center mb-8">
                             <h3 className="font-black text-[#302464] text-xs uppercase">Informações Base</h3>
                             
-                            {/* --- BOTÃO DE EDITAR (LÁPIS) --- */}
-                            {canEdit && (
-                                <button 
-                                    onClick={handlePreparaEdicaoCliente}
-                                    className="p-2 bg-slate-50 text-[#7C69AF] rounded-xl hover:bg-[#302464] hover:text-white transition-all shadow-sm"
-                                    title="Editar Dados do Cliente"
-                                >
-                                    <Pencil size={16} />
-                                </button>
-                            )}
-                            {/* ------------------------------- */}
+                            {/* --- BOTÕES DE AÇÃO (EDITAR + ATIVAR/DESATIVAR) --- */}
+                            <div className="flex items-center gap-2">
+                                {canEdit && (
+                                    <>
+                                        {/* Botão de Status (Ativo/Inativo) */}
+                                        <div className="flex items-center bg-slate-50 rounded-xl p-1 border border-slate-100 mr-2">
+                                            <button
+                                                onClick={handleToggleAtivo}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all
+                                                    ${cliente.ativo 
+                                                        ? 'bg-emerald-100 text-emerald-700 shadow-sm' 
+                                                        : 'bg-transparent text-slate-400 hover:bg-slate-200'
+                                                    }`}
+                                            >
+                                                ON
+                                            </button>
+                                            <button
+                                                onClick={handleToggleAtivo}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all
+                                                    ${!cliente.ativo 
+                                                        ? 'bg-red-100 text-red-600 shadow-sm' 
+                                                        : 'bg-transparent text-slate-400 hover:bg-slate-200'
+                                                    }`}
+                                            >
+                                                OFF
+                                            </button>
+                                        </div>
+
+                                        <button 
+                                            onClick={handlePreparaEdicaoCliente}
+                                            className="p-2 bg-slate-50 text-[#7C69AF] rounded-xl hover:bg-[#302464] hover:text-white transition-all shadow-sm"
+                                            title="Editar Dados do Cliente"
+                                        >
+                                            <Pencil size={16} />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-slate-700">
@@ -440,14 +492,14 @@ export default function Documentacao() {
                                     </div>
                                     
                                     <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end pl-14 md:pl-0">
-                                        <div className="text-right">
-                                            <p className="text-[9px] font-black text-slate-300 uppercase">Data</p>
-                                            <p className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                                                <Calendar size={12} className="text-[#A696D1]"/>
-                                                {new Date(chamado.created_at || chamado.data_abertura).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                        <ChevronRight size={18} className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all" />
+                                            <div className="text-right">
+                                                <p className="text-[9px] font-black text-slate-300 uppercase">Data</p>
+                                                <p className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                                                    <Calendar size={12} className="text-[#A696D1]"/>
+                                                    {new Date(chamado.created_at || chamado.data_abertura).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <ChevronRight size={18} className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all" />
                                     </div>
                                 </div>
                             ))}

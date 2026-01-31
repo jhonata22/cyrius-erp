@@ -1,3 +1,4 @@
+import re # <--- IMPORTANTE: Adicione este import no topo
 from rest_framework import serializers
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, 
@@ -37,12 +38,61 @@ class ClienteSerializer(serializers.ModelSerializer):
     contratos = ContratoClienteSerializer(many=True, read_only=True)
     nome_exibicao = serializers.SerializerMethodField()
     
-    # CORREÇÃO: Sem many=True (Um cliente tem UM dossiê)
     documentacao_tecnica = DocumentacaoTecnicaSerializer(read_only=True)
 
     class Meta:
         model = Cliente
         fields = '__all__'
+
     def get_nome_exibicao(self, obj):
-        # A lógica inteligente fica aqui no backend
         return obj.nome if obj.nome else obj.razao_social
+
+    # === VALIDAÇÕES DE SEGURANÇA E LIMPEZA ===
+
+    def validate_cpf(self, value):
+        """
+        Remove pontuação do CPF e valida se tem 11 dígitos.
+        """
+        if not value:
+            return value
+        
+        # Remove tudo que NÃO for número
+        clean_value = re.sub(r'\D', '', str(value))
+
+        if len(clean_value) != 11:
+            raise serializers.ValidationError("O CPF deve conter exatamente 11 dígitos numéricos.")
+        
+        return clean_value
+
+    def validate_cnpj(self, value):
+        """
+        Remove pontuação do CNPJ e valida se tem 14 dígitos.
+        """
+        if not value:
+            return value
+            
+        # Remove tudo que NÃO for número
+        clean_value = re.sub(r'\D', '', str(value))
+
+        if len(clean_value) != 14:
+            raise serializers.ValidationError("O CNPJ deve conter exatamente 14 dígitos numéricos.")
+            
+        return clean_value
+
+    def validate(self, data):
+        """
+        Validação geral cruzada (Ex: Garantir que tem CPF OU CNPJ)
+        """
+        # Exemplo opcional: Garantir que pelo menos um documento foi enviado
+        # if not data.get('cpf') and not data.get('cnpj'):
+        #     raise serializers.ValidationError("É necessário informar CPF ou CNPJ.")
+        return data
+
+    def create(self, validated_data):
+        """
+        Garante que o cliente seja criado como Ativo se o campo não for passado
+        """
+        if 'ativo' not in validated_data:
+            validated_data['ativo'] = True
+            
+        return super().create(validated_data)
