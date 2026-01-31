@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, Wallet, ArrowUpRight, TrendingUp, RefreshCw, 
   Truck, PieChart as PieIcon, Check, X, Search, Printer, 
-  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2
+  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2, Filter
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -26,7 +26,10 @@ export default function Financeiro() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Filtro de Data
+  // NOVO: Estado para o Filtro de Categoria/Tipo
+  const [filtroCategoria, setFiltroCategoria] = useState('TODOS');
+
+  // Filtro de Data (Controla o Dashboard)
   const [filtroData, setFiltroData] = useState({
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear()
@@ -40,7 +43,10 @@ export default function Financeiro() {
     arquivo_1: null, arquivo_2: null
   });
 
-  // --- CARREGAMENTO DE DADOS ---
+  // =========================================================================
+  // 1. CARREGAMENTO INTELIGENTE
+  // =========================================================================
+
   const carregarDadosGlobais = async () => {
       try {
           const [dadosFin, dadosCli] = await Promise.all([
@@ -68,7 +74,7 @@ export default function Financeiro() {
 
   useEffect(() => {
       financeiroService.processarRecorrencias()
-          .catch(() => {})
+          .catch(() => {}) 
           .finally(() => {
               carregarDadosGlobais();
           });
@@ -80,34 +86,9 @@ export default function Financeiro() {
   }, [carregarEstatisticas]);
 
 
-  // --- FILTROS E CÁLCULOS ---
-  
-  // 1. Dados Básicos do Dashboard
-  const kpis = dadosDashboard || { 
-      saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
-      contratosAtivos: 0, custoTransporte: 0 
-  };
-  const graficoReceita = dadosDashboard?.graficoReceita || [];
-
-  // 2. CORREÇÃO DO RANKING DE VISITAS
-  // Cruzamos o ID do cliente que vem do dashboard com a lista de clientes para pegar o Nome Fantasia
-  const rankingVisitas = useMemo(() => {
-      const rawRanking = dadosDashboard?.rankingVisitas || [];
-      
-      return rawRanking.map(item => {
-          // Tenta encontrar o cliente na lista completa carregada
-          const clienteEncontrado = clientes.find(c => c.id === item.cliente); // Assume que o backend manda 'cliente' como ID
-          
-          return {
-              ...item,
-              // Prioridade: Nome Fantasia > Razão Social > Nome que veio do Dashboard > 'Cliente'
-              nome_exibicao: clienteEncontrado 
-                  ? (clienteEncontrado.nome || clienteEncontrado.razao_social) 
-                  : (item.nome_cliente || 'Cliente')
-          };
-      });
-  }, [dadosDashboard, clientes]);
-
+  // =========================================================================
+  // 2. FILTROS E CÁLCULOS (MEMOIZED - INSTANTÂNEO)
+  // =========================================================================
 
   const lancamentosDoMes = useMemo(() => {
       const mesSel = parseInt(filtroData.mes);
@@ -120,14 +101,33 @@ export default function Financeiro() {
       }).sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento)); 
   }, [todosLancamentos, filtroData]);
 
+  // CORREÇÃO E IMPLEMENTAÇÃO DO FILTRO DE CATEGORIAS
   const extratoExibicao = useMemo(() => {
-      if (!buscaExtrato) return lancamentosDoMes;
-      const termo = buscaExtrato.toLowerCase();
-      return lancamentosDoMes.filter(l => 
-          l.descricao.toLowerCase().includes(termo) || 
-          (l.nome_cliente && l.nome_cliente.toLowerCase().includes(termo))
-      );
-  }, [lancamentosDoMes, buscaExtrato]);
+      let dados = lancamentosDoMes;
+
+      // 1. Filtro de Texto (Busca)
+      if (buscaExtrato) {
+          const termo = buscaExtrato.toLowerCase();
+          dados = dados.filter(l => 
+              l.descricao.toLowerCase().includes(termo) || 
+              (l.nome_cliente && l.nome_cliente.toLowerCase().includes(termo))
+          );
+      }
+
+      // 2. Filtro de Categoria/Tipo (Novo)
+      if (filtroCategoria !== 'TODOS') {
+        if (filtroCategoria === 'ENTRADA') {
+            dados = dados.filter(l => l.tipo_lancamento === 'ENTRADA');
+        } else if (filtroCategoria === 'SAIDA') {
+            dados = dados.filter(l => l.tipo_lancamento === 'SAIDA');
+        } else {
+            // Filtra pela coluna 'categoria' do banco (ex: SERVICO, CONTRATO, IMPOSTO)
+            dados = dados.filter(l => l.categoria === filtroCategoria);
+        }
+      }
+
+      return dados;
+  }, [lancamentosDoMes, buscaExtrato, filtroCategoria]); // Adicionado filtroCategoria nas dependências
 
   const inadimplentesAgrupados = useMemo(() => {
       const hoje = new Date();
@@ -147,20 +147,16 @@ export default function Financeiro() {
       vencidos.forEach(item => {
           if (item.cliente) {
               if (!mapa[item.cliente]) {
-                  // Tenta achar o nome amigável na lista de clientes carregada
-                  const clienteInfo = clientes.find(c => c.id === item.cliente);
-                  const nomeExibicao = clienteInfo ? (clienteInfo.nome || clienteInfo.razao_social) : item.nome_cliente;
-
                   mapa[item.cliente] = {
                       id: `grupo-${item.cliente}`,
                       isGroup: true,
                       clienteId: item.cliente,
-                      nome_cliente: nomeExibicao, // Usa o nome amigável
+                      nome_cliente: item.nome_cliente,
                       ids_reais: [], 
                       valor: 0,
                       qtd: 0,
                       data_mais_antiga: item.data_vencimento,
-                      comprovante: null
+                      comprovante: null 
                   };
                   listaFinal.push(mapa[item.cliente]);
               }
@@ -182,13 +178,16 @@ export default function Financeiro() {
       });
 
       return listaFinal.sort((a, b) => new Date(a.isGroup ? a.data_mais_antiga : a.data_vencimento) - new Date(b.isGroup ? b.data_mais_antiga : b.data_vencimento));
-  }, [todosLancamentos, clientes]);
+  }, [todosLancamentos]);
 
   const servicosMes = useMemo(() => {
       return lancamentosDoMes.filter(l => l.tipo_lancamento === 'ENTRADA' && l.categoria === 'SERVICO');
   }, [lancamentosDoMes]);
 
-  // --- AÇÕES ---
+  // =========================================================================
+  // 3. AÇÕES (HANDLERS)
+  // =========================================================================
+
   const handleToggleSelect = (id) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter(item => item !== id));
@@ -222,7 +221,7 @@ export default function Financeiro() {
     try {
         await financeiroService.baixarEmLote(pendentesSelecionados.map(p => p.id));
         alert("Baixa realizada com sucesso!");
-        carregarDadosGlobais();
+        carregarDadosGlobais(); 
         carregarEstatisticas();
         setSelectedIds([]);
     } catch (error) {
@@ -259,7 +258,7 @@ export default function Financeiro() {
 
   const handleImprimir = () => {
     const periodo = `${filtroData.mes}/${filtroData.ano}`;
-    const dados = extratoExibicao;
+    const dados = extratoExibicao; 
     let totalEnt = 0;
     let totalSai = 0;
 
@@ -341,7 +340,24 @@ export default function Financeiro() {
     } catch { alert("Erro ao salvar."); }
   };
 
+  // Definição das opções de Filtro Rápido
+  const FILTROS_RAPIDOS = [
+      { id: 'TODOS', label: 'Tudo' },
+      { id: 'ENTRADA', label: 'Receitas (+)' },
+      { id: 'SAIDA', label: 'Despesas (-)' },
+      { id: 'CONTRATO', label: 'Contratos' },
+      { id: 'SERVICO', label: 'Serviços/Transporte' },
+      { id: 'IMPOSTO', label: 'Impostos' },
+  ];
+
   const COLORS = ['#7C69AF', '#A696D1', '#302464'];
+
+  const kpis = dadosDashboard || { 
+      saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
+      contratosAtivos: 0, custoTransporte: 0 
+  };
+  const graficoReceita = dadosDashboard?.graficoReceita || [];
+  const rankingVisitas = dadosDashboard?.rankingVisitas || [];
 
   if (loading && !dadosDashboard) return <div className="p-20 text-center font-black text-[#7C69AF] animate-pulse uppercase tracking-widest text-xs">Carregando Finanças...</div>;
 
@@ -448,7 +464,7 @@ export default function Financeiro() {
                     </div>
                 </div>
 
-                {/* RANKING DE VISITAS (CORRIGIDO) */}
+                {/* RANKING DE VISITAS */}
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                     <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Truck size={16} className="text-[#7C69AF]"/> Top Visitas (Mês)
@@ -462,7 +478,7 @@ export default function Financeiro() {
                                     <div className="flex items-center gap-4">
                                         <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center font-black text-[#302464] text-xs shadow-sm border border-slate-100">{idx + 1}</div>
                                         <div>
-                                            <p className="font-bold text-slate-700 text-sm">{item.nome_exibicao}</p>
+                                            <p className="font-bold text-slate-700 text-sm">{item.nome_cliente || 'Cliente'}</p>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{item.qtd} visitas</p>
                                         </div>
                                     </div>
@@ -488,8 +504,7 @@ export default function Financeiro() {
                       <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Check size={16} className="text-emerald-500"/> Serviços Realizados ({filtroData.mes}/{filtroData.ano})
                     </h3>
-                    {/* SCROLLBAR PERSONALIZADA */}
-                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-purple-200 scrollbar-track-transparent">
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                         {servicosMes.length === 0 ? (
                             <p className="text-slate-400 text-xs text-center py-4">Nenhum serviço este mês.</p>
                         ) : servicosMes.map(serv => (
@@ -497,6 +512,7 @@ export default function Financeiro() {
                                 <div>
                                     <p className="font-bold text-slate-700 text-sm">{serv.descricao}</p>
                                     <p className="text-[10px] font-black text-slate-400 uppercase">{new Date(serv.data_vencimento).toLocaleDateString()} • {serv.nome_cliente || 'Avulso'}</p>
+                                    
                                     <div className="flex gap-2 mt-1">
                                             {serv.comprovante && (
                                                 <a href={serv.comprovante} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:scale-125 transition-transform" title="Ver OS/Comprovante">
@@ -515,13 +531,12 @@ export default function Financeiro() {
                     </div>
                 </div>
 
-                {/* INADIMPLENTES (AGRUPADO POR CLIENTE) */}
+                {/* INADIMPLENTES */}
                 <div className="bg-red-50/50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
                       <h3 className="font-black text-red-600 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                         <AlertTriangle size={16} className="text-red-500"/> Inadimplentes (Acumulado)
                     </h3>
-                    {/* SCROLLBAR PERSONALIZADA */}
-                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-red-200 scrollbar-track-transparent">
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                         {inadimplentesAgrupados.length === 0 ? (
                              <div className="flex flex-col items-center justify-center py-6 text-emerald-600/60">
                                 <Check size={40} className="mb-2"/>
@@ -563,94 +578,112 @@ export default function Financeiro() {
       {activeTab === 'LISTA' && (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
              
-             {/* BARRA DE BUSCA + AÇÕES EM LOTE */}
-             <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                    <Search size={20} className="text-slate-300" />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por descrição, cliente ou valor..." 
-                        className="w-full font-bold text-slate-600 outline-none placeholder:text-slate-300"
-                        value={buscaExtrato}
-                        onChange={(e) => setBuscaExtrato(e.target.value)}
-                    />
-                </div>
-                
-                {selectedIds.length > 0 && (
-                    <button 
-                        onClick={handleBaixarMultiplo}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 animate-in fade-in slide-in-from-right-5"
-                    >
-                        <CheckSquare size={16} /> Baixar ({selectedIds.length})
-                    </button>
-                )}
+             {/* BARRA DE BUSCA + AÇÕES */}
+             <div className="p-6 border-b border-slate-100">
+                 <div className="flex items-center justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3 flex-1 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
+                        <Search size={20} className="text-slate-300" />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por descrição, cliente ou valor..." 
+                            className="w-full bg-transparent font-bold text-slate-600 outline-none placeholder:text-slate-300"
+                            value={buscaExtrato}
+                            onChange={(e) => setBuscaExtrato(e.target.value)}
+                        />
+                    </div>
+                    
+                    {selectedIds.length > 0 && (
+                        <button 
+                            onClick={handleBaixarMultiplo}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 animate-in fade-in slide-in-from-right-5 shadow-lg shadow-emerald-500/20"
+                        >
+                            <CheckSquare size={16} /> Baixar ({selectedIds.length})
+                        </button>
+                    )}
+                 </div>
+
+                 {/* NOVOS FILTROS RÁPIDOS DE CATEGORIA */}
+                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
+                    {FILTROS_RAPIDOS.map(filtro => (
+                        <button
+                            key={filtro.id}
+                            onClick={() => setFiltroCategoria(filtro.id)}
+                            className={`
+                                whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border
+                                ${filtroCategoria === filtro.id 
+                                    ? 'bg-[#302464] text-white border-[#302464] shadow-md shadow-purple-900/20' 
+                                    : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50 hover:border-slate-200'}
+                            `}
+                        >
+                            {filtro.label}
+                        </button>
+                    ))}
+                 </div>
              </div>
 
-             {/* SOLUÇÃO DO PROBLEMA DE LAYOUT: SCROLL HORIZONTAL NA TABELA */}
-             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-purple-100 scrollbar-track-transparent">
-                 <table className="w-full text-left min-w-[800px]"> {/* min-w força o scroll se espremer demais */}
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                            <th className="p-6 w-14">
+             <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                        <th className="p-6 w-14">
+                            <input 
+                                type="checkbox" 
+                                className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
+                                checked={extratoExibicao.length > 0 && selectedIds.length === extratoExibicao.length}
+                                onChange={handleSelectAll}
+                            />
+                        </th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                    {extratoExibicao.map(lanc => (
+                        <tr key={lanc.id} className={`group transition-colors ${selectedIds.includes(lanc.id) ? 'bg-purple-50/50' : 'hover:bg-slate-50/50'}`}>
+                            <td className="p-6">
                                 <input 
                                     type="checkbox" 
                                     className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
-                                    checked={extratoExibicao.length > 0 && selectedIds.length === extratoExibicao.length}
-                                    onChange={handleSelectAll}
+                                    checked={selectedIds.includes(lanc.id)}
+                                    onChange={() => handleToggleSelect(lanc.id)}
                                 />
-                            </th>
-                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
-                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
-                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
+                            </td>
+                            <td className="p-6">
+                                <div className="font-black text-slate-800">{lanc.descricao}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
+                                    <span className="text-[9px] font-bold text-slate-300 uppercase bg-slate-100 px-1.5 py-0.5 rounded">{lanc.categoria}</span>
+                                </div>
+                                
+                                <div className="flex gap-2 mt-2">
+                                    {lanc.comprovante && (
+                                        <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-100">
+                                            <CheckSquare size={10}/> Comprovante OS
+                                        </a>
+                                    )}
+                                    {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
+                                    {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
+                                </div>
+                            </td>
+                            <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
+                            <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
+                            <td className="p-6 text-right">
+                                <div className="flex items-center justify-end gap-4">
+                                    <div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                    <div className="flex flex-col gap-2">
+                                        {lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline">Baixar</button>}
+                                        <button onClick={() => handleExcluir(lanc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {extratoExibicao.map(lanc => (
-                            <tr key={lanc.id} className={`group transition-colors ${selectedIds.includes(lanc.id) ? 'bg-purple-50/50' : 'hover:bg-slate-50/50'}`}>
-                                <td className="p-6">
-                                    <input 
-                                        type="checkbox" 
-                                        className="w-5 h-5 accent-[#302464] cursor-pointer rounded-md"
-                                        checked={selectedIds.includes(lanc.id)}
-                                        onChange={() => handleToggleSelect(lanc.id)}
-                                    />
-                                </td>
-                                <td className="p-6">
-                                    <div className="font-black text-slate-800">{lanc.descricao}</div>
-                                    <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
-                                    
-                                    {/* EXIBIÇÃO DE ANEXOS NA LISTA */}
-                                    <div className="flex gap-2 mt-2">
-                                        {lanc.comprovante && (
-                                            <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-100">
-                                                <CheckSquare size={10}/> Comprovante OS
-                                            </a>
-                                        )}
-
-                                        {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
-                                        {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
-                                    </div>
-                                </td>
-                                <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
-                                <td className="p-6 text-center"><span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${lanc.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : lanc.status === 'PENDENTE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{lanc.status}</span></td>
-                                <td className="p-6 text-right">
-                                    <div className="flex items-center justify-end gap-4">
-                                        <div className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>{lanc.tipo_lancamento === 'SAIDA' && '- '}R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                        <div className="flex flex-col gap-2">
-                                            {lanc.status === 'PENDENTE' && <button onClick={() => handleConfirmarPagamento(lanc)} className="text-[9px] font-black text-[#7C69AF] uppercase tracking-widest hover:underline">Baixar</button>}
-                                            <button onClick={() => handleExcluir(lanc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {extratoExibicao.length === 0 && (
-                            <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado.</td></tr>
-                        )}
-                    </tbody>
-                 </table>
-             </div>
+                    ))}
+                    {extratoExibicao.length === 0 && (
+                        <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado para este filtro.</td></tr>
+                    )}
+                </tbody>
+             </table>
         </div>
       )}
 
@@ -719,12 +752,7 @@ export default function Financeiro() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vincular Cliente</label>
                         <select className="w-full px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-700 outline-none" value={form.cliente} onChange={e => setForm({...form, cliente: e.target.value})}>
                             <option value="">Nenhum (Lançamento Avulso)</option>
-                            {/* CORREÇÃO DO NOME DO CLIENTE NO SELECT */}
-                            {clientes.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.nome || c.razao_social}
-                                </option>
-                            ))}
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
                         </select>
                     </div>
 
