@@ -6,29 +6,16 @@ import {
   Wrench, Menu, X
 } from 'lucide-react';
 import authService from '../services/authService';
+// IMPORTANTE: Importar o equipeService para buscar os dados atualizados
+import equipeService from '../services/equipeService'; 
 import NotificationBell from './NotificationBell';
 
-// --- ESTILO DA BARRA DE ROLAGEM PERSONALIZADA ---
-// Isso garante que o scroll seja sutil e elegante, combinando com o tema roxo.
 const scrollbarStyle = `
-  .sidebar-scroll::-webkit-scrollbar {
-    width: 5px;
-  }
-  .sidebar-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .sidebar-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-  }
-  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-  }
-  /* Compatibilidade com Firefox */
-  .sidebar-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-  }
+  .sidebar-scroll::-webkit-scrollbar { width: 5px; }
+  .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+  .sidebar-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
 `;
 
 const SidebarItem = ({ icon: Icon, text, to, isExpanded, onClick }) => {
@@ -60,9 +47,36 @@ export default function Layout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   
-  const userName = authService.getLoggedUser() || 'Usuário';
-  const userPhoto = localStorage.getItem('user_photo');
-  const userCargo = localStorage.getItem('cargo');
+  // Estado para os dados do usuário
+  const [userName, setUserName] = useState(authService.getLoggedUser() || 'Usuário');
+  const [userPhoto, setUserPhoto] = useState(localStorage.getItem('user_photo'));
+  const [userCargo, setUserCargo] = useState(localStorage.getItem('cargo'));
+
+  // Efeito para buscar dados atualizados do perfil (Foto, Cargo, Nome)
+  useEffect(() => {
+    async function fetchUserData() {
+        try {
+            const data = await equipeService.me();
+            
+            // Atualiza estados
+            if (data.nome) setUserName(data.nome);
+            if (data.cargo) setUserCargo(data.cargo);
+            
+            // Lógica da Foto
+            if (data.foto) {
+                setUserPhoto(data.foto);
+                // Opcional: Atualizar localStorage para cache na próxima vez
+                localStorage.setItem('user_photo', data.foto);
+            }
+            // Atualiza cargo no storage para permissões
+            if (data.cargo) localStorage.setItem('cargo', data.cargo);
+
+        } catch (error) {
+            console.error("Erro ao carregar perfil do usuário no Layout", error);
+        }
+    }
+    fetchUserData();
+  }, []);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -75,11 +89,8 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden">
-      
-      {/* Injeta o CSS da barra de rolagem */}
       <style>{scrollbarStyle}</style>
 
-      {/* OVERLAY PARA MOBILE */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -87,7 +98,6 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* SIDEBAR */}
       <aside 
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
@@ -110,8 +120,6 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* MENU COM SCROLLBAR PERSONALIZADA */}
-        {/* Substituí 'no-scrollbar' por 'sidebar-scroll' e removi 'overflow-y-auto' padrão para garantir a aplicação da classe correta */}
         <nav className="flex-1 px-4 py-4 overflow-y-auto sidebar-scroll">
           <p className={`px-2 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4 transition-opacity duration-300 ${(isExpanded || isMobileOpen) ? 'opacity-100' : 'opacity-0'}`}>
             Menu
@@ -144,7 +152,6 @@ export default function Layout({ children }) {
           </ul>
         </nav>
 
-        {/* LOGOUT */}
         <div className="p-4 border-t border-white/5 shrink-0">
           <button onClick={() => authService.logout()} className="flex items-center w-full px-4 py-3 text-sm font-bold text-white/40 hover:text-white hover:bg-red-500/20 rounded-xl transition-all group">
             <LogOut size={18} className="min-w-[18px]" />
@@ -153,9 +160,7 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-        
         <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-10 shrink-0">
             <div className="flex items-center">
                 <button 
@@ -181,18 +186,25 @@ export default function Layout({ children }) {
                         <p className="text-[10px] font-black text-[#7C69AF] uppercase tracking-widest">{userCargo || 'Colaborador'}</p>
                     </div>
                     
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-xs md:text-sm border-2 border-white overflow-hidden shadow-sm">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-xs md:text-sm border-2 border-white overflow-hidden shadow-sm relative">
                         {userPhoto ? (
-                          <img src={userPhoto} alt="Perfil" className="w-full h-full object-cover" />
-                        ) : (
-                          userName.substring(0, 2).toUpperCase()
-                        )}
+                          <img 
+                             src={userPhoto} 
+                             alt="Perfil" 
+                             className="w-full h-full object-cover absolute inset-0"
+                             onError={(e) => { e.target.style.display = 'none'; }} // Esconde se der erro e mostra iniciais
+                          />
+                        ) : null}
+                        
+                        {/* Fallback de iniciais se não tiver foto ou der erro */}
+                        <span className={userPhoto ? 'hidden' : 'block'}>
+                            {userName.substring(0, 2).toUpperCase()}
+                        </span>
                     </div>
                 </Link>
             </div>
         </header>
         
-        {/* CONTEÚDO */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent hover:scrollbar-thumb-slate-400">
           <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {children}

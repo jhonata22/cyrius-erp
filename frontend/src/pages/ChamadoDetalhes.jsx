@@ -55,7 +55,7 @@ export default function ChamadoDetalhes() {
       setLoading(true);
       const dados = await chamadoService.buscarPorId(id);
       setChamado(dados);
-      setCliente(dados.cliente);
+      setCliente(dados.cliente); // O serializer já manda 'nome_exibicao' aqui dentro
       setTecnicos(dados.tecnicos || []);
 
       setEditData({
@@ -294,10 +294,20 @@ export default function ChamadoDetalhes() {
               </h3>
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-[#302464] font-black text-xl shrink-0">
-                  {cliente.razao_social.charAt(0)}
+                  {/* Pega a inicial do nome correto */}
+                  {(cliente.nome_exibicao || cliente.razao_social).charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-black text-slate-800 text-sm leading-tight truncate">{cliente.razao_social}</p>
+                  {/* AQUI ESTÁ A ALTERAÇÃO: Usa nome_exibicao (Fantasia) se existir, senão Razão */}
+                  <p className="font-black text-slate-800 text-sm leading-tight truncate">
+                      {cliente.nome_exibicao || cliente.razao_social}
+                  </p>
+                  
+                  {/* Se for fantasia, mostra a razão social embaixo em cinza */}
+                  {cliente.nome_fantasia && (
+                       <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{cliente.razao_social}</p>
+                  )}
+                  
                   <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{cliente.cnpj_cpf}</p>
                   <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase mt-1 inline-block ${cliente.tipo_cliente === 'AVULSO' ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}`}>
                     {cliente.tipo_cliente || 'CONTRATO'}

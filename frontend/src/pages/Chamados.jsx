@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   AlertTriangle, ChevronRight, Search, Info, Monitor, Filter,
-  ChevronLeft, ChevronRight as ChevronRightIcon, Lock // Adicionado Lock
+  ChevronLeft, ChevronRight as ChevronRightIcon, Lock 
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
@@ -332,11 +332,16 @@ export default function Chamados() {
               <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
                  <select 
-                    name="cliente" required value={formData.cliente} onChange={handleInputChange}
-                    className="w-full px-5 py-3.5 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 mt-2"
+                   name="cliente" required value={formData.cliente} onChange={handleInputChange}
+                   className="w-full px-5 py-3.5 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 mt-2"
                  >
                     <option value="">Selecione...</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social} {c.ativo ? '' : '(INATIVO)'}</option>)}
+                    {/* AQUI ESTÁ A ALTERAÇÃO: Prioriza nome fantasia */}
+                    {clientes.map(c => (
+                        <option key={c.id} value={c.id}>
+                            {c.nome || c.razao_social} {c.ativo ? '' : '(INATIVO)'}
+                        </option>
+                    ))}
                  </select>
                  
                  {/* === ALERTA DE CLIENTE DESATIVADO === */}
@@ -344,10 +349,10 @@ export default function Chamados() {
                      <div className="mt-4 bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-2">
                         <Lock className="text-red-500 shrink-0 mt-0.5" size={20}/>
                         <div>
-                            <h4 className="text-sm font-black text-red-600 uppercase">Cliente Desativado</h4>
-                            <p className="text-xs text-red-500 font-medium leading-relaxed">
-                                Esse cliente está temporariamente (ou não) desativado, por favor, contate seus superiores para mais detalhes.
-                            </p>
+                           <h4 className="text-sm font-black text-red-600 uppercase">Cliente Desativado</h4>
+                           <p className="text-xs text-red-500 font-medium leading-relaxed">
+                               Esse cliente está temporariamente (ou não) desativado, por favor, contate seus superiores para mais detalhes.
+                           </p>
                         </div>
                      </div>
                  )}
@@ -400,9 +405,9 @@ export default function Chamados() {
                      <Monitor size={10} /> Ativo (Opcional)
                  </label>
                  <select 
-                    name="ativo" value={formData.ativo} onChange={handleInputChange}
-                    disabled={!formData.cliente}
-                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 disabled:opacity-50"
+                   name="ativo" value={formData.ativo} onChange={handleInputChange}
+                   disabled={!formData.cliente}
+                   className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 disabled:opacity-50"
                  >
                     <option value="">Selecione...</option>
                     {ativosDoCliente.map(a => <option key={a.id} value={a.id}>{a.nome} ({a.tipo})</option>)}
