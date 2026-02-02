@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, Wallet, ArrowUpRight, TrendingUp, RefreshCw, 
   Truck, PieChart as PieIcon, Check, X, Search, Printer, 
-  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2, Filter, 
-  MoreVertical // Ícone para menu mobile se necessário
+  CheckSquare, Paperclip, Building2, AlertTriangle, Trash2, 
+  MoreVertical, FileText, Download 
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend 
@@ -18,7 +18,12 @@ export default function Financeiro() {
   // === ESTADOS DE DADOS ===
   const [todosLancamentos, setTodosLancamentos] = useState([]); 
   const [clientes, setClientes] = useState([]);
-  const [dadosDashboard, setDadosDashboard] = useState(null); 
+  // Inicializa com estrutura padrão para evitar erro de "undefined" no dashboard
+  const [dadosDashboard, setDadosDashboard] = useState({
+      saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
+      contratosAtivos: 0, custoTransporte: 0,
+      graficoReceita: [], rankingVisitas: []
+  }); 
   
   // === ESTADOS DE INTERFACE ===
   const [loading, setLoading] = useState(true);
@@ -27,7 +32,7 @@ export default function Financeiro() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // NOVO: Estado para o Filtro de Categoria/Tipo
+  // Filtro de Categoria/Tipo
   const [filtroCategoria, setFiltroCategoria] = useState('TODOS');
 
   // Filtro de Data (Controla o Dashboard)
@@ -65,7 +70,13 @@ export default function Financeiro() {
       try {
           setLoading(true);
           const stats = await financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano);
-          setDadosDashboard(stats || {});
+          
+          // Garante que o estado receba um objeto válido mesmo se a API falhar
+          setDadosDashboard(stats || {
+              saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
+              contratosAtivos: 0, custoTransporte: 0,
+              graficoReceita: [], rankingVisitas: []
+          });
       } catch (error) {
           console.error("Erro ao carregar KPIs:", error);
       } finally {
@@ -88,7 +99,7 @@ export default function Financeiro() {
 
 
   // =========================================================================
-  // 2. FILTROS E CÁLCULOS (MEMOIZED - INSTANTÂNEO)
+  // 2. FILTROS E CÁLCULOS
   // =========================================================================
 
   const lancamentosDoMes = useMemo(() => {
@@ -348,14 +359,10 @@ export default function Financeiro() {
 
   const COLORS = ['#7C69AF', '#A696D1', '#302464'];
 
-  const kpis = dadosDashboard || { 
-      saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
-      contratosAtivos: 0, custoTransporte: 0 
-  };
-  const graficoReceita = dadosDashboard?.graficoReceita || [];
-  const rankingVisitas = dadosDashboard?.rankingVisitas || [];
-
-  if (loading && !dadosDashboard) return <div className="p-20 text-center font-black text-[#7C69AF] animate-pulse uppercase tracking-widest text-xs">Carregando Finanças...</div>;
+  // Dados seguros para o Dashboard
+  const kpis = dadosDashboard;
+  const graficoReceita = dadosDashboard.graficoReceita || [];
+  const rankingVisitas = dadosDashboard.rankingVisitas || [];
 
   return (
     <div className="animate-in fade-in duration-500 pb-20">
@@ -388,11 +395,11 @@ export default function Financeiro() {
            </div>
 
            <button onClick={handleImprimir} className="bg-white border-2 border-slate-200 text-slate-600 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all">
-             <Printer size={16}/> Imprimir
+             <Printer size={16}/> <span className="hidden sm:inline">Imprimir</span>
            </button>
 
            <button onClick={handleGerarFaturas} disabled={gerandoFaturas} className="bg-white border-2 border-[#302464] text-[#302464] px-6 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50">
-             {gerandoFaturas ? <RefreshCw className="animate-spin" size={16}/> : <RefreshCw size={16}/>} Faturas
+             {gerandoFaturas ? <RefreshCw className="animate-spin" size={16}/> : <RefreshCw size={16}/>} <span className="hidden sm:inline">Faturas</span>
            </button>
            <button onClick={() => setIsModalOpen(true)} className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all active:scale-95">
              <Plus size={18} /> Lançar
@@ -400,7 +407,7 @@ export default function Financeiro() {
         </div>
       </div>
 
-      <div className="flex p-1.5 bg-slate-200/50 rounded-2xl mb-8 w-full md:w-fit">
+      <div className="flex p-1.5 bg-slate-200/50 rounded-2xl mb-8 w-full md:w-fit overflow-x-auto">
           <button onClick={() => setActiveTab('DASHBOARD')} className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'DASHBOARD' ? 'bg-white text-[#302464] shadow-sm' : 'text-slate-500'}`}>Dashboard</button>
           <button onClick={() => setActiveTab('LISTA')} className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'LISTA' ? 'bg-white text-[#302464] shadow-sm' : 'text-slate-500'}`}>Extrato ({lancamentosDoMes.length})</button>
       </div>
@@ -412,30 +419,30 @@ export default function Financeiro() {
                 <div className="bg-[#302464] p-6 rounded-[2rem] border border-[#302464] shadow-xl shadow-purple-900/30">
                     <p className="text-[10px] font-black text-[#A696D1] uppercase tracking-widest mb-3">Caixa Total (Acumulado)</p>
                     <div className="flex items-end justify-between">
-                        <h3 className="text-3xl font-black text-white">R$ {(kpis?.saldo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                        <h3 className="text-3xl font-black text-white">R$ {(kpis.saldo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                         <div className="p-2 bg-white/10 text-white rounded-xl"><Wallet size={20}/></div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Resultado do Mês</p>
                     <div className="flex items-end justify-between">
-                        <h3 className={`text-2xl font-black ${kpis?.resultadoPeriodo >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>R$ {(kpis?.resultadoPeriodo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
-                        <div className={`p-2 rounded-xl ${kpis?.resultadoPeriodo >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                            {kpis?.resultadoPeriodo >= 0 ? <ArrowUpRight size={20}/> : <TrendingUp size={20} className="rotate-180"/>}
+                        <h3 className={`text-2xl font-black ${kpis.resultadoPeriodo >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>R$ {(kpis.resultadoPeriodo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                        <div className={`p-2 rounded-xl ${kpis.resultadoPeriodo >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                            {kpis.resultadoPeriodo >= 0 ? <ArrowUpRight size={20}/> : <TrendingUp size={20} className="rotate-180"/>}
                         </div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Entradas (Mês)</p>
                     <div className="flex items-end justify-between">
-                        <h3 className="text-2xl font-black text-[#7C69AF]">R$ {(kpis?.receitaPeriodo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                        <h3 className="text-2xl font-black text-[#7C69AF]">R$ {(kpis.receitaPeriodo || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                         <div className="p-2 bg-purple-50 text-[#7C69AF] rounded-xl"><TrendingUp size={20}/></div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Contratos Ativos</p>
                     <div className="flex items-end justify-between">
-                        <h3 className="text-2xl font-black text-slate-800">{kpis?.contratosAtivos || 0}</h3>
+                        <h3 className="text-2xl font-black text-slate-800">{kpis.contratosAtivos || 0}</h3>
                         <div className="p-2 bg-slate-50 text-slate-600 rounded-xl"><Building2 size={20}/></div>
                     </div>
                 </div>
@@ -443,20 +450,27 @@ export default function Financeiro() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* GRÁFICO */}
-                <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-center items-center">
+                <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-center items-center min-h-[300px]">
                     <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-4 w-full flex items-center gap-2">
                         <PieIcon size={16} className="text-[#7C69AF]"/> Fontes de Receita (Mês)
                     </h3>
                     <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={graficoReceita} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                    {graficoReceita.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                                </Pie>
-                                <RechartsTooltip formatter={(val) => `R$ ${val.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`} contentStyle={{borderRadius: '10px', border:'none', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}} />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-                            </PieChart>
-                        </ResponsiveContainer>
+                        {graficoReceita.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={graficoReceita} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                        {graficoReceita.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                    <RechartsTooltip formatter={(val) => `R$ ${val.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`} contentStyle={{borderRadius: '10px', border:'none', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}} />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                <PieIcon size={48} className="opacity-20 mb-2"/>
+                                <p className="text-xs uppercase font-bold tracking-widest">Sem dados para o gráfico</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -483,7 +497,7 @@ export default function Financeiro() {
                             ))
                         )}
                     </div>
-                    {kpis?.custoTransporte > 0 && (
+                    {kpis.custoTransporte > 0 && (
                         <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Gasto Transporte</span>
                             <span className="text-lg font-black text-red-500">R$ {kpis.custoTransporte.toFixed(2)}</span>
@@ -499,7 +513,7 @@ export default function Financeiro() {
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                       <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Check size={16} className="text-emerald-500"/> Serviços Realizados ({filtroData.mes}/{filtroData.ano})
-                    </h3>
+                      </h3>
                     <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                         {servicosMes.length === 0 ? (
                             <p className="text-slate-400 text-xs text-center py-4">Nenhum serviço este mês.</p>
@@ -531,7 +545,7 @@ export default function Financeiro() {
                 <div className="bg-red-50/50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
                       <h3 className="font-black text-red-600 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                         <AlertTriangle size={16} className="text-red-500"/> Inadimplentes (Acumulado)
-                    </h3>
+                      </h3>
                     <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                         {inadimplentesAgrupados.length === 0 ? (
                              <div className="flex flex-col items-center justify-center py-6 text-emerald-600/60">
@@ -576,8 +590,8 @@ export default function Financeiro() {
              
              {/* BARRA DE BUSCA + AÇÕES */}
              <div className="p-6 border-b border-slate-100">
-                 <div className="flex items-center justify-between gap-4 mb-4">
-                    <div className="flex items-center gap-3 flex-1 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
+                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3 w-full md:flex-1 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
                         <Search size={20} className="text-slate-300" />
                         <input 
                             type="text" 
@@ -591,7 +605,7 @@ export default function Financeiro() {
                     {selectedIds.length > 0 && (
                         <button 
                             onClick={handleBaixarMultiplo}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 animate-in fade-in slide-in-from-right-5 shadow-lg shadow-emerald-500/20"
+                            className="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 animate-in fade-in slide-in-from-right-5 shadow-lg shadow-emerald-500/20"
                         >
                             <CheckSquare size={16} /> Baixar ({selectedIds.length})
                         </button>
@@ -630,6 +644,7 @@ export default function Financeiro() {
                                 />
                             </th>
                             <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
+                            <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Documentos</th>
                             <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Vencimento</th>
                             <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
                             <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
@@ -652,15 +667,32 @@ export default function Financeiro() {
                                         <div className="text-[10px] text-slate-400 flex items-center gap-1 font-bold uppercase"><Building2 size={10}/> {lanc.nome_cliente || 'Geral'}</div>
                                         <span className="text-[9px] font-bold text-slate-300 uppercase bg-slate-100 px-1.5 py-0.5 rounded">{lanc.categoria}</span>
                                     </div>
-                                    
-                                    <div className="flex gap-2 mt-2">
+                                </td>
+                                <td className="p-6 text-center">
+                                    <div className="flex justify-center gap-2">
                                         {lanc.comprovante && (
-                                            <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-100">
-                                                <CheckSquare size={10}/> Comprovante OS
+                                            <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="Ver Comprovante/OS">
+                                                <CheckSquare size={14}/>
                                             </a>
                                         )}
-                                        {lanc.arquivo_1 && <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 1</a>}
-                                        {lanc.arquivo_2 && <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] font-bold text-[#302464] bg-purple-50 px-2 py-1 rounded-md hover:bg-[#302464] hover:text-white transition-colors"><Paperclip size={10}/> Anexo 2</a>}
+                                        {/* EXIBIR PDFS DO ESTOQUE (ORÇAMENTOS) */}
+                                        {(lanc.arquivo_1 || lanc.arquivo_2) && (
+                                            <div className="flex gap-1">
+                                                {lanc.arquivo_1 && (
+                                                    <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-lg hover:bg-purple-100" title="Ver Orçamento/Anexo 1">
+                                                        <FileText size={14}/>
+                                                    </a>
+                                                )}
+                                                {lanc.arquivo_2 && (
+                                                    <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-lg hover:bg-purple-100" title="Ver Anexo 2">
+                                                        <Paperclip size={14}/>
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )}
+                                        {!lanc.arquivo_1 && !lanc.arquivo_2 && !lanc.comprovante && (
+                                            <span className="text-slate-200">-</span>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="p-6 text-center text-xs font-bold text-slate-500">{new Date(lanc.data_vencimento).toLocaleDateString()}</td>
@@ -677,7 +709,7 @@ export default function Financeiro() {
                             </tr>
                         ))}
                         {extratoExibicao.length === 0 && (
-                            <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado para este filtro.</td></tr>
+                            <tr><td colSpan="6" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum lançamento encontrado para este filtro.</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -688,54 +720,73 @@ export default function Financeiro() {
                  {extratoExibicao.map(lanc => (
                     <div 
                        key={lanc.id} 
-                       className={`p-4 rounded-2xl bg-white border shadow-sm transition-all 
-                                   ${selectedIds.includes(lanc.id) ? 'border-[#302464] ring-1 ring-[#302464]' : 'border-slate-100'}`}
+                       className={`p-5 rounded-3xl bg-white border shadow-sm transition-all relative overflow-hidden
+                                   ${selectedIds.includes(lanc.id) ? 'border-[#302464] ring-2 ring-[#302464]/20' : 'border-slate-100'}`}
                        onClick={() => handleToggleSelect(lanc.id)}
                     >
-                        <div className="flex justify-between items-start mb-3">
+                        {/* Status Badge Absolute */}
+                        <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest
+                            ${lanc.status === 'PAGO' ? 'bg-emerald-100 text-emerald-600' : 
+                              lanc.status === 'PENDENTE' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+                            {lanc.status}
+                        </div>
+
+                        <div className="flex flex-col gap-3">
                            <div>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${lanc.tipo_lancamento === 'ENTRADA' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                 {lanc.tipo_lancamento}
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${lanc.tipo_lancamento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                  {lanc.tipo_lancamento}
                               </span>
-                              <h3 className="font-bold text-slate-800 mt-1 leading-tight">{lanc.descricao}</h3>
-                              <p className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
+                              <h3 className="font-black text-slate-800 mt-2 text-lg leading-tight">{lanc.descricao}</h3>
+                              <p className="text-[10px] text-slate-400 font-bold mt-1 flex items-center gap-1 uppercase">
                                  <Building2 size={10}/> {lanc.nome_cliente || 'Geral'}
                               </p>
                            </div>
-                           <div className="text-right">
-                              <p className={`font-black text-lg ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>
-                                 R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                              </p>
-                              <span className={`text-[9px] font-black uppercase ${lanc.status === 'PAGO' ? 'text-emerald-500' : lanc.status === 'PENDENTE' ? 'text-amber-500' : 'text-red-500'}`}>
-                                 {lanc.status}
-                              </span>
+
+                           <div className="flex items-end justify-between mt-2">
+                               <div className="text-[10px] font-bold text-slate-400">
+                                  Venc: {new Date(lanc.data_vencimento).toLocaleDateString()}
+                               </div>
+                               <div className={`font-black text-2xl ${lanc.tipo_lancamento === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                  R$ {parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                               </div>
                            </div>
                         </div>
 
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                           <div className="text-[10px] font-bold text-slate-400">
-                              Venc: {new Date(lanc.data_vencimento).toLocaleDateString()}
+                        {/* Botões de Ação e Arquivos */}
+                        <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
+                           <div className="flex gap-2">
+                              {/* MOSTRAR PDFS NO MOBILE */}
+                              {lanc.arquivo_1 && (
+                                  <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                      <FileText size={18}/>
+                                  </a>
+                              )}
+                              {lanc.arquivo_2 && (
+                                  <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                      <Paperclip size={18}/>
+                                  </a>
+                              )}
+                              {lanc.comprovante && (
+                                  <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="p-2 bg-emerald-50 text-emerald-600 rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                      <CheckSquare size={18}/>
+                                  </a>
+                              )}
                            </div>
                            
-                           <div className="flex items-center gap-3">
-                              {(lanc.arquivo_1 || lanc.arquivo_2 || lanc.comprovante) && (
-                                <Paperclip size={14} className="text-[#302464]" />
-                              )}
-                              
+                           <div className="flex gap-3">
                               {lanc.status === 'PENDENTE' && (
                                 <button 
                                    onClick={(e) => { e.stopPropagation(); handleConfirmarPagamento(lanc); }}
-                                   className="bg-[#302464] text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest"
+                                   className="bg-[#302464] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/10 active:scale-95 transition-transform"
                                 >
                                    Baixar
                                 </button>
                               )}
-                              
                               <button 
                                  onClick={(e) => { e.stopPropagation(); handleExcluir(lanc.id); }}
-                                 className="text-slate-300 hover:text-red-500 p-1"
+                                 className="text-slate-300 hover:text-red-500 p-2"
                               >
-                                 <Trash2 size={16}/>
+                                 <Trash2 size={20}/>
                               </button>
                            </div>
                         </div>
@@ -755,7 +806,7 @@ export default function Financeiro() {
       {/* MODAL LANÇAMENTO MANUAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20 overflow-y-auto max-h-[90vh]">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
                 <form onSubmit={handleSalvar} className="space-y-5">

@@ -2,7 +2,6 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
-# Fallback para TimeStampedModel
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -28,7 +27,7 @@ class Chamado(TimeStampedModel):
         VISITA = 'VISITA', 'Visita Técnica'
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
-    # RELACIONAMENTOS (Use strings para evitar circular import)
+    # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
 
     ativo = models.ForeignKey(
@@ -40,6 +39,16 @@ class Chamado(TimeStampedModel):
         help_text="Equipamento que recebeu o serviço"
     )
     
+    # Adicionado para compatibilidade com o Serializer (Técnico Principal)
+    tecnico = models.ForeignKey(
+        'equipe.Equipe', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='chamados_responsavel',
+        verbose_name="Técnico Responsável"
+    )
+
     titulo = models.CharField(max_length=100)
     descricao_detalhada = models.TextField(max_length=500)
     origem = models.CharField(max_length=50, default='TELEFONE')
@@ -47,15 +56,21 @@ class Chamado(TimeStampedModel):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ABERTO)
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
     tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
+    
+    # === NOVOS CAMPOS (Correção do Erro) ===
+    resolucao = models.TextField(null=True, blank=True, verbose_name="Resolução Técnica")
+    
     valor_servico = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Valor do Serviço (Avulso)")
     financeiro_gerado = models.BooleanField(default=False, help_text="Indica se a cobrança automática foi gerada")
-    arquivo_conclusao = models.FileField(
-        upload_to='chamados/conclusao/%Y/%m/', 
-        null=True, 
-        blank=True,
-        help_text="Comprovante ou OS assinada anexada pelo técnico na finalização"
-    )
     
+    # Arquivos e Fotos (Para o Upload funcionar)
+    arquivo_conclusao = models.FileField(upload_to='chamados/conclusao/%Y/%m/', null=True, blank=True)
+    arquivo_1 = models.FileField(upload_to='chamados/docs/', null=True, blank=True)
+    arquivo_2 = models.FileField(upload_to='chamados/docs/', null=True, blank=True)
+    foto_antes = models.ImageField(upload_to='chamados/fotos/', null=True, blank=True)
+    foto_depois = models.ImageField(upload_to='chamados/fotos/', null=True, blank=True)
+    # ========================================
+
     data_agendamento = models.DateTimeField(null=True, blank=True)
     
     # Custos
@@ -68,7 +83,7 @@ class Chamado(TimeStampedModel):
     data_abertura = models.DateTimeField(default=timezone.now)
     data_fechamento = models.DateTimeField(null=True, blank=True)
     
-    # ManyToMany com Equipe através de tabela intermediária
+    # ManyToMany com Equipe através de tabela intermediária (Equipe de Apoio)
     tecnicos = models.ManyToManyField('equipe.Equipe', through='ChamadoTecnico')
 
     class Meta: 

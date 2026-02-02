@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Truck, Package, Calendar, DollarSign, History, ShoppingBag, TrendingUp } from 'lucide-react';
+import { 
+  ArrowLeft, Truck, Package, Calendar, DollarSign, History, 
+  FileText, Paperclip // New icons for files
+} from 'lucide-react';
 import estoqueService from '../services/estoqueService';
 
 export default function FornecedorDetalhes() {
@@ -19,7 +22,8 @@ export default function FornecedorDetalhes() {
           estoqueService.listarHistorico()
         ]);
         setFornecedor(dadosForn);
-        // Filtra apenas entradas (compras) deste fornecedor específico
+        
+        // Filter only entries (purchases) from this specific supplier
         const comprasDesteForn = historicoGeral.filter(h => 
           h.tipo_movimento === 'ENTRADA' && parseInt(h.fornecedor) === parseInt(id)
         );
@@ -31,11 +35,16 @@ export default function FornecedorDetalhes() {
     carregarDados();
   }, [id]);
 
-  // Calcula estatísticas rápidas
+  // Calculates quick stats with safety against string concatenation
   const stats = useMemo(() => {
-    const totalItens = compras.reduce((acc, c) => acc + c.quantidade, 0);
-    const totalGasto = compras.reduce((acc, c) => acc + (c.quantidade * c.preco_unitario), 0);
+    // CORRECTION: Ensure quantity is treated as a number
+    const totalItens = compras.reduce((acc, c) => acc + parseFloat(c.quantidade || 0), 0);
+    
+    // Calculate total spent safely
+    const totalGasto = compras.reduce((acc, c) => acc + (parseFloat(c.quantidade || 0) * parseFloat(c.preco_unitario || 0)), 0);
+    
     const produtosUnicos = new Set(compras.map(c => c.nome_produto)).size;
+    
     return { totalItens, totalGasto, produtosUnicos };
   }, [compras]);
 
@@ -49,7 +58,7 @@ export default function FornecedorDetalhes() {
         Voltar para Estoque
       </button>
 
-      {/* CABEÇALHO DO FORNECEDOR */}
+      {/* SUPPLIER HEADER */}
       <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-slate-900/20 mb-8 relative overflow-hidden">
          <Truck className="absolute -right-6 -bottom-6 text-white opacity-5" size={180} />
          <div className="relative z-10">
@@ -61,11 +70,12 @@ export default function FornecedorDetalhes() {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 relative z-10">
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total de Itens Comprados</p>
-                <p className="text-2xl font-black">{stats.totalItens} un</p>
+                {/* CORRECTION: Format correctly with locale */}
+                <p className="text-2xl font-black">{stats.totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} un</p>
             </div>
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Volume de Negócios</p>
-                <p className="text-2xl font-black text-emerald-400">R$ {stats.totalGasto.toLocaleString()}</p>
+                <p className="text-2xl font-black text-emerald-400">R$ {stats.totalGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mix de Produtos</p>
@@ -74,7 +84,7 @@ export default function FornecedorDetalhes() {
          </div>
       </div>
 
-      {/* HISTÓRICO DE COMPRAS */}
+      {/* PURCHASE HISTORY */}
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8">
         <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">
             <History className="text-orange-500" /> Histórico de Preços e Pedidos
@@ -85,7 +95,7 @@ export default function FornecedorDetalhes() {
                 <div className="text-center py-20 text-slate-400 font-bold italic">Nenhuma compra registrada para este fornecedor.</div>
             ) : (
                 compras.map((c, idx) => (
-                    <div key={idx} className="group flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded-3xl border border-transparent hover:border-orange-200 hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div key={idx} className="group flex flex-col md:flex-row items-start md:items-center justify-between p-6 bg-slate-50 rounded-3xl border border-transparent hover:border-orange-200 hover:bg-white hover:shadow-xl transition-all duration-300">
                         <div className="flex items-center gap-6">
                             <div className="p-4 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-orange-500 transition-colors">
                                 <Package size={24} />
@@ -98,14 +108,52 @@ export default function FornecedorDetalhes() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-12 mt-6 md:mt-0">
-                            <div className="text-center">
-                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Quantidade</p>
-                                <p className="font-black text-slate-700">{c.quantidade} un</p>
-                            </div>
-                            <div className="text-right min-w-[120px]">
-                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Preço Pago</p>
-                                <p className="text-xl font-black text-emerald-600">R$ {c.preco_unitario}</p>
+                        <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-12 mt-6 md:mt-0 w-full md:w-auto">
+                            
+                            {/* === NEW: FILES/PDFs SECTION === */}
+                            {(c.arquivo_1 || c.arquivo_2) && (
+                                <div className="flex gap-2">
+                                    {c.arquivo_1 && (
+                                        <a 
+                                            href={c.arquivo_1} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-orange-500 hover:border-orange-200 transition-colors"
+                                            title="Ver Anexo 1"
+                                        >
+                                            <FileText size={14} />
+                                            <span className="hidden lg:inline">Anexo 1</span>
+                                        </a>
+                                    )}
+                                    {c.arquivo_2 && (
+                                        <a 
+                                            href={c.arquivo_2} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-orange-500 hover:border-orange-200 transition-colors"
+                                            title="Ver Anexo 2"
+                                        >
+                                            <Paperclip size={14} />
+                                            <span className="hidden lg:inline">Anexo 2</span>
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-12 w-full md:w-auto justify-between md:justify-end">
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Quantidade</p>
+                                    <p className="font-black text-slate-700">
+                                        {/* CORRECTION: Format individual item */}
+                                        {parseFloat(c.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 0 })} un
+                                    </p>
+                                </div>
+                                <div className="text-right min-w-[120px]">
+                                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Preço Pago</p>
+                                    <p className="text-xl font-black text-emerald-600">
+                                        R$ {parseFloat(c.preco_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

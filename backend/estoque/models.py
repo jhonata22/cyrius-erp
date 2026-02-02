@@ -1,9 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db.models import Sum
 
-# Fallback TimeStampedModel
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -28,7 +26,7 @@ class Fornecedor(models.Model):
 class Produto(TimeStampedModel):
     nome = models.CharField(max_length=100)
     estoque_minimo = models.PositiveIntegerField(default=2)
-    # Transformamos estoque em campo real para performance
+    # Importante: DecimalField para evitar erros de precisão (0.9999)
     estoque_atual = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     preco_venda_sugerido = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -52,12 +50,10 @@ class MovimentacaoEstoque(models.Model):
     preco_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     fornecedor = models.ForeignKey(Fornecedor, on_delete=models.SET_NULL, null=True, blank=True)
-    # Referência segura para Cliente
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.SET_NULL, null=True, blank=True)
     
     numero_serial = models.CharField(max_length=100, null=True, blank=True)
     
-    # Arquivos
     arquivo_1 = models.FileField(upload_to='docs_estoque/', null=True, blank=True)
     arquivo_2 = models.FileField(upload_to='docs_estoque/', null=True, blank=True)
     
@@ -67,11 +63,9 @@ class MovimentacaoEstoque(models.Model):
         db_table = 'TB_MOVIMENTACAO_ESTOQUE'
         verbose_name = 'Movimentação de Estoque'
 
-    def clean(self):
-        if self.produto and self.tipo_movimento == 'SAIDA' and not self.pk:
-            if self.produto.estoque_atual < self.quantidade:
-                raise ValidationError(f"Estoque insuficiente. Saldo atual: {self.produto.estoque_atual}")
+    # REMOVEMOS O CLEAN() DAQUI POIS O SERVICE JÁ VALIDA O ESTOQUE ANTES DE SUBTRAIR.
+    # O clean aqui estava olhando o saldo já atualizado pelo service e bloqueando a gravação.
 
     def save(self, *args, **kwargs):
-        self.full_clean()
+        # Mantemos apenas o save padrão para evitar conflitos com o service
         super().save(*args, **kwargs)
