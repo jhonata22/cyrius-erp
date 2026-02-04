@@ -9,6 +9,9 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 class Fornecedor(models.Model):
+    # === NOVO CAMPO: EMPRESA ===
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, null=True, blank=True)
+
     razao_social = models.CharField(max_length=100)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     contato_nome = models.CharField(max_length=100, null=True, blank=True)
@@ -24,9 +27,11 @@ class Fornecedor(models.Model):
         return self.razao_social
 
 class Produto(TimeStampedModel):
+    # Produto geralmente é global (catálogo), mas se quiser separar estoque físico por filial,
+    # precisaríamos de uma tabela intermediária. 
+    # Por simplificação, o cadastro do PRODUTO é global, mas a MOVIMENTAÇÃO é por empresa.
     nome = models.CharField(max_length=100)
     estoque_minimo = models.PositiveIntegerField(default=2)
-    # Importante: DecimalField para evitar erros de precisão (0.9999)
     estoque_atual = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     preco_venda_sugerido = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -43,6 +48,9 @@ class MovimentacaoEstoque(models.Model):
         ('SAIDA', 'Saída'),
     ]
     
+    # === NOVO CAMPO: EMPRESA ===
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, null=True, blank=True)
+
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name='movimentacoes')
     tipo_movimento = models.CharField(max_length=10, choices=TIPO_CHOICES)
     quantidade = models.DecimalField(max_digits=10, decimal_places=2)
@@ -63,9 +71,5 @@ class MovimentacaoEstoque(models.Model):
         db_table = 'TB_MOVIMENTACAO_ESTOQUE'
         verbose_name = 'Movimentação de Estoque'
 
-    # REMOVEMOS O CLEAN() DAQUI POIS O SERVICE JÁ VALIDA O ESTOQUE ANTES DE SUBTRAIR.
-    # O clean aqui estava olhando o saldo já atualizado pelo service e bloqueando a gravação.
-
     def save(self, *args, **kwargs):
-        # Mantemos apenas o save padrão para evitar conflitos com o service
         super().save(*args, **kwargs)

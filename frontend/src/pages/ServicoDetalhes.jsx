@@ -4,15 +4,20 @@ import {
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
   AlertTriangle, Truck, Download, Printer, QrCode,
-  Edit, Monitor // <--- IMPORT NOVO (Monitor)
+  Edit, Monitor 
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
 import estoqueService from '../services/estoqueService'; 
 
+// Importar Contexto (Opcional, apenas se quiser validar se bate com a seleção atual)
+import { useEmpresa } from '../contexts/EmpresaContext';
+
 export default function ServicoDetalhes() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { empresaSelecionada } = useEmpresa(); // Opcional
+
   const [loading, setLoading] = useState(true);
   const [os, setOs] = useState(null);
   
@@ -48,8 +53,18 @@ export default function ServicoDetalhes() {
         desconto: dadosOS.desconto || ''
       });
 
+      // Se a OS não estiver fechada, carrega produtos para adicionar peças
       if (dadosOS.status !== 'CONCLUIDO' && dadosOS.status !== 'CANCELADO') {
-        const listaProdutos = await estoqueService.listar(); 
+        
+        // --- PONTO CRUCIAL: FILTRAR ESTOQUE PELA EMPRESA DA OS ---
+        // Se a OS tem uma empresa vinculada (dadosOS.empresa), passamos esse ID
+        // para listar apenas o estoque daquela filial.
+        // Se for null (OS antiga ou global), traz tudo ou filtra pelo contexto.
+        const empresaIdParaEstoque = dadosOS.empresa || null; 
+        
+        // Aqui assumimos que estoqueService.listar aceita filtros ou um ID direto
+        // Ajuste conforme seu estoqueService.js (ex: listar(empresaId))
+        const listaProdutos = await estoqueService.listarProdutos(empresaIdParaEstoque); 
         setProdutos(listaProdutos);
       }
 
@@ -169,6 +184,8 @@ export default function ServicoDetalhes() {
   const imprimirOS = () => {
     const totalGeral = (parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0);
     const logoHtml = `<img src="/logo.png" alt="CYRIUS" style="max-height: 200px;" />`; 
+    // Se quiser mostrar a empresa no impresso:
+    const empresaNome = os.empresa_nome || "CYRIUS TECNOLOGIA"; // Assumindo que o serializer manda o nome
 
     const janela = window.open('', '', 'width=800,height=600');
     janela.document.write(`
@@ -193,7 +210,10 @@ export default function ServicoDetalhes() {
         </head>
         <body>
           <div class="header">
-            <div class="logo-container">${logoHtml}</div>
+            <div class="logo-container">
+               ${logoHtml}
+               <div style="font-size: 12px; margin-top: 5px; color: #666;">${empresaNome}</div>
+            </div>
             <div class="info-os">
               <h1>OS #${String(os.id).padStart(4, '0')}</h1>
               <p>Data: ${new Date(os.data_entrada).toLocaleDateString()}</p>
@@ -278,7 +298,7 @@ export default function ServicoDetalhes() {
                     <p>${os.nome_cliente.substring(0, 25)}</p>
                     <div class="qr-container">${qrCodeSvg}</div>
                     <p>Entrada: ${new Date(os.data_entrada).toLocaleDateString()}</p>
-                    <p style="font-size: 10px; margin-top: 10px; text-transform: uppercase;">CYRIUS - CONTROLE INTERNO</p>
+                    <p style="font-size: 10px; margin-top: 10px; text-transform: uppercase;">CONTROLE INTERNO</p>
                 </div>
             </body>
         </html>
@@ -313,10 +333,15 @@ export default function ServicoDetalhes() {
                         ${os.status === 'CONCLUIDO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                         {os.status.replace('_', ' ')}
                     </span>
+                    {/* Badge da Empresa */}
+                    {os.empresa_nome && (
+                        <span className="bg-purple-100 text-[#302464] text-[9px] font-black px-2 py-0.5 rounded border border-purple-200 uppercase">
+                            {os.empresa_nome}
+                        </span>
+                    )}
                 </div>
                 <p className="text-slate-400 font-bold text-sm mt-1">{os.nome_cliente} • {os.titulo}</p>
                 
-                {/* --- AQUI: MENÇÃO AO ATIVO --- */}
                 {os.ativo && (
                     <div 
                         onClick={() => navigate(`/ativos/${os.ativo}`)}
@@ -376,7 +401,7 @@ export default function ServicoDetalhes() {
                 />
             </div>
 
-            {/* PEÇAS E PRODUTOS (COM BOTÕES DE EDIÇÃO/EXCLUSÃO) */}
+            {/* PEÇAS E PRODUTOS */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -405,8 +430,6 @@ export default function ServicoDetalhes() {
                                     <p className="text-xs text-slate-400 font-bold">{item.quantidade}x {formatMoney(item.preco_venda)}</p>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    
-                                    {/* BOTÕES DE AÇÃO (EDITAR / EXCLUIR) */}
                                     {!isLocked && (
                                         <div className="flex items-center gap-1">
                                             <button 
@@ -546,6 +569,14 @@ export default function ServicoDetalhes() {
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative">
                 <button onClick={() => setModalItemOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-[#302464]"><ArrowLeft size={20} /></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6">{itemForm.id ? 'Editar Quantidade' : 'Adicionar Peça'}</h3>
+                
+                {/* AVISO DO ESTOQUE FILTRADO */}
+                {os.empresa_nome && (
+                    <div className="mb-4 p-2 bg-purple-50 rounded-lg text-center text-xs font-bold text-purple-700">
+                        Mostrando estoque de: {os.empresa_nome}
+                    </div>
+                )}
+
                 <form onSubmit={handleAdicionarItem} className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Produto do Estoque</label>
@@ -554,7 +585,7 @@ export default function ServicoDetalhes() {
                             value={itemForm.produto}
                             onChange={e => setItemForm({...itemForm, produto: e.target.value})}
                             required
-                            disabled={!!itemForm.id} // Desabilita troca de produto na edição
+                            disabled={!!itemForm.id} 
                         >
                             <option value="">Selecione...</option>
                             {produtos.map(p => (
@@ -578,7 +609,7 @@ export default function ServicoDetalhes() {
         </div>
       )}
 
-      {/* MODAL ANEXO (Mantido igual) */}
+      {/* MODAL ANEXO */}
       {modalAnexoOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative">

@@ -2,10 +2,17 @@ import api from './api';
 
 const servicoService = {
   // 1. CRUD Básico da OS
-  listar: async (filtros) => { 
-    const params = new URLSearchParams(filtros).toString(); 
-    const url = params ? `/servicos/?${params}` : '/servicos/';
-    const response = await api.get(url);
+  // ATUALIZADO: Aceita filtros e o ID da empresa
+  listar: async (filtros = {}, empresaId = null) => { 
+    const params = { ...filtros };
+    
+    // Se tiver empresa selecionada, injeta no parametro GET
+    if (empresaId) {
+      params.empresa = empresaId;
+    }
+
+    // O Axios converte o objeto params para query string automaticamente (?empresa=1&status=ABERTO...)
+    const response = await api.get('/servicos/', { params });
     return response.data;
   },
 
@@ -15,6 +22,7 @@ const servicoService = {
   },
 
   criar: async (dados) => {
+    // O objeto 'dados' já vem com o campo 'empresa' preenchido pelo front
     const response = await api.post('/servicos/', dados);
     return response.data;
   },
@@ -31,7 +39,7 @@ const servicoService = {
 
   // 2. Ações Específicas (Itens e Peças)
 
-  // Adiciona peça à OS (Dispara a validação de estoque no backend)
+  // Adiciona peça à OS
   adicionarItem: async (osId, dadosItem) => {
     const response = await api.post(`/servicos/${osId}/adicionar-item/`, dadosItem);
     return response.data;
@@ -43,7 +51,7 @@ const servicoService = {
     return response.data;
   },
 
-  // Remove item da OS (O backend bloqueia se a OS estiver FINALIZADA)
+  // Remove item da OS
   removerItem: async (itemId) => {
     const response = await api.delete(`/itens-servico/${itemId}/`);
     return response.data;
@@ -53,15 +61,14 @@ const servicoService = {
 
   /**
    * Finaliza a OS
-   * Dispara: Baixa de estoque + Geração de Financeiro (Entradas e Saídas)
-   * Agora o backend retorna erros claros (estoque/decimal) via catch no React
+   * Dispara: Baixa de estoque + Geração de Financeiro
    */
   finalizar: async (osId) => {
     const response = await api.post(`/servicos/${osId}/finalizar/`);
     return response.data;
   },
 
-  // Upload de arquivos (Comprovantes, fotos do serviço, etc.)
+  // Upload de arquivos
   anexarArquivo: async (osId, arquivo, tipo, descricao) => {
     const formData = new FormData();
     formData.append('arquivo', arquivo);

@@ -12,13 +12,18 @@ import {
 import financeiroService from '../services/financeiroService';
 import clienteService from '../services/clienteService';
 
+// 1. IMPORTAR O CONTEXTO
+import { useEmpresa } from '../contexts/EmpresaContext';
+
 export default function Financeiro() {
+  // 2. PEGAR A EMPRESA SELECIONADA
+  const { empresaSelecionada } = useEmpresa();
+
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
   // === ESTADOS DE DADOS ===
   const [todosLancamentos, setTodosLancamentos] = useState([]); 
   const [clientes, setClientes] = useState([]);
-  // Inicializa com estrutura padrão para evitar erro de "undefined" no dashboard
   const [dadosDashboard, setDadosDashboard] = useState({
       saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
       contratosAtivos: 0, custoTransporte: 0,
@@ -35,13 +40,12 @@ export default function Financeiro() {
   // Filtro de Categoria/Tipo
   const [filtroCategoria, setFiltroCategoria] = useState('TODOS');
 
-  // Filtro de Data (Controla o Dashboard)
+  // Filtro de Data
   const [filtroData, setFiltroData] = useState({
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear()
   });
 
-  // Form State
   const [form, setForm] = useState({
     descricao: '', valor: '', tipo_lancamento: 'ENTRADA', 
     categoria: 'DESPESA', data_vencimento: '', cliente: '',
@@ -50,28 +54,35 @@ export default function Financeiro() {
   });
 
   // =========================================================================
-  // 1. CARREGAMENTO INTELIGENTE
+  // 1. CARREGAMENTO INTELIGENTE (REFATORADO)
   // =========================================================================
 
-  const carregarDadosGlobais = async () => {
+  const carregarDadosGlobais = useCallback(async () => {
       try {
+          // Define o ID: se for null, o service entende como "Todas" (se a lógica backend permitir)
+          // ou você pode tratar isso no backend.
+          const empresaId = empresaSelecionada?.id || null;
+
           const [dadosFin, dadosCli] = await Promise.all([
-              financeiroService.listar(),
-              clienteService.listar()
+              // Passamos o ID da empresa para filtrar a lista
+              financeiroService.listar({}, empresaId),
+              clienteService.listar() // Clientes podem ser globais ou filtrados também, dependendo da sua regra
           ]);
           setTodosLancamentos(dadosFin || []);
           setClientes(dadosCli || []);
       } catch (error) {
           console.error("Erro ao carregar lista:", error);
       }
-  };
+  }, [empresaSelecionada]); // Recria a função se a empresa mudar
 
   const carregarEstatisticas = useCallback(async () => {
       try {
           setLoading(true);
-          const stats = await financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano);
+          const empresaId = empresaSelecionada?.id || null;
+
+          // Passamos o ID da empresa para os KPIs
+          const stats = await financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano, empresaId);
           
-          // Garante que o estado receba um objeto válido mesmo se a API falhar
           setDadosDashboard(stats || {
               saldo: 0, resultadoPeriodo: 0, receitaPeriodo: 0, 
               contratosAtivos: 0, custoTransporte: 0,
@@ -82,16 +93,21 @@ export default function Financeiro() {
       } finally {
           setLoading(false);
       }
-  }, [filtroData]);
+  }, [filtroData, empresaSelecionada]); // Dependência adicionada aqui também
 
+  // Efeito Inicial e de Mudança de Empresa
   useEffect(() => {
-      financeiroService.processarRecorrencias()
+      const empresaId = empresaSelecionada?.id || null;
+
+      // Processa recorrencias da empresa selecionada (ou todas)
+      financeiroService.processarRecorrencias(empresaId)
           .catch(() => {}) 
           .finally(() => {
               carregarDadosGlobais();
           });
-  }, []);
+  }, [carregarDadosGlobais, empresaSelecionada]); // Roda quando monta ou quando troca empresa
 
+  // Efeito de Mudança de Filtro de Data ou Estatisticas
   useEffect(() => {
       carregarEstatisticas();
       setSelectedIds([]); 
@@ -266,6 +282,7 @@ export default function Financeiro() {
 
   const handleImprimir = () => {
     const periodo = `${filtroData.mes}/${filtroData.ano}`;
+    const empresaNome = empresaSelecionada ? (empresaSelecionada.nome_fantasia || empresaSelecionada.razao_social) : "Todas as Empresas";
     const dados = extratoExibicao; 
     let totalEnt = 0;
     let totalSai = 0;
@@ -281,11 +298,16 @@ export default function Financeiro() {
             td { padding: 10px; border-bottom: 1px solid #ddd; }
             .valor { font-weight: bold; text-align: right; }
             .entrada { color: green; } .saida { color: red; }
+            .header { margin-bottom: 20px; }
         </style>
     `);
     printWindow.document.write('</head><body>');
-    printWindow.document.write(`<h1>Relatório Financeiro - ${periodo}</h1>`);
-    printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
+    printWindow.document.write(`<div class="header">
+        <h1>Relatório Financeiro</h1>
+        <p><strong>Empresa:</strong> ${empresaNome}</p>
+        <p><strong>Período:</strong> ${periodo}</p>
+    </div>`);
+    printWindow.document.write('<table><thead><tr><th>Data</th><th>Descrição</th><th>Cliente/Destino</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead><tbody>');
     
     dados.forEach(item => {
         const valor = parseFloat(item.valor);
@@ -294,6 +316,7 @@ export default function Financeiro() {
             <tr>
                 <td>${new Date(item.data_vencimento).toLocaleDateString('pt-BR')}</td>
                 <td>${item.descricao}</td>
+                <td>${item.nome_cliente || '-'}</td>
                 <td>${item.status}</td>
                 <td class="valor ${item.tipo_lancamento === 'ENTRADA' ? 'entrada' : 'saida'}">
                     R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
@@ -309,10 +332,12 @@ export default function Financeiro() {
   };
 
   const handleGerarFaturas = async () => {
-    if (!window.confirm("Gerar mensalidades para todos os contratos ativos?")) return;
+    if (!window.confirm("Gerar mensalidades para todos os contratos ativos desta empresa?")) return;
     setGerandoFaturas(true);
     try {
-      const res = await financeiroService.gerarFaturasMensais();
+      const empresaId = empresaSelecionada?.id || null;
+      // Passa o ID para gerar apenas faturas da empresa selecionada
+      const res = await financeiroService.gerarFaturasMensais(empresaId);
       alert(`Sucesso! ${res.faturas_geradas} faturas geradas.`);
       carregarDadosGlobais();
       carregarEstatisticas();
@@ -332,6 +357,11 @@ export default function Financeiro() {
       data.append('total_parcelas', form.total_parcelas);
       if (form.cliente) data.append('cliente', form.cliente);
       
+      // === VINCULAR LANÇAMENTO À EMPRESA SELECIONADA ===
+      if (empresaSelecionada) {
+          data.append('empresa', empresaSelecionada.id);
+      }
+
       if (form.arquivo_1) data.append('arquivo_1', form.arquivo_1);
       if (form.arquivo_2) data.append('arquivo_2', form.arquivo_2);
 
@@ -359,7 +389,6 @@ export default function Financeiro() {
 
   const COLORS = ['#7C69AF', '#A696D1', '#302464'];
 
-  // Dados seguros para o Dashboard
   const kpis = dadosDashboard;
   const graficoReceita = dadosDashboard.graficoReceita || [];
   const rankingVisitas = dadosDashboard.rankingVisitas || [];
@@ -372,6 +401,10 @@ export default function Financeiro() {
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Financeiro</h1>
           <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
+          {/* Indicador visual de contexto (Opcional, pois já tem no topo) */}
+          <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">
+            {empresaSelecionada ? `Filtrado por: ${empresaSelecionada.nome_fantasia}` : 'Visão Geral (Todas as Empresas)'}
+          </p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
@@ -721,7 +754,7 @@ export default function Financeiro() {
                     <div 
                        key={lanc.id} 
                        className={`p-5 rounded-3xl bg-white border shadow-sm transition-all relative overflow-hidden
-                                   ${selectedIds.includes(lanc.id) ? 'border-[#302464] ring-2 ring-[#302464]/20' : 'border-slate-100'}`}
+                                  ${selectedIds.includes(lanc.id) ? 'border-[#302464] ring-2 ring-[#302464]/20' : 'border-slate-100'}`}
                        onClick={() => handleToggleSelect(lanc.id)}
                     >
                         {/* Status Badge Absolute */}
@@ -755,22 +788,22 @@ export default function Financeiro() {
                         {/* Botões de Ação e Arquivos */}
                         <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
                            <div className="flex gap-2">
-                              {/* MOSTRAR PDFS NO MOBILE */}
-                              {lanc.arquivo_1 && (
-                                  <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
-                                      <FileText size={18}/>
-                                  </a>
-                              )}
-                              {lanc.arquivo_2 && (
-                                  <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
-                                      <Paperclip size={18}/>
-                                  </a>
-                              )}
-                              {lanc.comprovante && (
-                                  <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="p-2 bg-emerald-50 text-emerald-600 rounded-xl" onClick={(e)=>e.stopPropagation()}>
-                                      <CheckSquare size={18}/>
-                                  </a>
-                              )}
+                             {/* MOSTRAR PDFS NO MOBILE */}
+                             {lanc.arquivo_1 && (
+                                 <a href={lanc.arquivo_1} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                     <FileText size={18}/>
+                                 </a>
+                             )}
+                             {lanc.arquivo_2 && (
+                                 <a href={lanc.arquivo_2} target="_blank" rel="noopener noreferrer" className="p-2 bg-purple-50 text-[#302464] rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                     <Paperclip size={18}/>
+                                 </a>
+                             )}
+                             {lanc.comprovante && (
+                                 <a href={lanc.comprovante} target="_blank" rel="noopener noreferrer" className="p-2 bg-emerald-50 text-emerald-600 rounded-xl" onClick={(e)=>e.stopPropagation()}>
+                                     <CheckSquare size={18}/>
+                                 </a>
+                             )}
                            </div>
                            
                            <div className="flex gap-3">
@@ -809,6 +842,12 @@ export default function Financeiro() {
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20 overflow-y-auto max-h-[90vh]">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
+                {empresaSelecionada && (
+                    <div className="mb-4 p-3 bg-purple-50 rounded-xl text-center">
+                        <p className="text-[10px] font-black text-purple-400 uppercase">Vinculado a:</p>
+                        <p className="text-sm font-bold text-[#302464]">{empresaSelecionada.nome_fantasia}</p>
+                    </div>
+                )}
                 <form onSubmit={handleSalvar} className="space-y-5">
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>

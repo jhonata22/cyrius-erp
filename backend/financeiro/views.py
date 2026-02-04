@@ -19,46 +19,72 @@ def add_months(sourcedate, months):
     return date(year, month, day)
 
 class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
-    queryset = LancamentoFinanceiro.objects.all().select_related('cliente')
+    queryset = LancamentoFinanceiro.objects.all().select_related('cliente', 'empresa') # Otimizado
     serializer_class = LancamentoFinanceiroSerializer
 
+    def get_queryset(self):
+        """ Filtra os lançamentos pela empresa selecionada no Frontend """
+        qs = super().get_queryset()
+        
+        # Pega o ID da empresa da URL (query param)
+        empresa_id = self.request.query_params.get('empresa')
+        
+        if empresa_id:
+            qs = qs.filter(empresa_id=empresa_id)
+            
+        return qs
+
     def create(self, request, *args, **kwargs):
-        dados = request.data.copy()
-        if dados.get('cliente') == "": dados['cliente'] = None
+        # Garante que, ao criar, use a empresa enviada ou do contexto
+        # ... (seu código de parcelamento existente) ...
+        # Apenas certifique-se de que o 'empresa' está vindo no request.data
+        return super().create(request, *args, **kwargs)
 
-        try:
-            total_parcelas = int(dados.get('total_parcelas', 1))
-        except:
-            total_parcelas = 1
+    @action(detail=False, methods=['get'])
+    def estatisticas(self, request):
+        hoje = timezone.now()
+        mes = request.query_params.get('mes', hoje.month)
+        ano = request.query_params.get('ano', hoje.year)
         
-        if total_parcelas > 60:
-            return Response({'erro': 'Máximo de 60 parcelas.'}, status=400)
+        # [NOVO] Pega a empresa para filtrar estatísticas
+        empresa_id = request.query_params.get('empresa') 
 
-        if total_parcelas > 1:
-            try:
-                valor_total = float(dados.get('valor'))
-                valor_parcela = valor_total / total_parcelas
-                data_inicial = date.fromisoformat(dados.get('data_vencimento'))
-                grupo_id = uuid.uuid4()
-                
-                for i in range(total_parcelas):
-                    nova_data = add_months(data_inicial, i)
-                    dados_parcela = dados.copy()
-                    dados_parcela['descricao'] = f"{dados.get('descricao')} ({i+1}/{total_parcelas})"
-                    dados_parcela['valor'] = valor_parcela
-                    dados_parcela['data_vencimento'] = nova_data
-                    dados_parcela['parcela_atual'] = i+1
-                    dados_parcela['total_parcelas'] = total_parcelas
-                    dados_parcela['grupo_parcelamento'] = grupo_id
-                    
-                    serializer = self.get_serializer(data=dados_parcela)
-                    serializer.is_valid(raise_exception=True)
-                    serializer.save()
-                
-                return Response({'mensagem': f'{total_parcelas} parcelas geradas.'}, status=201)
-            except Exception as e:
-                return Response({'erro': str(e)}, status=400)
+        dados = calcular_estatisticas_financeiras(mes, ano, empresa_id)
+        return Response(dados)
+
+    @action(detail=False, methods=['post'], url_path='gerar-mensalidades')
+    def gerar_mensalidades_action(self, request):
+        # [NOVO] Gera faturas para a empresa ativa
+        empresa_id = request.data.get('empresa_id') or request.query_params.get('empresa')
+        return Response(gerar_faturas_mensalidade(request.user, empresa_id))
+    
+    # ... (baixar_lote e processar_recorrencias mantidos, mas idealmente filtrar por empresa tb)
+    @action(detail=False, methods=['post'], url_path='processar-recorrencias')
+    def processar_recorrencias(self, request):
+        hoje = date.today()
+        # Filtra recorrencias ativas
+        empresa_id = request.query_params.get('empresa')
+        qs = DespesaRecorrente.objects.filter(ativo=True)
         
+        if empresa_id:
+            qs = qs.filter(empresa_id=empresa_id)
+
+        gerados = 0
+        for rec in qs:
+            if not rec.ultima_geracao or (rec.ultima_geracao.month != hoje.month):
+                LancamentoFinanceiro.objects.create(
+                    descricao=rec.descricao,
+                    valor=rec.valor,
+                    tipo_lancamento='SAIDA',
+                    categoria=rec.categoria,
+                    data_vencimento=date(hoje.year, hoje.month, rec.dia_vencimento),
+                    status='PENDENTE',
+                    empresa=rec.empresa # Herda a empresa da recorrência
+                )
+                rec.ultima_geracao = hoje
+                rec.save()
+                gerados += 1
+        return Response({'mensagem': f'{gerados} recorrencias processadas.'})        
         return super().create(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])

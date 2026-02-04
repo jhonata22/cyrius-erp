@@ -6,9 +6,11 @@ import {
   Wrench, Menu, X
 } from 'lucide-react';
 import authService from '../services/authService';
-// IMPORTANTE: Importar o equipeService para buscar os dados atualizados
 import equipeService from '../services/equipeService'; 
 import NotificationBell from './NotificationBell';
+
+// 1. IMPORTAÇÃO DO SELETOR DE EMPRESAS
+import EmpresaSelector from './EmpresaSelector';
 
 const scrollbarStyle = `
   .sidebar-scroll::-webkit-scrollbar { width: 5px; }
@@ -47,30 +49,21 @@ export default function Layout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   
-  // Estado para os dados do usuário
   const [userName, setUserName] = useState(authService.getLoggedUser() || 'Usuário');
   const [userPhoto, setUserPhoto] = useState(localStorage.getItem('user_photo'));
   const [userCargo, setUserCargo] = useState(localStorage.getItem('cargo'));
 
-  // Efeito para buscar dados atualizados do perfil (Foto, Cargo, Nome)
   useEffect(() => {
     async function fetchUserData() {
         try {
             const data = await equipeService.me();
-            
-            // Atualiza estados
             if (data.nome) setUserName(data.nome);
             if (data.cargo) setUserCargo(data.cargo);
-            
-            // Lógica da Foto
             if (data.foto) {
                 setUserPhoto(data.foto);
-                // Opcional: Atualizar localStorage para cache na próxima vez
                 localStorage.setItem('user_photo', data.foto);
             }
-            // Atualiza cargo no storage para permissões
             if (data.cargo) localStorage.setItem('cargo', data.cargo);
-
         } catch (error) {
             console.error("Erro ao carregar perfil do usuário no Layout", error);
         }
@@ -177,6 +170,14 @@ export default function Layout({ children }) {
             </div>
             
             <div className="flex items-center gap-2 md:gap-5 ml-auto">
+                
+                {/* 2. ALTERADO: SELETOR DE EMPRESAS VISÍVEL APENAS PARA SÓCIOS E GESTORES */}
+                {temPermissao(['SOCIO', 'GESTOR']) && (
+                    <div className="hidden md:block">
+                       <EmpresaSelector />
+                    </div>
+                )}
+                
                 <NotificationBell />
                 <div className="h-8 w-px bg-slate-200/50 hidden md:block"></div>
 
@@ -192,11 +193,10 @@ export default function Layout({ children }) {
                              src={userPhoto} 
                              alt="Perfil" 
                              className="w-full h-full object-cover absolute inset-0"
-                             onError={(e) => { e.target.style.display = 'none'; }} // Esconde se der erro e mostra iniciais
+                             onError={(e) => { e.target.style.display = 'none'; }} 
                           />
                         ) : null}
                         
-                        {/* Fallback de iniciais se não tiver foto ou der erro */}
                         <span className={userPhoto ? 'hidden' : 'block'}>
                             {userName.substring(0, 2).toUpperCase()}
                         </span>

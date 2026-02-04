@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     # 'whitenoise', # Descomente se instalar o whitenoise: pip install whitenoise
     
     # Meus Apps
+    'core',
     'clientes',
     'equipe',
     'infra',

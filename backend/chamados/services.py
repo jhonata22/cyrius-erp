@@ -7,15 +7,8 @@ from decimal import Decimal
 
 @transaction.atomic
 def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquivos=None):
-    """
-    Versão Corrigida:
-    1. Aceita 'arquivos' (request.FILES)
-    2. Converte strings do FormData em Decimal/Float com segurança
-    3. Clona o arquivo de conclusão para o financeiro
-    """
     Chamado = apps.get_model('chamados', 'Chamado')
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
-    ChamadoTecnico = apps.get_model('chamados', 'ChamadoTecnico')
     
     try:
         chamado = Chamado.objects.select_related('cliente').get(pk=chamado_id)
@@ -25,21 +18,23 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
     if chamado.status == 'FINALIZADO':
         raise ValidationError("Chamados finalizados não podem ser alterados.")
 
-    # --- FUNÇÃO AUXILIAR PARA LIMPAR NÚMEROS (FormData envia tudo como string) ---
     def safe_decimal(valor):
         if valor in [None, '', 'null', 'undefined']: return Decimal('0.00')
         try:
             return Decimal(str(valor).replace(',', '.'))
         except: return Decimal('0.00')
 
-    # 1. SALVAR O ARQUIVO (Se o técnico enviou)
-    if arquivos and 'arquivo_conclusao' in arquivos:
-        chamado.arquivo_conclusao = arquivos['arquivo_conclusao']
+    # 1. SALVAR ARQUIVOS
+    if arquivos:
+        for campo in ['arquivo_conclusao', 'arquivo_1', 'arquivo_2', 'foto_antes', 'foto_depois']:
+            if campo in arquivos:
+                setattr(chamado, campo, arquivos[campo])
 
-    # 2. ATUALIZAR CAMPOS GERAIS (Tratando tipos de dados)
-    if 'titulo' in dados_atualizacao: chamado.titulo = dados_atualizacao['titulo']
-    if 'descricao_detalhada' in dados_atualizacao: chamado.descricao_detalhada = dados_atualizacao['descricao_detalhada']
-    if 'prioridade' in dados_atualizacao: chamado.prioridade = dados_atualizacao['prioridade']
+    # 2. ATUALIZAR CAMPOS GERAIS
+    campos_texto = ['titulo', 'descricao_detalhada', 'prioridade', 'resolucao']
+    for campo in campos_texto:
+        if campo in dados_atualizacao:
+            setattr(chamado, campo, dados_atualizacao[campo])
     
     chamado.custo_ida = safe_decimal(dados_atualizacao.get('custo_ida', chamado.custo_ida))
     chamado.custo_volta = safe_decimal(dados_atualizacao.get('custo_volta', chamado.custo_volta))
@@ -49,21 +44,19 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
 
     # --- PROCESSO DE FINALIZAÇÃO ---
     if novo_status == 'FINALIZADO':
-        resolucao = dados_atualizacao.get('resolucao')
-        if not resolucao:
-            raise ValidationError("A resolução técnica é obrigatória para finalizar.")
+        if not chamado.resolucao and not dados_atualizacao.get('resolucao'):
+             raise ValidationError("A resolução técnica é obrigatória para finalizar.")
 
         chamado.status = 'FINALIZADO'
-        chamado.resolucao = resolucao
         chamado.data_fechamento = timezone.now()
         chamado.custo_transporte = chamado.custo_ida + chamado.custo_volta
 
-        # REGRA FINANCEIRO (AVULSO)
+        # A. REGRA FINANCEIRO (RECEITA - AVULSO)
         eh_avulso = getattr(chamado.cliente, 'tipo_cliente', 'AVULSO') == 'AVULSO'
         
         if eh_avulso and chamado.valor_servico > 0 and not chamado.financeiro_gerado:
-            # Cria o Lançamento
-            lancamento = LancamentoFinanceiro.objects.create(
+            lancamento_entrada = LancamentoFinanceiro.objects.create(
+                empresa=chamado.empresa, # <--- VINCULA À EMPRESA DO CHAMADO
                 cliente=chamado.cliente,
                 tecnico=getattr(usuario_responsavel, 'equipe', None) if hasattr(usuario_responsavel, 'equipe') else None,
                 descricao=f"Atendimento Avulso - #{chamado.protocolo}",
@@ -75,10 +68,10 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
                 forma_pagamento='PIX'
             )
 
-            # CLONAR ARQUIVO: Se o técnico anexou no chamado, copiamos para o financeiro
+            # Clonar comprovante/laudo para o financeiro
             if chamado.arquivo_conclusao:
                 nome_arquivo = chamado.arquivo_conclusao.name.split('/')[-1]
-                lancamento.comprovante.save(
+                lancamento_entrada.comprovante.save(
                     f"comp_{nome_arquivo}",
                     ContentFile(chamado.arquivo_conclusao.read()),
                     save=True
@@ -86,17 +79,27 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             
             chamado.financeiro_gerado = True
 
-        # REGRA DE CUSTOS (DESLOCAMENTO)
+        # B. REGRA DE CUSTOS (DESPESA - REEMBOLSO TRANSPORTE)
         if chamado.custo_transporte > 0:
-            LancamentoFinanceiro.objects.create(
-                descricao=f"Custo de transporte - #{chamado.protocolo}",
-                valor=chamado.custo_transporte,
-                tipo_lancamento='SAIDA',
-                status='PENDENTE',
-                data_vencimento=timezone.now().date(),
-                categoria='DESPESA',
-                cliente=chamado.cliente
+            descricao_transporte = f"Reembolso Transporte - OS #{chamado.protocolo}"
+            
+            LancamentoFinanceiro.objects.update_or_create(
+                descricao=descricao_transporte,
+                defaults={
+                    'empresa': chamado.empresa, # <--- VINCULA À EMPRESA
+                    'valor': chamado.custo_transporte,
+                    'tipo_lancamento': 'SAIDA',
+                    'status': 'PENDENTE',
+                    'data_vencimento': timezone.now().date(),
+                    'categoria': 'TRANSPORTE',
+                    'cliente': chamado.cliente,
+                    'tecnico': chamado.tecnico 
+                }
             )
+
+    # Se não for finalizado, apenas salva o status novo (se houver)
+    elif novo_status:
+        chamado.status = novo_status
 
     chamado.save()
     return chamado

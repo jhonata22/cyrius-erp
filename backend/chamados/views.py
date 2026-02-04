@@ -8,12 +8,11 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import datetime
 import calendar
-import traceback # IMPORTANTE PARA O DEBUG
+import traceback
 
 from .models import Chamado
 from .serializers import ChamadoSerializer
-from .services import atualizar_chamado 
-from financeiro.models import LancamentoFinanceiro
+from .services import atualizar_chamado
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -26,52 +25,38 @@ class ChamadoViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-    # --- DEBUG: Sobrescrevemos o LIST para pegar erros ocultos ---
     def list(self, request, *args, **kwargs):
-        print("\n\n=== INICIANDO DEBUG LISTAGEM CHAMADOS ===")
         try:
-            # 1. Testar Queryset
             queryset = self.filter_queryset(self.get_queryset())
-            total = queryset.count()
-            print(f"DEBUG: Queryset encontrou {total} chamados.")
-
-            # 2. Testar Paginação
             page = self.paginate_queryset(queryset)
             if page is not None:
-                print(f"DEBUG: Paginando {len(page)} itens.")
                 serializer = self.get_serializer(page, many=True)
-                # Se der erro, vai pular pro except abaixo
-                data = serializer.data 
-                print("DEBUG: Serialização da página concluída com sucesso.")
-                return self.get_paginated_response(data)
+                return self.get_paginated_response(serializer.data)
 
-            # Sem paginação
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
-
         except Exception as e:
-            print("\n\n============================================")
-            print("!!! ERRO CRÍTICO AO LISTAR CHAMADOS !!!")
-            print(f"Erro: {str(e)}")
-            print("Traceback completo:")
             traceback.print_exc()
-            print("============================================\n\n")
             return Response(
-                {"erro_debug": str(e), "detalhe": "Olhe o terminal do backend para ver o erro completo."}, 
+                {"erro_debug": str(e), "detalhe": "Erro ao listar chamados."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def get_queryset(self):
-        print(f"DEBUG: get_queryset chamado. Params: {self.request.query_params}")
         queryset = Chamado.objects.all().order_by('-created_at')
         
+        # === FILTRO MULTI-EMPRESA ===
+        empresa_id = self.request.query_params.get('empresa')
+        if empresa_id:
+            queryset = queryset.filter(empresa_id=empresa_id)
+        # ============================
+
         data_inicio = self.request.query_params.get('data_inicio')
         data_fim = self.request.query_params.get('data_fim')
         status_filtro = self.request.query_params.get('status')
         cliente_id = self.request.query_params.get('cliente')
 
         if data_inicio and data_fim:
-            # Filtro simples por string de data (YYYY-MM-DD) funciona bem com __date
             queryset = queryset.filter(data_abertura__date__range=[data_inicio, data_fim])
         elif data_inicio:
             queryset = queryset.filter(data_abertura__date__gte=data_inicio)
@@ -87,7 +72,6 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def estatisticas(self, request):
-        print("\n=== DEBUG ESTATISTICAS ===")
         mes_ref = request.query_params.get('mes') 
         
         try:
@@ -101,7 +85,6 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             hoje = timezone.now()
             ano, mes = hoje.year, hoje.month
 
-        # Correção Timezone
         ultimo_dia = calendar.monthrange(ano, mes)[1]
         
         try:
@@ -110,9 +93,13 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             data_inicio = timezone.make_aware(dt_ini_naive)
             data_fim = timezone.make_aware(dt_fim_naive)
             
-            print(f"DEBUG: Filtrando estatísticas de {data_inicio} até {data_fim}")
-
             qs_mes = Chamado.objects.filter(data_abertura__range=(data_inicio, data_fim))
+
+            # === FILTRO ESTATISTICA MULTI-EMPRESA ===
+            empresa_id = request.query_params.get('empresa')
+            if empresa_id:
+                qs_mes = qs_mes.filter(empresa_id=empresa_id)
+            # ========================================
 
             stats = qs_mes.aggregate(
                 total=Count('id'),
@@ -121,9 +108,6 @@ class ChamadoViewSet(viewsets.ModelViewSet):
                 finalizados=Count('id', filter=Q(status='FINALIZADO'))
             )
             
-            # Debug para ver se está travando aqui
-            print(f"DEBUG stats calculadas: {stats}")
-
             raw_empresas = qs_mes.values_list('cliente__nome', 'cliente__razao_social').order_by().distinct()
             lista_empresas = []
             for nome, razao in raw_empresas:
@@ -146,38 +130,18 @@ class ChamadoViewSet(viewsets.ModelViewSet):
                 ]
             })
         except Exception as e:
-            print(f"ERRO ESTATISTICAS: {e}")
             traceback.print_exc()
             return Response({"erro": str(e)}, status=500)
 
     def update(self, request, *args, **kwargs):
-        # ... (seu código de update existente mantido igual) ...
         try:
+            # A lógica financeira foi movida 100% para o service
             chamado = atualizar_chamado(
                 chamado_id=kwargs['pk'],
                 dados_atualizacao=request.data,
                 arquivos=request.FILES, 
                 usuario_responsavel=request.user
             )
-
-            if chamado.status == 'FINALIZADO' and chamado.custo_transporte and chamado.custo_transporte > 0:
-                descricao_lanc = f"Visita Técnica #{chamado.id} - {chamado.tecnico.nome if chamado.tecnico else 'Técnico'}"
-                LancamentoFinanceiro.objects.update_or_create(
-                    descricao__startswith=f"Visita Técnica #{chamado.id}", 
-                    defaults={
-                        'descricao': descricao_lanc,
-                        'valor': chamado.custo_transporte,
-                        'tipo_lancamento': 'SAIDA',
-                        'categoria': 'SERVICO',
-                        'data_vencimento': chamado.data_fechamento.date() if chamado.data_fechamento else timezone.now().date(),
-                        'status': 'PAGO',
-                        'forma_pagamento': 'DINHEIRO',
-                        'cliente': chamado.cliente,
-                        'tecnico': chamado.tecnico
-                    }
-                )
-            elif chamado.status != 'FINALIZADO' or chamado.custo_transporte == 0:
-                LancamentoFinanceiro.objects.filter(descricao__startswith=f"Visita Técnica #{chamado.id}").delete()
 
             serializer = self.get_serializer(chamado)
             return Response(serializer.data)

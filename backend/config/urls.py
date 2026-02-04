@@ -8,7 +8,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 
 # ==========================================================
-# 1. IMPORTAÇÕES DOS NOVOS APPS (EM VEZ DE CORE)
+# 1. IMPORTAÇÕES DOS APPS
 # ==========================================================
 from clientes.views import (
     ClienteViewSet, 
@@ -33,7 +33,10 @@ from servicos.views import (
 from chamados.views import ChamadoViewSet
 from financeiro.views import LancamentoFinanceiroViewSet
 
-# Autenticação JWT (Mantida)
+# [NOVO] Importação do Core (Empresas)
+from core.views import EmpresaViewSet 
+
+# Autenticação JWT
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -44,13 +47,17 @@ from rest_framework_simplejwt.views import (
 # ==========================================================
 router = DefaultRouter()
 
+# --- CORE (Multi-Empresa) ---
+# Isso gera a rota: /api/core/empresas/
+router.register(r'core/empresas', EmpresaViewSet, basename='empresa')
+
 # --- Clientes e Equipe ---
 router.register(r'clientes', ClienteViewSet)
 router.register(r'equipe', EquipeViewSet)
 router.register(r'contatos', ContatoClienteViewSet)
 router.register(r'provedores', ProvedorInternetViewSet)
-router.register(r'emails', ContaEmailViewSet) # Mantive 'emails' como no antigo
-router.register(r'documentacao', DocumentacaoTecnicaViewSet) # Mantive 'documentacao'
+router.register(r'emails', ContaEmailViewSet)
+router.register(r'documentacao', DocumentacaoTecnicaViewSet)
 
 # --- Operacional (Chamados e Infra) ---
 router.register(r'chamados', ChamadoViewSet, basename='chamado')
@@ -58,15 +65,16 @@ router.register(r'ativos', AtivoViewSet)
 
 # --- Serviços (OS) ---
 router.register(r'servicos', OrdemServicoViewSet, basename='servicos')
-router.register(r'itens-servico', ItemServicoViewSet) # Rota individual de itens
+router.register(r'itens-servico', ItemServicoViewSet)
 router.register(r'notificacoes', NotificacaoViewSet, basename='notificacao')
 
 # --- Financeiro ---
-router.register(r'financeiro', LancamentoFinanceiroViewSet)
+# Ajustei para 'lancamentos' para bater com o padrão REST e com o Service que criamos
+# Rota final: /api/lancamentos/
+router.register(r'lancamentos', LancamentoFinanceiroViewSet, basename='lancamento-financeiro')
 
 # --- Estoque e Contratos ---
 router.register(r'fornecedores', FornecedorViewSet)
-# Mantive os caminhos aninhados 'estoque/...' para não quebrar o frontend
 router.register(r'estoque/produtos', ProdutoViewSet, basename='produtos') 
 router.register(r'estoque/movimentacoes', MovimentacaoEstoqueViewSet, basename='movimentacoes')
 router.register(r'contratos', ContratoViewSet)

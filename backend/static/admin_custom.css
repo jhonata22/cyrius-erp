@@ -1,0 +1,30 @@
+/* static/css/admin_custom.css */
+
+/* Barra Superior - Seu Roxo Escuro */
+.navbar-purple {
+    background-color: #302464 !important;
+}
+
+/* Menu Lateral - Um tom levemente diferente ou o mesmo */
+.sidebar-dark-purple {
+    background-color: #1e1b4b !important; /* Slate 900 do seu front */
+}
+.sidebar-dark-purple .nav-link.active {
+    background-color: #7C69AF !important; /* Seu Roxo Claro para item ativo */
+    color: #fff !important;
+}
+
+/* Botões Principais */
+.btn-primary {
+    background-color: #302464 !important;
+    border-color: #302464 !important;
+}
+.btn-primary:hover {
+    background-color: #7C69AF !important;
+    border-color: #7C69AF !important;
+}
+
+/* Branding */
+.brand-link.navbar-purple {
+    background-color: #302464 !important;
+}

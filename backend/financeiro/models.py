@@ -3,19 +3,21 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-# Fallback TimeStampedModel
+# Importação do modelo de Empresa (Core)
+# Usamos string 'core.Empresa' para evitar circular import se precisar importar algo do financeiro no core
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         abstract = True
 
-def mes_esta_fechado(data):
-    # Função auxiliar para verificar se o mês já foi travado
-    # Importação local para evitar ciclo no carregamento inicial
+def mes_esta_fechado(data, empresa_id=None):
+    # ATUALIZADO: Agora verificamos o fechamento DAQUELA empresa específica
     try:
-        fechamento = FechamentoFinanceiro.objects.filter(ano=data.year, mes=data.month).exists()
-        return fechamento
+        query = FechamentoFinanceiro.objects.filter(ano=data.year, mes=data.month)
+        if empresa_id:
+            query = query.filter(empresa_id=empresa_id)
+        return query.exists()
     except:
         return False
 
@@ -24,6 +26,7 @@ def mes_esta_fechado(data):
 # =====================================================
 
 class LancamentoFinanceiro(TimeStampedModel):
+    # ... (Mantenha StatusFinanceiro, Categoria, FORMA_PAGAMENTO_CHOICES igual ao seu) ...
     class StatusFinanceiro(models.TextChoices):
         PENDENTE = 'PENDENTE', 'Pendente'
         PAGO = 'PAGO', 'Pago'
@@ -50,7 +53,11 @@ class LancamentoFinanceiro(TimeStampedModel):
         ('TRANSFERENCIA', 'Transferência'),
     ]
 
-    # Relacionamentos como Strings (Safe Imports)
+    # === NOVO CAMPO: EMPRESA ===
+    # on_delete=models.PROTECT para não deixar apagar uma empresa se tiver lançamentos
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, null=True, blank=True, related_name='lancamentos')
+
+    # Relacionamentos existentes
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT, null=True, blank=True)
     tecnico = models.ForeignKey('equipe.Equipe', on_delete=models.SET_NULL, null=True, blank=True)
     fornecedor = models.ForeignKey('estoque.Fornecedor', on_delete=models.SET_NULL, null=True, blank=True, related_name='lancamentos')
@@ -75,7 +82,7 @@ class LancamentoFinanceiro(TimeStampedModel):
     forma_pagamento = models.CharField(max_length=20, choices=FORMA_PAGAMENTO_CHOICES, default='DINHEIRO')
     parcela_atual = models.IntegerField(default=1)
     total_parcelas = models.IntegerField(default=1)
-    grupo_parcelamento = models.UUIDField(null=True, blank=True, help_text="ID único para agrupar parcelas")
+    grupo_parcelamento = models.UUIDField(null=True, blank=True)
 
     class Meta: 
         db_table = 'TB_LANCAMENTO_FINANCEIRO'
@@ -83,8 +90,9 @@ class LancamentoFinanceiro(TimeStampedModel):
         ordering = ['-data_vencimento']
 
     def clean(self):
-        if self.data_vencimento and mes_esta_fechado(self.data_vencimento):
-            raise ValidationError(f"Mês {self.data_vencimento.month}/{self.data_vencimento.year} está fechado.")
+        # Passamos a empresa para validar o fechamento correto
+        if self.data_vencimento and mes_esta_fechado(self.data_vencimento, self.empresa_id):
+            raise ValidationError(f"Mês {self.data_vencimento.month}/{self.data_vencimento.year} está fechado para esta empresa.")
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -100,14 +108,16 @@ class LancamentoFinanceiro(TimeStampedModel):
 
 
 class DespesaRecorrente(models.Model):
+    # === NOVO CAMPO: EMPRESA ===
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, null=True, blank=True)
+
     descricao = models.CharField(max_length=255)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     categoria = models.CharField(max_length=20, choices=LancamentoFinanceiro.Categoria.choices, default='DESPESA')
     dia_vencimento = models.IntegerField(help_text="Dia do mês que vence (1-31)")
     
     ativo = models.BooleanField(default=True)
-    ultima_geracao = models.DateField(null=True, blank=True, help_text="Data em que foi gerada a última cobrança")
-    
+    ultima_geracao = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -118,6 +128,10 @@ class DespesaRecorrente(models.Model):
 
 
 class FechamentoFinanceiro(models.Model):
+    # === NOVO CAMPO: EMPRESA ===
+    # O fechamento agora é por CNPJ (pode fechar a empresa A e deixar a B aberta)
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, null=True, blank=True)
+
     ano = models.PositiveIntegerField()
     mes = models.PositiveSmallIntegerField()
     fechado_em = models.DateTimeField(auto_now_add=True)
@@ -125,4 +139,5 @@ class FechamentoFinanceiro(models.Model):
     
     class Meta: 
         db_table = 'TB_FECHAMENTO_FINANCEIRO'
-        unique_together = ('ano', 'mes')
+        # Agora o unique together inclui a empresa
+        unique_together = ('ano', 'mes', 'empresa')

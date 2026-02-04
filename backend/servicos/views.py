@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.core.exceptions import ValidationError # Erro disparado pelo models/services
+from django.core.exceptions import ValidationError
 import traceback
 
 from utils.permissions import IsFuncionario
@@ -16,14 +16,19 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = OrdemServico.objects.all().select_related(
-            'cliente', 'tecnico_responsavel', 'ativo'
+            'cliente', 'tecnico_responsavel', 'ativo', 'empresa' # Otimizado
         ).prefetch_related('itens', 'anexos').order_by('-created_at')
 
-        # Filtro: Técnicos comuns vêem apenas suas ordens
+        # 1. Filtro de Segurança (Técnicos só veem as suas, exceto Gestores)
         if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
              qs = qs.filter(tecnico_responsavel=user.equipe)
 
-        # Filtros de URL (Query Params)
+        # 2. Filtro MULTI-EMPRESA
+        empresa_id = self.request.query_params.get('empresa')
+        if empresa_id:
+            qs = qs.filter(empresa_id=empresa_id)
+
+        # 3. Filtros Padrão
         ativo_id = self.request.query_params.get('ativo')
         cliente_id = self.request.query_params.get('cliente')
         
@@ -35,15 +40,24 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        # Auto-atribui o técnico logado se não for enviado
+        # Prepara os dados extras para salvar
+        save_kwargs = {}
+
+        # 1. Auto-atribui o técnico se não vier
         if 'tecnico_responsavel' not in serializer.validated_data:
             if hasattr(self.request.user, 'equipe'):
-                serializer.save(tecnico_responsavel=self.request.user.equipe)
-            else:
-                serializer.save()
-        else:
-            serializer.save()
+                save_kwargs['tecnico_responsavel'] = self.request.user.equipe
 
+        # 2. Atribui a EMPRESA se vier na requisição (JSON ou Query Param)
+        # O Frontend vai mandar no corpo da requisição { ..., "empresa": 1 }
+        # O Serializer já lida com isso se estiver nos fields, mas se falhar, forçamos aqui:
+        empresa_id = self.request.data.get('empresa') or self.request.query_params.get('empresa')
+        if empresa_id:
+            save_kwargs['empresa_id'] = empresa_id
+
+        serializer.save(**save_kwargs)
+
+    # ... (Mantenha adicionar_item, finalizar, anexar_arquivo, etc. IGUAIS) ...
     @action(detail=True, methods=['post'], url_path='adicionar-item')
     def adicionar_item(self, request, pk=None):
         try:
@@ -54,9 +68,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
                 preco_venda=request.data.get('preco_venda')
             )
             return Response(ItemServicoSerializer(item).data, status=status.HTTP_201_CREATED)
-        
         except ValidationError as e:
-            # Captura erros de estoque ou validações de modelo
             return Response({"erro": self._format_validation_error(e)}, status=400)
         except Exception as e:
             return Response({"erro": str(e)}, status=400)
@@ -67,14 +79,13 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         try:
             os_atualizada = finalizar_ordem_servico(os, request.user)
             return Response(OrdemServicoSerializer(os_atualizada).data)
-        
         except ValidationError as e:
-            # Retorna o erro formatado para o React exibir bonito
             return Response({"erro": self._format_validation_error(e)}, status=400)
-        
         except Exception as e:
-            traceback.print_exc() # Mantemos esse log de erro interno pois é útil
-            return Response({"erro": f"Erro interno no servidor: {str(e)}"}, status=500)    @action(detail=True, methods=['post'], url_path='anexar')
+            traceback.print_exc()
+            return Response({"erro": f"Erro interno no servidor: {str(e)}"}, status=500)
+
+    @action(detail=True, methods=['post'], url_path='anexar')
     def anexar_arquivo(self, request, pk=None):
         os = self.get_object()
         arquivo = request.FILES.get('arquivo')
@@ -89,12 +100,9 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         return Response(AnexoServicoSerializer(anexo).data, status=201)
 
     def _format_validation_error(self, e):
-        """
-        Helper para transformar ValidationError do Django em algo que o React entenda.
-        """
         if hasattr(e, 'message_dict'):
-            return e.message_dict  # Retorna dicionário: {'campo': ['erro']}
-        return e.messages[0] if e.messages else str(e) # Retorna string amigável
+            return e.message_dict
+        return e.messages[0] if e.messages else str(e)
 
 
 class ItemServicoViewSet(viewsets.ModelViewSet):

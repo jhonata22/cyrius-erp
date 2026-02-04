@@ -1,9 +1,8 @@
 from django.db import models
 from django.db.models import Sum, F
 from django.utils import timezone
-from django.conf import settings # Para referenciar User
+from django.conf import settings 
 
-# Fallback TimeStampedModel
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -11,13 +10,14 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 class OrdemServico(TimeStampedModel):
+    # ... (Mantenha Status e Tipo iguais) ...
     class Status(models.TextChoices):
         ORCAMENTO = 'ORCAMENTO', 'Orçamento'
         APROVADO = 'APROVADO', 'Aprovado'
         EM_EXECUCAO = 'EM_EXECUCAO', 'Em Execução'
         AGUARDANDO_PECA = 'AGUARDANDO_PECA', 'Aguardando Peça'
         CONCLUIDO = 'CONCLUIDO', 'Concluído'
-        FINALIZADO = 'FINALIZADO', 'Finalizado' # Status final de travamento
+        FINALIZADO = 'FINALIZADO', 'Finalizado' 
         CANCELADO = 'CANCELADO', 'Cancelado'
 
     class Tipo(models.TextChoices):
@@ -25,10 +25,13 @@ class OrdemServico(TimeStampedModel):
         EXTERNO = 'EXTERNO', 'Projeto Externo / Visita'
         REMOTO = 'REMOTO', 'Acesso Remoto Especializado'
 
+    # === NOVO CAMPO: EMPRESA ===
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, null=True, blank=True, related_name='servicos')
+
     # Identificação
     titulo = models.CharField(max_length=150, help_text="Ex: Formatação PC, Instalação Câmeras")
     
-    # RELACIONAMENTOS EXTERNOS (Strings)
+    # RELACIONAMENTOS EXTERNOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT, related_name='servicos')
     tecnico_responsavel = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
     ativo = models.ForeignKey('infra.Ativo', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_os')
@@ -43,14 +46,12 @@ class OrdemServico(TimeStampedModel):
     # Datas
     data_entrada = models.DateTimeField(default=timezone.now)
     data_previsao = models.DateField(null=True, blank=True)
-    data_conclusao = models.DateTimeField(null=True, blank=True) # Data técnica
-    data_finalizacao = models.DateTimeField(null=True, blank=True) # Data financeira/travamento
+    data_conclusao = models.DateTimeField(null=True, blank=True)
+    data_finalizacao = models.DateTimeField(null=True, blank=True)
 
-    # Custos Operacionais (Saídas)
+    # Custos e Faturamento
     custo_deslocamento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_terceiros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-
-    # Faturamento (Entradas)
     valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
@@ -65,7 +66,6 @@ class OrdemServico(TimeStampedModel):
 
     @property
     def total_pecas(self):
-        # Soma dinâmica dos itens
         return self.itens.aggregate(total=Sum(models.F('quantidade') * models.F('preco_venda')))['total'] or 0
 
     @property
@@ -75,12 +75,10 @@ class OrdemServico(TimeStampedModel):
         desc = self.desconto
         return (float(pecas) + float(mo)) - float(desc)
 
-
+# ... (Mantenha ItemServico, AnexoServico e Notificacao iguais) ...
 class ItemServico(models.Model):
     os = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='itens')
-    # Aponta para Estoque
     produto = models.ForeignKey('estoque.Produto', on_delete=models.PROTECT)
-    
     quantidade = models.PositiveIntegerField(default=1)
     preco_venda = models.DecimalField(max_digits=10, decimal_places=2, help_text="Preço cobrado no momento da OS")
 
@@ -94,7 +92,6 @@ class ItemServico(models.Model):
     @property
     def valor_total(self):
         return self.quantidade * self.preco_venda
-
 
 class AnexoServico(models.Model):
     class TipoArquivo(models.TextChoices):

@@ -27,6 +27,17 @@ class Chamado(TimeStampedModel):
         VISITA = 'VISITA', 'Visita Técnica'
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
+    # === MULTI-EMPRESAS ===
+    empresa = models.ForeignKey(
+        'empresas.Empresa', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='chamados',
+        verbose_name="Filial/Empresa"
+    )
+    # ======================
+
     # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
 
@@ -39,7 +50,6 @@ class Chamado(TimeStampedModel):
         help_text="Equipamento que recebeu o serviço"
     )
     
-    # Adicionado para compatibilidade com o Serializer (Técnico Principal)
     tecnico = models.ForeignKey(
         'equipe.Equipe', 
         on_delete=models.SET_NULL, 
@@ -57,19 +67,17 @@ class Chamado(TimeStampedModel):
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
     tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
     
-    # === NOVOS CAMPOS (Correção do Erro) ===
     resolucao = models.TextField(null=True, blank=True, verbose_name="Resolução Técnica")
     
     valor_servico = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Valor do Serviço (Avulso)")
     financeiro_gerado = models.BooleanField(default=False, help_text="Indica se a cobrança automática foi gerada")
     
-    # Arquivos e Fotos (Para o Upload funcionar)
+    # Arquivos
     arquivo_conclusao = models.FileField(upload_to='chamados/conclusao/%Y/%m/', null=True, blank=True)
     arquivo_1 = models.FileField(upload_to='chamados/docs/', null=True, blank=True)
     arquivo_2 = models.FileField(upload_to='chamados/docs/', null=True, blank=True)
     foto_antes = models.ImageField(upload_to='chamados/fotos/', null=True, blank=True)
     foto_depois = models.ImageField(upload_to='chamados/fotos/', null=True, blank=True)
-    # ========================================
 
     data_agendamento = models.DateTimeField(null=True, blank=True)
     
@@ -83,7 +91,6 @@ class Chamado(TimeStampedModel):
     data_abertura = models.DateTimeField(default=timezone.now)
     data_fechamento = models.DateTimeField(null=True, blank=True)
     
-    # ManyToMany com Equipe através de tabela intermediária (Equipe de Apoio)
     tecnicos = models.ManyToManyField('equipe.Equipe', through='ChamadoTecnico')
 
     class Meta: 
@@ -102,6 +109,7 @@ class Chamado(TimeStampedModel):
         # 2. Geração de Protocolo
         if not self.protocolo:
             hoje = timezone.now().strftime('%Y%m%d')
+            # Busca o último protocolo gerado (independente da empresa, para garantir unicidade global ou pode filtrar por empresa se preferir)
             ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('-protocolo').first()
             
             sequencia = 1

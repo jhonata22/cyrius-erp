@@ -9,13 +9,19 @@ class Ativo(models.Model):
         MONITOR = 'MONITOR', 'Monitor'
         PERIFERICO = 'PERIFERICO', 'Periférico/Outro'
 
-    # Relacionamento com Cliente via string
+    # Relacionamento
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.CASCADE, related_name='ativos')
     
     nome = models.CharField(max_length=100)
     tipo = models.CharField(max_length=20, choices=TipoAtivo.choices)
     marca_modelo = models.CharField(max_length=100, blank=True)
     
+    # === CAMPO QUE FALTAVA (Correção do Erro 1) ===
+    numero_serial = models.CharField(max_length=100, blank=True, null=True, verbose_name="Número de Série / Service Tag")
+    
+    # === CAMPO QUE FALTAVA (Correção do Erro 2 - Busca) ===
+    descricao = models.TextField(blank=True, null=True, verbose_name="Observações / Descrição")
+
     # Detalhes de Hardware
     processador = models.CharField(max_length=100, blank=True)
     memoria_ram = models.CharField(max_length=50, blank=True)

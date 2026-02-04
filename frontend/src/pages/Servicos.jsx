@@ -1,20 +1,28 @@
-import { useState, useEffect, useMemo } from 'react'; // <--- useMemo ADICIONADO
+import { useState, useEffect, useMemo, useCallback } from 'react'; // Adicionei useCallback para boas práticas
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Wrench, Truck, Monitor, Calendar, 
   User, Search, Clock, CheckCircle, XCircle, AlertCircle 
 } from 'lucide-react';
+
 import servicoService from '../services/servicoService';
 import clienteService from '../services/clienteService';
 import equipeService from '../services/equipeService';
-import ativoService from '../services/ativoService'; // <--- 1. IMPORTADO
+import ativoService from '../services/ativoService'; 
+
+// 1. IMPORTAR O CONTEXTO
+import { useEmpresa } from '../contexts/EmpresaContext';
 
 export default function Servicos() {
   const navigate = useNavigate();
+  
+  // 2. PEGAR EMPRESA SELECIONADA
+  const { empresaSelecionada } = useEmpresa();
+
   const [servicos, setServicos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
-  const [ativos, setAtivos] = useState([]); // <--- 2. ESTADO DOS ATIVOS
+  const [ativos, setAtivos] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState('TODOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,27 +30,32 @@ export default function Servicos() {
   // Form para Nova OS
   const [formData, setFormData] = useState({
     cliente: '',
-    ativo: '', // <--- 3. CAMPO NO STATE
+    ativo: '', 
     titulo: '',
     tipo: 'LABORATORIO',
     descricao_problema: '',
     tecnico_responsavel: ''
   });
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  const carregarDados = async () => {
+  // 3. ATUALIZAR O CARREGAMENTO DE DADOS
+  // Usamos useCallback para que a função não seja recriada a cada render, permitindo usá-la no useEffect
+  const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
+      
+      const empresaId = empresaSelecionada?.id || null; // Pega o ID ou null (Todas)
+
       // Carrega Serviços, Clientes, Equipe e ATIVOS
       const [listaServicos, listaClientes, listaEquipe, listaAtivos] = await Promise.all([
-        servicoService.listar(),
-        clienteService.listar(),
+        // Passamos o filtro de empresa para o serviço de OS
+        servicoService.listar({}, empresaId), 
+        
+        // Dependendo da sua regra de negócio, clientes e ativos também poderiam ser filtrados aqui
+        clienteService.listar(), 
         equipeService.listar(),
-        ativoService.listar() // <--- 4. CARREGA ATIVOS
+        ativoService.listar() 
       ]);
+
       setServicos(listaServicos);
       setClientes(listaClientes);
       setAtivos(listaAtivos);
@@ -55,12 +68,16 @@ export default function Servicos() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [empresaSelecionada]); // <--- RECARREGA SE MUDAR A EMPRESA
+
+  // 4. ATUALIZAR O USE EFFECT
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]); // Depende da função que já depende da empresa
 
   // --- FILTRO INTELIGENTE DE ATIVOS ---
   const ativosDoCliente = useMemo(() => {
     if (!formData.cliente) return [];
-    // Filtra onde o ID do cliente bate com o selecionado
     return ativos.filter(a => a.cliente === parseInt(formData.cliente) || a.cliente?.id === parseInt(formData.cliente));
   }, [formData.cliente, ativos]);
 
@@ -71,7 +88,10 @@ export default function Servicos() {
       const payload = {
         ...formData,
         cliente: parseInt(formData.cliente),
-        ativo: formData.ativo ? parseInt(formData.ativo) : null // <--- 5. ENVIA O ATIVO
+        ativo: formData.ativo ? parseInt(formData.ativo) : null,
+        
+        // 5. VINCULAR A NOVA OS À EMPRESA SELECIONADA
+        empresa: empresaSelecionada?.id // Se for null (todas), o backend decide (ou vc bloqueia criar sem selecionar)
       };
 
       if (formData.tecnico_responsavel) {
@@ -125,7 +145,15 @@ export default function Servicos() {
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
             <Wrench className="text-[#7C69AF]" /> Gestão de Serviços
           </h1>
-          <p className="text-slate-400 font-medium mt-1">Laboratório, Projetos e Manutenções Externas</p>
+          {/* 6. INDICADOR VISUAL DE EMPRESA */}
+          <div className="flex items-center gap-2 mt-1">
+             <p className="text-slate-400 font-medium">Laboratório, Projetos e Manutenções Externas</p>
+             {empresaSelecionada && (
+                <span className="bg-purple-50 text-[#302464] text-[10px] font-black px-2 py-0.5 rounded border border-purple-100 uppercase tracking-wide">
+                    {empresaSelecionada.nome_fantasia}
+                </span>
+             )}
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
@@ -235,7 +263,14 @@ export default function Servicos() {
                 </button>
 
                 <h2 className="text-2xl font-black text-[#302464] mb-1">Abrir Nova OS</h2>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">Iniciando atendimento</p>
+                <div className="flex items-center gap-2 mb-8">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Iniciando atendimento</p>
+                    {empresaSelecionada && (
+                        <span className="bg-purple-100 text-[#302464] text-[9px] font-black px-2 py-0.5 rounded uppercase">
+                            Em: {empresaSelecionada.nome_fantasia}
+                        </span>
+                    )}
+                </div>
 
                 <form onSubmit={handleCreate} className="space-y-4">
                     
@@ -255,7 +290,7 @@ export default function Servicos() {
                         </select>
                     </div>
 
-                    {/* 6. CAMPO NOVO: ATIVO / EQUIPAMENTO */}
+                    {/* CAMPO ATIVO */}
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
                             <Monitor size={10} /> Equipamento / Ativo (Opcional)

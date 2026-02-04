@@ -1,8 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-import traceback # Para ver o erro real no terminal
-import sys # Para garantir que o print saia no log
+import traceback
+import sys
 
 from .models import Fornecedor, Produto, MovimentacaoEstoque
 from .serializers import FornecedorSerializer, ProdutoSerializer, MovimentacaoEstoqueSerializer
@@ -12,7 +12,20 @@ class FornecedorViewSet(viewsets.ModelViewSet):
     queryset = Fornecedor.objects.all()
     serializer_class = FornecedorSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        empresa_id = self.request.query_params.get('empresa')
+        if empresa_id:
+            qs = qs.filter(empresa_id=empresa_id)
+        return qs
+    
+    def perform_create(self, serializer):
+        # Salva com a empresa selecionada
+        empresa_id = self.request.data.get('empresa') or self.request.query_params.get('empresa')
+        serializer.save(empresa_id=empresa_id)
+
 class ProdutoViewSet(viewsets.ModelViewSet):
+    # Produtos são globais (catálogo unificado)
     queryset = Produto.objects.all().order_by('nome')
     serializer_class = ProdutoSerializer
 
@@ -20,54 +33,44 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     queryset = MovimentacaoEstoque.objects.all().order_by('-data_movimento')
     serializer_class = MovimentacaoEstoqueSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Filtra movimentações pela empresa selecionada
+        empresa_id = self.request.query_params.get('empresa')
+        if empresa_id:
+            qs = qs.filter(empresa_id=empresa_id)
+        return qs
+
     def create(self, request, *args, **kwargs):
-        print("\n\n=== INICIANDO CREATE MOVIMENTAÇÃO ===")
-        print(f"DADOS RECEBIDOS: {request.data}")
-        
+        print("\n\n=== INICIANDO CREATE MOVIMENTAÇÃO (MULTI-EMPRESA) ===")
         try:
-            # 1. Validar e Buscar Produto
+            # ... (Lógica de busca de produto, cliente, fornecedor IGUAL) ...
             produto_id = request.data.get('produto')
-            if not produto_id:
-                raise ValidationError("O campo 'produto' é obrigatório.")
-            
-            print(f"Buscando produto ID: {produto_id}")
+            if not produto_id: raise ValidationError("Produto obrigatório.")
             produto = Produto.objects.get(pk=produto_id)
-            print(f"Produto encontrado: {produto.nome} | Estoque Atual: {produto.estoque_atual}")
             
-            # 2. Buscar Cliente (Se houver)
-            cliente = None
             cliente_id = request.data.get('cliente')
+            cliente = None
             if cliente_id:
-                print(f"Buscando cliente ID: {cliente_id}")
                 from django.apps import apps
-                try:
-                    Cliente = apps.get_model('clientes', 'Cliente')
-                    cliente = Cliente.objects.get(pk=cliente_id)
-                    print(f"Cliente encontrado: {cliente.razao_social}")
-                except Exception as e:
-                    print(f"Erro ao buscar cliente: {e}")
-                    # Não vamos travar se não achar cliente, apenas logar (ou lance erro se preferir)
+                cliente = apps.get_model('clientes', 'Cliente').objects.get(pk=cliente_id)
 
-            # 3. Buscar Fornecedor (Se houver)
-            fornecedor = None
             fornecedor_id = request.data.get('fornecedor')
+            fornecedor = None
             if fornecedor_id:
-                print(f"Buscando fornecedor ID: {fornecedor_id}")
                 fornecedor = Fornecedor.objects.get(pk=fornecedor_id)
-                print(f"Fornecedor encontrado: {fornecedor.razao_social}")
 
-            # 4. Arquivos
+            # --- PEGAR EMPRESA ---
+            empresa_id = request.data.get('empresa') or request.query_params.get('empresa')
+            
+            # --- ARQUIVOS ---
             arquivos = {
                 'arquivo_1': request.FILES.get('arquivo_1'),
                 'arquivo_2': request.FILES.get('arquivo_2')
             }
-            
-            dados_financeiros = {
-                'total_parcelas': request.data.get('total_parcelas', 1)
-            }
+            dados_financeiros = {'total_parcelas': request.data.get('total_parcelas', 1)}
 
-            # 5. Processar no Service
-            print("Chamando service processar_movimentacao_estoque...")
+            # --- CHAMAR SERVICE ---
             movimentacao = processar_movimentacao_estoque(
                 produto=produto,
                 quantidade=request.data.get('quantidade'),
@@ -78,26 +81,18 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
                 preco_unitario=request.data.get('preco_unitario'),
                 arquivos=arquivos,
                 gerar_financeiro=True,
-                dados_financeiros=dados_financeiros
+                dados_financeiros=dados_financeiros,
+                
+                # Passamos a empresa para o service
+                empresa_id=empresa_id 
             )
-            print("Service finalizado com sucesso.")
             
-            return Response(
-                MovimentacaoEstoqueSerializer(movimentacao).data, 
-                status=status.HTTP_201_CREATED
-            )
+            return Response(MovimentacaoEstoqueSerializer(movimentacao).data, status=status.HTTP_201_CREATED)
 
         except Produto.DoesNotExist:
-             print("ERRO: Produto não encontrado no banco.")
              return Response({"erro": "Produto não encontrado"}, status=404)
         except ValidationError as e:
-            print(f"ERRO DE VALIDAÇÃO: {e.message}")
             return Response({"erro": e.message}, status=400)
         except Exception as e:
-            # AQUI VAMOS PEGAR O ERRO REAL QUE CAUSA O 500
-            print("\n\n========================================")
-            print("ERRO CRÍTICO NO CREATE MOVIMENTAÇÃO:")
-            print(str(e))
-            traceback.print_exc() # Imprime a pilha completa do erro
-            print("========================================\n\n")
+            traceback.print_exc()
             return Response({"erro": f"Erro interno: {str(e)}"}, status=500)
