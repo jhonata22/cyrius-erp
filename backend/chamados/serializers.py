@@ -3,7 +3,7 @@ from .models import Chamado, ChamadoTecnico
 from clientes.models import Cliente
 from infra.models import Ativo
 from equipe.models import Equipe
-from core.models import Empresa # Importante
+from core.models import Empresa # <--- IMPORTANDO DO CORE
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
     nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
@@ -32,7 +32,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chamado
         fields = [
-            'id', 'empresa', 'empresa_nome', # Adicionado aqui
+            'id', 'empresa', 'empresa_nome', 
             'cliente', 'nome_cliente', 
             'ativo', 'nome_ativo', 'tipo_ativo',
             'titulo', 'descricao_detalhada', 'origem', 
@@ -49,8 +49,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
         return [t.nome for t in obj.tecnicos.all()]
 
     def get_nome_cliente(self, obj):
-        if not obj.cliente:
-            return "Cliente Removido"
+        if not obj.cliente: return "Cliente Removido"
         return obj.cliente.nome if obj.cliente.nome else obj.cliente.razao_social
 
     def to_representation(self, instance):

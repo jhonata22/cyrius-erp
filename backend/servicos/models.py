@@ -36,6 +36,10 @@ class OrdemServico(TimeStampedModel):
     tecnico_responsavel = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
     ativo = models.ForeignKey('infra.Ativo', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_os')
 
+    # ===== ADICIONE ESTA LINHA AQUI! =====
+    tecnicos = models.ManyToManyField('equipe.Equipe', related_name='servicos_participante', blank=True)
+    # =====================================
+
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.LABORATORIO)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ORCAMENTO)
     
@@ -75,7 +79,7 @@ class OrdemServico(TimeStampedModel):
         desc = self.desconto
         return (float(pecas) + float(mo)) - float(desc)
 
-# ... (Mantenha ItemServico, AnexoServico e Notificacao iguais) ...
+# ... Mantenha o restante (ItemServico, AnexoServico, Notificacao) inalterado ...
 class ItemServico(models.Model):
     os = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey('estoque.Produto', on_delete=models.PROTECT)

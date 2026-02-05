@@ -1,35 +1,33 @@
 import api from './api';
 
 const chamadoService = {
-  // LISTAR GERAL: Mantido para a tela de listagem principal
-  listar: async (pagina = 1, dataInicio = '', dataFim = '', status = '') => {
-    const params = new URLSearchParams({
-      page: pagina,
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-      status: status
-    });
-    // Remove params vazios para não sujar a URL
-    if (!dataInicio) params.delete('data_inicio');
-    if (!dataFim) params.delete('data_fim');
-    if (!status) params.delete('status');
+  // ATUALIZADO: Agora aceita um objeto de filtros e o ID da empresa
+  listar: async (filtros = {}, empresaId = null) => {
+    // Cria uma cópia dos filtros para não alterar o original
+    const params = { ...filtros };
 
-    const response = await api.get(`/chamados/?${params.toString()}`);
-    return response.data; // Retorna { count, next, results: [] }
+    // Se a empresa estiver selecionada, adiciona ao parâmetro
+    if (empresaId) {
+      params.empresa = empresaId;
+    }
+
+    // O Axios converte automaticamente o objeto params em query string
+    // Ex: /chamados/?page=1&status=ABERTO&empresa=1
+    const response = await api.get('/chamados/', { params });
+    return response.data;
   },
 
-  // --- NOVO MÉTODO: LISTAR POR CLIENTE (Usado na Documentação) ---
+  // --- NOVO MÉTODO: LISTAR POR CLIENTE ---
   listarPorCliente: async (clienteId, pagina = 1) => {
     const response = await api.get('/chamados/', {
         params: {
-            cliente: clienteId, // O Backend deve filtrar por ?cliente=ID
+            cliente: clienteId,
             page: pagina
         }
     });
     return response.data;
   },
-  // ---------------------------------------------------------------
-
+  
   buscarPorId: async (id) => {
     const response = await api.get(`/chamados/${id}/`);
     return response.data;
@@ -38,6 +36,7 @@ const chamadoService = {
   criar: async (dados) => {
     const payload = { ...dados };
     if (payload.data_agendamento) {
+      // Garante formato ISO correto
       payload.data_agendamento = new Date(payload.data_agendamento).toISOString();
     }
     const response = await api.post('/chamados/', payload);
@@ -46,7 +45,6 @@ const chamadoService = {
   
   atualizar: async (id, dados) => {
     const payload = { ...dados };
-    // Verifica se data_agendamento é válida antes de converter
     if (payload.data_agendamento && payload.data_agendamento.length > 10) {
       payload.data_agendamento = new Date(payload.data_agendamento).toISOString();
     }
@@ -63,12 +61,23 @@ const chamadoService = {
   },
 
   // ESTATÍSTICAS DO DASHBOARD
-  getDashboardStats: async (mesAno) => {
-    const response = await api.get('/chamados/estatisticas/', {
-      params: { mes: mesAno }
-    });
+  getDashboardStats: async (mesAno, empresaId = null) => {
+    const params = { mes: mesAno };
+    if (empresaId) params.empresa = empresaId;
+
+    const response = await api.get('/chamados/estatisticas/', { params });
     return response.data; 
-  }
+  },
+  
+  // ESTATÍSTICAS PARA A TELA DE CHAMADOS (MÉTODO NOVO SUGERIDO)
+  // Se você usar estatísticas na tela de listagem, use este padrão:
+  estatisticas: async (mes, empresaId = null) => {
+    const params = { mes };
+    if (empresaId) params.empresa = empresaId;
+    
+    const response = await api.get('/chamados/estatisticas/', { params });
+    return response.data;
+  },
 };
 
 export default chamadoService;

@@ -1,36 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react'; // Adicionado useMemo
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
   AlertTriangle, Truck, Download, Printer, QrCode,
-  Edit, Monitor 
+  Edit, Monitor, Users, UserPlus, X // Novos ícones
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
 import estoqueService from '../services/estoqueService'; 
+import equipeService from '../services/equipeService'; // <--- IMPORTANTE: Importar o serviço de equipe
 
-// Importar Contexto (Opcional, apenas se quiser validar se bate com a seleção atual)
 import { useEmpresa } from '../contexts/EmpresaContext';
 
 export default function ServicoDetalhes() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { empresaSelecionada } = useEmpresa(); // Opcional
+  const { empresaSelecionada } = useEmpresa();
 
   const [loading, setLoading] = useState(true);
   const [os, setOs] = useState(null);
   
   // Dados Auxiliares
   const [produtos, setProdutos] = useState([]); 
+  const [equipe, setEquipe] = useState([]); // <--- Estado para lista de técnicos disponíveis
 
   // Modais
   const [modalItemOpen, setModalItemOpen] = useState(false);
   const [modalAnexoOpen, setModalAnexoOpen] = useState(false);
+  const [modalTecnicoOpen, setModalTecnicoOpen] = useState(false); // <--- Modal de Técnicos
 
   // Forms dos Modais
   const [itemForm, setItemForm] = useState({ id: null, produto: '', quantidade: 1 });
   const [anexoForm, setAnexoForm] = useState({ arquivo: null, tipo: 'FOTO', descricao: '' });
+  const [tecnicoSelecionado, setTecnicoSelecionado] = useState(''); // <--- ID do técnico selecionado no modal
 
   // Edição Geral
   const [editData, setEditData] = useState({
@@ -53,19 +56,18 @@ export default function ServicoDetalhes() {
         desconto: dadosOS.desconto || ''
       });
 
-      // Se a OS não estiver fechada, carrega produtos para adicionar peças
+      // Carregar auxiliares se a OS estiver aberta
       if (dadosOS.status !== 'CONCLUIDO' && dadosOS.status !== 'CANCELADO') {
+        const empresaId = dadosOS.empresa || null; 
         
-        // --- PONTO CRUCIAL: FILTRAR ESTOQUE PELA EMPRESA DA OS ---
-        // Se a OS tem uma empresa vinculada (dadosOS.empresa), passamos esse ID
-        // para listar apenas o estoque daquela filial.
-        // Se for null (OS antiga ou global), traz tudo ou filtra pelo contexto.
-        const empresaIdParaEstoque = dadosOS.empresa || null; 
-        
-        // Aqui assumimos que estoqueService.listar aceita filtros ou um ID direto
-        // Ajuste conforme seu estoqueService.js (ex: listar(empresaId))
-        const listaProdutos = await estoqueService.listarProdutos(empresaIdParaEstoque); 
+        // Carrega Produtos e Equipe em paralelo
+        const [listaProdutos, listaEquipe] = await Promise.all([
+            estoqueService.listarProdutos(empresaId),
+            equipeService.listar(empresaId) // <--- Busca a equipe
+        ]);
+
         setProdutos(listaProdutos);
+        setEquipe(listaEquipe);
       }
 
     } catch (error) {
@@ -81,7 +83,51 @@ export default function ServicoDetalhes() {
     carregarDados();
   }, [carregarDados]);
 
-  // --- AÇÕES ---
+  // --- LÓGICA DE TÉCNICOS ---
+
+  const handleAdicionarTecnico = async (e) => {
+    e.preventDefault();
+    if (!tecnicoSelecionado) return;
+
+    try {
+        // Pega os IDs atuais (assumindo que o backend retorna os.tecnicos como lista de objetos)
+        // Se o backend retorna só IDs, remova o .map(t => t.id)
+        const idsAtuais = os.tecnicos ? os.tecnicos.map(t => t.id) : [];
+        
+        // Evita duplicidade
+        if (idsAtuais.includes(parseInt(tecnicoSelecionado))) {
+            alert("Este técnico já está na OS.");
+            return;
+        }
+
+        const novosIds = [...idsAtuais, parseInt(tecnicoSelecionado)];
+
+        // Envia PATCH com a nova lista de IDs
+        await servicoService.atualizar(id, { tecnicos: novosIds });
+        
+        setModalTecnicoOpen(false);
+        setTecnicoSelecionado('');
+        carregarDados(); // Recarrega para atualizar a tela
+    } catch (error) {
+        alert("Erro ao adicionar técnico.");
+    }
+  };
+
+  const handleRemoverTecnico = async (tecnicoId) => {
+    if(!window.confirm("Remover este técnico da OS?")) return;
+    try {
+        const idsAtuais = os.tecnicos ? os.tecnicos.map(t => t.id) : [];
+        const novosIds = idsAtuais.filter(id => id !== tecnicoId);
+
+        await servicoService.atualizar(id, { tecnicos: novosIds });
+        carregarDados();
+    } catch (error) {
+        alert("Erro ao remover técnico.");
+    }
+  };
+
+
+  // --- DEMAIS AÇÕES (MANTIDAS) ---
 
   const handleSalvarGeral = async () => {
     try {
@@ -184,8 +230,12 @@ export default function ServicoDetalhes() {
   const imprimirOS = () => {
     const totalGeral = (parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0);
     const logoHtml = `<img src="/logo.png" alt="CYRIUS" style="max-height: 200px;" />`; 
-    // Se quiser mostrar a empresa no impresso:
-    const empresaNome = os.empresa_nome || "CYRIUS TECNOLOGIA"; // Assumindo que o serializer manda o nome
+    const empresaNome = os.empresa_nome || "CYRIUS TECNOLOGIA"; 
+
+    // Pega nomes dos técnicos para impressão
+    const nomesTecnicos = os.tecnicos && os.tecnicos.length > 0 
+        ? os.tecnicos.map(t => t.nome).join(', ')
+        : (os.nome_tecnico || 'Não atribuído');
 
     const janela = window.open('', '', 'width=800,height=600');
     janela.document.write(`
@@ -223,7 +273,7 @@ export default function ServicoDetalhes() {
             <div class="grid">
               <div>
                 <p><strong>Cliente:</strong> ${os.nome_cliente}</p>
-                <p><strong>Técnico:</strong> ${os.nome_tecnico || 'Não atribuído'}</p>
+                <p><strong>Técnicos:</strong> ${nomesTecnicos}</p>
                 ${os.nome_ativo ? `<p><strong>Ativo:</strong> ${os.nome_ativo}</p>` : ''} 
               </div>
               <div>
@@ -542,12 +592,44 @@ export default function ServicoDetalhes() {
                 </div>
             </div>
 
+            {/* CARD DE TÉCNICOS RESPONSÁVEIS - ATUALIZADO */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                 <div className="space-y-4 text-xs font-bold text-slate-500">
-                    <div className="flex justify-between">
-                        <span>Técnico Responsável</span>
-                        <span className="text-[#302464]">{os.nome_tecnico}</span>
-                    </div>
+                 <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                         <Users size={14} className="text-[#7C69AF]"/> Equipe Técnica
+                     </h3>
+                     {!isLocked && (
+                         <button onClick={() => setModalTecnicoOpen(true)} className="p-1.5 bg-purple-50 text-[#7C69AF] rounded-lg hover:bg-purple-100 transition-colors">
+                             <UserPlus size={14} />
+                         </button>
+                     )}
+                 </div>
+
+                 <div className="space-y-3">
+                     {/* Se o backend retorna um array 'tecnicos', usamos ele. Se retorna só 'nome_tecnico', tratamos como array de 1 */}
+                     {(os.tecnicos && os.tecnicos.length > 0 ? os.tecnicos : (os.nome_tecnico ? [{id: 'unico', nome: os.nome_tecnico}] : [])).map((tec, idx) => (
+                         <div key={tec.id || idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                             <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-[#302464] text-white flex items-center justify-center font-bold text-xs">
+                                     {tec.nome.charAt(0)}
+                                 </div>
+                                 <span className="text-sm font-bold text-slate-700">{tec.nome}</span>
+                             </div>
+                             {!isLocked && tec.id !== 'unico' && (
+                                 <button onClick={() => handleRemoverTecnico(tec.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                                     <X size={14} />
+                                 </button>
+                             )}
+                         </div>
+                     ))}
+                     {(!os.tecnicos || os.tecnicos.length === 0) && !os.nome_tecnico && (
+                         <p className="text-xs text-slate-400 font-medium text-center py-2">Nenhum técnico atribuído.</p>
+                     )}
+                 </div>
+
+                 <div className="h-px bg-slate-100 my-4"></div>
+                 
+                 <div className="space-y-2 text-xs font-bold text-slate-500">
                     <div className="flex justify-between">
                         <span>Data Entrada</span>
                         <span>{new Date(os.data_entrada).toLocaleDateString()}</span>
@@ -562,6 +644,35 @@ export default function ServicoDetalhes() {
             </div>
         </div>
       </div>
+
+      {/* MODAL ADICIONAR TÉCNICO */}
+      {modalTecnicoOpen && (
+        <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm p-8 relative">
+                <button onClick={() => setModalTecnicoOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-[#302464]"><X size={20} /></button>
+                <h3 className="font-black text-[#302464] text-xl mb-6">Adicionar Técnico</h3>
+                <form onSubmit={handleAdicionarTecnico}>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecione o membro da equipe</label>
+                        <select 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none"
+                            value={tecnicoSelecionado}
+                            onChange={e => setTecnicoSelecionado(e.target.value)}
+                            required
+                        >
+                            <option value="">Selecione...</option>
+                            {equipe.map(tec => (
+                                <option key={tec.id} value={tec.id}>{tec.nome}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button className="w-full py-4 bg-[#302464] text-white rounded-2xl font-black text-sm uppercase tracking-widest mt-6 hover:opacity-90 transition-opacity">
+                        Confirmar
+                    </button>
+                </form>
+             </div>
+        </div>
+      )}
 
       {/* MODAL ADICIONAR/EDITAR ITEM */}
       {modalItemOpen && (

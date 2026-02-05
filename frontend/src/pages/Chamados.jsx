@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   AlertTriangle, ChevronRight, Search, Info, Monitor, Filter,
-  ChevronLeft, ChevronRight as ChevronRightIcon, Lock 
+  ChevronLeft, ChevronRight as ChevronRightIcon, Lock, ListFilter
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 import clienteService from '../services/clienteService';
 import ativoService from '../services/ativoService';
+import { useEmpresa } from '../contexts/EmpresaContext'; // <--- CONTEXTO
 
 // MAPAS VISUAIS
 const PRIORIDADE_MAP = {
@@ -27,8 +28,18 @@ const STATUS_MAP = {
   AGENDADO: 'bg-purple-50 text-[#7C69AF]',
 };
 
+// FILTROS DE ABA
+const ABAS_FILTRO = [
+    { id: 'TODOS', label: 'Todos', statusBackend: '' },
+    { id: 'PENDENTES', label: 'Pendentes', statusBackend: 'ABERTO' },
+    { id: 'ANDAMENTO', label: 'Em Andamento', statusBackend: 'EM_ANDAMENTO' },
+    { id: 'VISITAS', label: 'Visitas Agendadas', statusBackend: 'AGENDADO' }, // Novo!
+    { id: 'CONCLUIDOS', label: 'Concluídos', statusBackend: 'FINALIZADO' },
+];
+
 export default function Chamados() {
   const navigate = useNavigate();
+  const { empresaSelecionada } = useEmpresa(); // <--- EMPRESA ATUAL
   const [loading, setLoading] = useState(true);
   
   // Dados Principais
@@ -40,10 +51,11 @@ export default function Chamados() {
   // PAGINAÇÃO E FILTROS
   const [pagina, setPagina] = useState(1);
   const [totalItens, setTotalItens] = useState(0);
-  const [filtros, setFiltros] = useState({
+  const [abaAtiva, setAbaAtiva] = useState('PENDENTES'); // Default: Pendentes para focar no trabalho
+  
+  const [filtrosData, setFiltrosData] = useState({
     inicio: '',
-    fim: '',
-    status: ''
+    fim: ''
   });
   
   // UI
@@ -62,15 +74,26 @@ export default function Chamados() {
     return (parseFloat(formData.custo_ida || 0) + parseFloat(formData.custo_volta || 0));
   }, [formData.custo_ida, formData.custo_volta]);
 
-  // CARREGAMENTO COM INTEGRAÇÃO DE FILTROS E PÁGINA
+  // CARREGAMENTO COM INTEGRAÇÃO DE FILTROS, PÁGINA E EMPRESA
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
+      const empresaId = empresaSelecionada?.id || null;
+
+      // Descobre qual status mandar pro backend baseado na aba ativa
+      const statusFiltro = ABAS_FILTRO.find(a => a.id === abaAtiva)?.statusBackend || '';
+
       const [responseChamados, e, cli, atv] = await Promise.all([
-        chamadoService.listar(pagina, filtros.inicio, filtros.fim, filtros.status),
-        equipeService.listar(),
-        clienteService.listar(),
-        ativoService.listar()
+        chamadoService.listar({
+            page: pagina,
+            data_inicio: filtrosData.inicio,
+            data_fim: filtrosData.fim,
+            status: statusFiltro,
+            search: busca // Se seu backend suportar busca server-side
+        }, empresaId), // Passa ID da empresa
+        equipeService.listar(empresaId), // Assumindo que equipe também filtra
+        clienteService.listar(empresaId),
+        ativoService.listar(empresaId)
       ]);
 
       const listaTratada = responseChamados?.results || (Array.isArray(responseChamados) ? responseChamados : []);
@@ -86,9 +109,15 @@ export default function Chamados() {
     } finally {
       setLoading(false);
     }
-  }, [pagina, filtros]);
+  }, [pagina, filtrosData, abaAtiva, empresaSelecionada, busca]);
 
-  useEffect(() => { carregarDados(); }, [carregarDados]);
+  // Debounce na busca (opcional, para não recarregar a cada tecla se for server-side)
+  useEffect(() => { 
+      const timer = setTimeout(() => {
+          carregarDados();
+      }, 500);
+      return () => clearTimeout(timer);
+  }, [carregarDados]);
 
   // Filtro de Ativos por Cliente no formulário
   const ativosDoCliente = useMemo(() => {
@@ -102,17 +131,6 @@ export default function Chamados() {
     if (!formData.cliente) return null;
     return clientes.find(c => c.id === parseInt(formData.cliente));
   }, [formData.cliente, clientes]);
-
-  const chamadosFiltrados = useMemo(() => {
-    if (!Array.isArray(chamados)) return [];
-    const termo = busca.toLowerCase();
-    return chamados.filter(c => 
-      c.titulo?.toLowerCase().includes(termo) || 
-      c.protocolo?.toLowerCase().includes(termo) ||
-      (c.nome_cliente && c.nome_cliente.toLowerCase().includes(termo)) ||
-      (c.nome_ativo && c.nome_ativo.toLowerCase().includes(termo))
-    );
-  }, [busca, chamados]);
 
   // HANDLERS
   const handleOpenModal = (mode) => {
@@ -161,7 +179,8 @@ export default function Chamados() {
         tipo_atendimento: modalMode,
         data_agendamento: formData.data_agendamento ? new Date(formData.data_agendamento).toISOString() : null,
         custo_ida: parseFloat(formData.custo_ida || 0),
-        custo_volta: parseFloat(formData.custo_volta || 0)
+        custo_volta: parseFloat(formData.custo_volta || 0),
+        empresa: empresaSelecionada?.id // <--- VINCULA À EMPRESA
       };
 
       await chamadoService.criar(payload);
@@ -182,7 +201,14 @@ export default function Chamados() {
       <div className="flex flex-col gap-8 mb-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Atendimentos</h1>
+            <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-black text-slate-800 tracking-tight">Atendimentos</h1>
+                {empresaSelecionada && (
+                    <span className="bg-purple-100 text-[#302464] border border-purple-200 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                        {empresaSelecionada.nome_fantasia}
+                    </span>
+                )}
+            </div>
             <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
           </div>
           
@@ -196,6 +222,23 @@ export default function Chamados() {
           </div>
         </div>
 
+        {/* ABAS DE FILTRO DE STATUS */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {ABAS_FILTRO.map(aba => (
+                <button
+                    key={aba.id}
+                    onClick={() => { setAbaAtiva(aba.id); setPagina(1); }}
+                    className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border
+                        ${abaAtiva === aba.id 
+                            ? 'bg-[#302464] text-white border-[#302464] shadow-md' 
+                            : 'bg-white text-slate-400 border-slate-200 hover:border-[#7C69AF] hover:text-[#7C69AF]'
+                        }`}
+                >
+                    {aba.label}
+                </button>
+            ))}
+        </div>
+
         {/* BARRA DE PESQUISA E DATAS */}
         <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[250px]">
@@ -207,20 +250,20 @@ export default function Chamados() {
             />
           </div>
           
-          <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl">
+          <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
             <Filter size={16} className="text-slate-400" />
             <input 
               type="date" 
               className="bg-transparent border-none text-xs font-black text-slate-600 outline-none"
-              value={filtros.inicio}
-              onChange={e => { setFiltros({...filtros, inicio: e.target.value}); setPagina(1); }}
+              value={filtrosData.inicio}
+              onChange={e => { setFiltrosData({...filtrosData, inicio: e.target.value}); setPagina(1); }}
             />
             <span className="text-slate-300 font-bold">~</span>
             <input 
               type="date" 
               className="bg-transparent border-none text-xs font-black text-slate-600 outline-none"
-              value={filtros.fim}
-              onChange={e => { setFiltros({...filtros, fim: e.target.value}); setPagina(1); }}
+              value={filtrosData.fim}
+              onChange={e => { setFiltrosData({...filtrosData, fim: e.target.value}); setPagina(1); }}
             />
           </div>
         </div>
@@ -230,26 +273,27 @@ export default function Chamados() {
       <div className="space-y-4">
         {loading ? (
           <div className="py-20 text-center text-[#7C69AF] animate-pulse font-black uppercase tracking-widest text-xs">Sincronizando Atendimentos...</div>
-        ) : chamadosFiltrados.length === 0 ? (
+        ) : chamados.length === 0 ? (
           <div className="text-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
-             <Info size={48} className="mx-auto text-slate-100 mb-4" />
-             <p className="text-slate-400 font-bold tracking-tight">Nenhum atendimento encontrado para este filtro.</p>
+             <ListFilter size={48} className="mx-auto text-slate-100 mb-4" />
+             <p className="text-slate-400 font-bold tracking-tight">Nenhum atendimento encontrado nesta aba.</p>
+             <button onClick={() => setAbaAtiva('TODOS')} className="mt-4 text-[#7C69AF] text-xs font-black uppercase hover:underline">Limpar filtros</button>
           </div>
         ) : (
           <>
-            {chamadosFiltrados.map((item) => (
+            {chamados.map((item) => (
               <div 
                 key={item.id} 
                 onClick={() => navigate(`/chamados/${item.id}`)}
                 className="group bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col md:flex-row items-center justify-between gap-6"
               >
-                <div className="flex items-center gap-6 flex-1">
-                  <div className={`p-4 rounded-2xl shadow-inner ${item.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-[#7C69AF]' : 'bg-slate-50 text-[#302464]'}`}>
+                <div className="flex items-center gap-6 flex-1 w-full md:w-auto">
+                  <div className={`p-4 rounded-2xl shadow-inner shrink-0 ${item.tipo_atendimento === 'VISITA' ? 'bg-purple-50 text-[#7C69AF]' : 'bg-slate-50 text-[#302464]'}`}>
                     {item.tipo_atendimento === 'VISITA' ? <Truck size={28} /> : <Briefcase size={28} />}
                   </div>
                   
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="text-[10px] font-black text-slate-300 tracking-tighter">#{item.protocolo}</span>
                       <span className={`text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest ${PRIORIDADE_MAP[item.prioridade]}`}>
                         {item.prioridade}
@@ -257,18 +301,22 @@ export default function Chamados() {
                       <span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${STATUS_MAP[item.status]}`}>
                         {item.status?.replace('_', ' ')}
                       </span>
+                      {/* Badge da Empresa na Listagem (Opcional, pois já filtramos) */}
+                      {item.empresa_nome && !empresaSelecionada && (
+                           <span className="text-[9px] font-black px-2 py-0.5 rounded border bg-gray-50 text-gray-500 uppercase">{item.empresa_nome}</span>
+                      )}
                     </div>
-                    <h3 className="text-lg font-black text-slate-800 group-hover:text-[#7C69AF] transition-colors">{item.titulo}</h3>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide">
+                    <h3 className="text-lg font-black text-slate-800 group-hover:text-[#7C69AF] transition-colors truncate">{item.titulo}</h3>
+                    <div className="flex flex-wrap items-center gap-4 mt-2">
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide truncate">
                           <Building2 size={13} className="text-slate-300" /> {item.nome_cliente}
                       </span>
                       {item.nome_ativo && (
-                          <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide">
+                          <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide truncate hidden sm:flex">
                               <Monitor size={13} className="text-slate-300" /> {item.nome_ativo}
                           </span>
                       )}
-                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium whitespace-nowrap">
                         {item.tipo_atendimento === 'VISITA' ? (
                            <><Calendar size={13} className="text-[#A696D1]" /> {item.data_agendamento ? new Date(item.data_agendamento).toLocaleString('pt-BR') : 'Data Pendente'}</>
                         ) : (
@@ -278,7 +326,7 @@ export default function Chamados() {
                     </div>
                   </div>
                 </div>
-                <ChevronRight className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all" />
+                <ChevronRight className="text-slate-200 group-hover:text-[#7C69AF] group-hover:translate-x-1 transition-all hidden md:block" />
               </div>
             ))}
 
@@ -314,7 +362,7 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL */}
+      {/* MODAL (Mantido igual, apenas com a lógica de enviar empresaId no submit) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto relative border border-white/20">
@@ -327,6 +375,16 @@ export default function Chamados() {
               {modalMode === 'VISITA' ? 'Agendar Visita Técnica' : 'Novo Chamado Remoto'}
             </h2>
 
+            {/* Aviso de Empresa no Modal */}
+            {empresaSelecionada && (
+                <div className="mb-6 p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-center gap-3">
+                    <Building2 className="text-[#302464]" size={18} />
+                    <p className="text-xs font-bold text-[#302464]">
+                        Este chamado será vinculado à filial: <span className="uppercase">{empresaSelecionada.nome_fantasia}</span>
+                    </p>
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl">
@@ -336,7 +394,6 @@ export default function Chamados() {
                    className="w-full px-5 py-3.5 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700 mt-2"
                  >
                     <option value="">Selecione...</option>
-                    {/* AQUI ESTÁ A ALTERAÇÃO: Prioriza nome fantasia */}
                     {clientes.map(c => (
                         <option key={c.id} value={c.id}>
                             {c.nome || c.razao_social} {c.ativo ? '' : '(INATIVO)'}
@@ -344,7 +401,6 @@ export default function Chamados() {
                     ))}
                  </select>
                  
-                 {/* === ALERTA DE CLIENTE DESATIVADO === */}
                  {clienteSelecionado && !clienteSelecionado.ativo && (
                      <div className="mt-4 bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-2">
                         <Lock className="text-red-500 shrink-0 mt-0.5" size={20}/>
@@ -357,9 +413,6 @@ export default function Chamados() {
                      </div>
                  )}
               </div>
-
-              {/* Se o cliente estiver desativado, oculta/desabilita o resto do form ou apenas o botão?
-                  Optamos por manter o form visível mas bloquear o botão, conforme padrão UX */}
 
               {modalMode === 'VISITA' && (
                 <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 animate-in slide-in-from-top-2">
@@ -377,24 +430,24 @@ export default function Chamados() {
                          />
                       </div>
                       <div>
-                         <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Ida (R$)</label>
-                         <input 
-                           type="number" name="custo_ida" step="0.01" placeholder="0.00"
-                           value={formData.custo_ida} onChange={handleInputChange}
-                           className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
-                         />
+                          <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Ida (R$)</label>
+                          <input 
+                            type="number" name="custo_ida" step="0.01" placeholder="0.00"
+                            value={formData.custo_ida} onChange={handleInputChange}
+                            className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                          />
                       </div>
                       <div>
-                         <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Volta (R$)</label>
-                         <input 
-                           type="number" name="custo_volta" step="0.01" placeholder="0.00"
-                           value={formData.custo_volta} onChange={handleInputChange}
-                           className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
-                         />
+                          <label className="text-[9px] font-black text-[#302464] uppercase tracking-widest block mb-2">Volta (R$)</label>
+                          <input 
+                            type="number" name="custo_volta" step="0.01" placeholder="0.00"
+                            value={formData.custo_volta} onChange={handleInputChange}
+                            className="w-full bg-white px-4 py-3 rounded-2xl border-none outline-none font-bold text-center text-slate-700"
+                          />
                       </div>
                       <div className="bg-[#302464] rounded-2xl flex flex-col items-center justify-center text-white">
-                         <p className="text-[8px] font-black uppercase tracking-widest opacity-50">Total</p>
-                         <p className="text-lg font-black">{custoEstimado.toFixed(2)}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest opacity-50">Total</p>
+                          <p className="text-lg font-black">{custoEstimado.toFixed(2)}</p>
                       </div>
                   </div>
                 </div>

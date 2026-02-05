@@ -1,3 +1,4 @@
+#backend/chamados/service.py
 from django.db import transaction
 from django.utils import timezone
 from django.apps import apps
@@ -56,7 +57,7 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
         
         if eh_avulso and chamado.valor_servico > 0 and not chamado.financeiro_gerado:
             lancamento_entrada = LancamentoFinanceiro.objects.create(
-                empresa=chamado.empresa, # <--- VINCULA À EMPRESA DO CHAMADO
+                empresa=chamado.empresa, # <--- Vinculando à empresa do Core
                 cliente=chamado.cliente,
                 tecnico=getattr(usuario_responsavel, 'equipe', None) if hasattr(usuario_responsavel, 'equipe') else None,
                 descricao=f"Atendimento Avulso - #{chamado.protocolo}",
@@ -86,7 +87,7 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             LancamentoFinanceiro.objects.update_or_create(
                 descricao=descricao_transporte,
                 defaults={
-                    'empresa': chamado.empresa, # <--- VINCULA À EMPRESA
+                    'empresa': chamado.empresa, # <--- Vinculando à empresa do Core
                     'valor': chamado.custo_transporte,
                     'tipo_lancamento': 'SAIDA',
                     'status': 'PENDENTE',
@@ -97,7 +98,6 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
                 }
             )
 
-    # Se não for finalizado, apenas salva o status novo (se houver)
     elif novo_status:
         chamado.status = novo_status
 

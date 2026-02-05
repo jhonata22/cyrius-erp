@@ -27,16 +27,16 @@ class Chamado(TimeStampedModel):
         VISITA = 'VISITA', 'Visita Técnica'
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
-    # === MULTI-EMPRESAS ===
+    # === MULTI-EMPRESAS (Ajustado para CORE) ===
     empresa = models.ForeignKey(
-        'empresas.Empresa', 
+        'core.Empresa',  # <--- APONTANDO PARA O APP CORE
         on_delete=models.CASCADE, 
         null=True, 
         blank=True,
         related_name='chamados',
         verbose_name="Filial/Empresa"
     )
-    # ======================
+    # ===========================================
 
     # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
@@ -101,15 +101,12 @@ class Chamado(TimeStampedModel):
         return self.protocolo or f"ID {self.pk}"
 
     def save(self, *args, **kwargs):
-        # 1. Tratamento seguro de custos
         ida = float(self.custo_ida or 0)
         volta = float(self.custo_volta or 0)
         self.custo_transporte = ida + volta
 
-        # 2. Geração de Protocolo
         if not self.protocolo:
             hoje = timezone.now().strftime('%Y%m%d')
-            # Busca o último protocolo gerado (independente da empresa, para garantir unicidade global ou pode filtrar por empresa se preferir)
             ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('-protocolo').first()
             
             sequencia = 1

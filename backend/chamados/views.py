@@ -1,3 +1,4 @@
+#backend/chamados/views.py
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -135,7 +136,6 @@ class ChamadoViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         try:
-            # A lógica financeira foi movida 100% para o service
             chamado = atualizar_chamado(
                 chamado_id=kwargs['pk'],
                 dados_atualizacao=request.data,

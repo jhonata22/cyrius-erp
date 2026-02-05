@@ -15,7 +15,6 @@ def limpar_decimal(valor):
         return Decimal('0.00')
     return Decimal(str(valor)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
 
-# ... (Mantenha a função adicionar_peca_os igual) ...
 def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
     OrdemServico = apps.get_model('servicos', 'OrdemServico')
     ItemServico = apps.get_model('servicos', 'ItemServico')
@@ -49,6 +48,41 @@ def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
 
     return item
 
+# ==============================================================================
+# 1. FUNÇÃO DE ATUALIZAÇÃO (ESSENCIAL PARA SALVAR OS TÉCNICOS)
+# ==============================================================================
+@transaction.atomic
+def atualizar_ordem_servico(os_id, dados_atualizacao):
+    OrdemServico = apps.get_model('servicos', 'OrdemServico')
+    
+    try:
+        os = OrdemServico.objects.get(pk=os_id)
+    except OrdemServico.DoesNotExist:
+        raise ValidationError("Ordem de Serviço não encontrada.")
+
+    # Atualiza campos simples (texto, valores, datas)
+    campos_permitidos = [
+        'titulo', 'descricao_problema', 'relatorio_tecnico', 
+        'valor_mao_de_obra', 'custo_deslocamento', 'desconto', 
+        'tecnico_responsavel', 'ativo', 'status'
+    ]
+    
+    for campo in campos_permitidos:
+        if campo in dados_atualizacao:
+            setattr(os, campo, dados_atualizacao[campo])
+
+    # === O PULO DO GATO: SALVAR MULTIPLOS TÉCNICOS ===
+    # O Serializer manda 'tecnicos': [1, 2, 3]
+    if 'tecnicos' in dados_atualizacao:
+        # O método .set() substitui a lista antiga pela nova
+        os.tecnicos.set(dados_atualizacao['tecnicos'])
+
+    os.save()
+    return os
+
+# ==============================================================================
+# 2. FUNÇÃO DE FINALIZAÇÃO (A QUE VOCÊ ENVIOU, LEVEMENTE AJUSTADA)
+# ==============================================================================
 @transaction.atomic
 def finalizar_ordem_servico(os, usuario_responsavel):
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
@@ -61,7 +95,13 @@ def finalizar_ordem_servico(os, usuario_responsavel):
     if os.status in ['FINALIZADO', 'CONCLUIDO']:
         raise ValidationError("OS já finalizada.")
 
-    # 1. BAIXA DE ESTOQUE (MANUAL) - Mantido igual
+    # === LÓGICA DE TÉCNICO PARA FINANCEIRO ===
+    # 1. Tenta o Responsável. 2. Se não tiver, pega o primeiro da lista.
+    tecnico_para_financeiro = os.tecnico_responsavel
+    if not tecnico_para_financeiro and os.tecnicos.exists():
+        tecnico_para_financeiro = os.tecnicos.first()
+
+    # 1. BAIXA DE ESTOQUE
     for item in os.itens.select_related('produto').all():
         item.produto.refresh_from_db()
         
@@ -75,55 +115,47 @@ def finalizar_ordem_servico(os, usuario_responsavel):
         item.produto.save()
         
         if MovimentacaoEstoque:
-            try:
-                MovimentacaoEstoque.objects.create(
-                    produto=item.produto,
-                    quantidade=item.quantidade,
-                    tipo_movimento='SAIDA',
-                    usuario=usuario_responsavel,
-                    observacao=f"Baixa OS #{os.pk} (Cliente: {os.cliente.razao_social})",
-                    data_movimento=timezone.now(),
-                    empresa=os.empresa # Se o estoque suportar empresa no futuro, já passamos aqui
-                )
-            except Exception as e:
-                # O model de movimentação pode ainda não ter o campo empresa, então ignoramos erro de campo extra
-                # Se der outro erro, printa.
-                # Para garantir: verifique se MovimentacaoEstoque tem empresa. Se não tiver, remova a linha acima.
-                # Assumindo que estoque ainda é global ou será migrado depois.
-                pass
+            dados_movimentacao = {
+                'produto': item.produto,
+                'quantidade': item.quantidade,
+                'tipo_movimento': 'SAIDA',
+                'usuario': usuario_responsavel,
+                'observacao': f"Baixa OS #{os.pk} (Cliente: {os.cliente.razao_social})",
+                'data_movimento': timezone.now(),
+            }
+            # Verifica suporte a multi-empresa no estoque
+            if hasattr(MovimentacaoEstoque, 'empresa') or 'empresa' in [f.name for f in MovimentacaoEstoque._meta.get_fields()]:
+                dados_movimentacao['empresa'] = os.empresa
+
+            MovimentacaoEstoque.objects.create(**dados_movimentacao)
 
     # 2. FINANCEIRO: RECEITA
-    # AQUI É O PULO DO GATO: Passamos os.empresa para o lançamento
     valor_receita = limpar_decimal(os.valor_total_geral)
     
     if valor_receita > 0:
         LancamentoFinanceiro.objects.create(
             cliente=os.cliente,
-            tecnico=os.tecnico_responsavel if os.tecnico_responsavel else None,
+            tecnico=tecnico_para_financeiro, 
             descricao=f"Receita OS #{os.pk} - {os.titulo}",
             valor=valor_receita,
             status='PENDENTE',
             tipo_lancamento='ENTRADA',
             categoria='SERVICO',
             data_vencimento=timezone.now().date(),
-            
-            # VINCULAÇÃO MULTI-EMPRESA
             empresa=os.empresa 
         )
 
-    # 3. FINANCEIRO: CUSTOS
+    # 3. FINANCEIRO: CUSTOS (Reembolso)
     if os.custo_deslocamento > 0:
         LancamentoFinanceiro.objects.create(
-            tecnico=os.tecnico_responsavel if os.tecnico_responsavel else None,
+            tecnico=tecnico_para_financeiro, 
             descricao=f"Custo Deslocamento OS #{os.pk}",
             valor=limpar_decimal(os.custo_deslocamento),
             status='PENDENTE',
             tipo_lancamento='SAIDA',
-            categoria='DESPESA',
+            categoria='DESPESA', # Mude para 'TRANSPORTE' se tiver criado no choices
             data_vencimento=timezone.now().date(),
             cliente=os.cliente,
-            
-            # VINCULAÇÃO MULTI-EMPRESA
             empresa=os.empresa
         )
 
@@ -136,8 +168,6 @@ def finalizar_ordem_servico(os, usuario_responsavel):
             categoria='CUSTO_TEC',
             data_vencimento=timezone.now().date(),
             cliente=os.cliente,
-            
-            # VINCULAÇÃO MULTI-EMPRESA
             empresa=os.empresa
         )
 

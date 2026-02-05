@@ -7,7 +7,9 @@ import traceback
 from utils.permissions import IsFuncionario
 from .models import OrdemServico, ItemServico, AnexoServico, Notificacao
 from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, NotificacaoSerializer
-from .services import finalizar_ordem_servico, adicionar_peca_os
+
+# IMPORTANTE: Adicione atualizar_ordem_servico aqui
+from .services import finalizar_ordem_servico, adicionar_peca_os, atualizar_ordem_servico
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
     serializer_class = OrdemServicoSerializer
@@ -16,12 +18,14 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = OrdemServico.objects.all().select_related(
-            'cliente', 'tecnico_responsavel', 'ativo', 'empresa' # Otimizado
-        ).prefetch_related('itens', 'anexos').order_by('-created_at')
+            'cliente', 'tecnico_responsavel', 'ativo', 'empresa'
+        ).prefetch_related('itens', 'anexos', 'tecnicos').order_by('-created_at') # Adicionado 'tecnicos' no prefetch
 
-        # 1. Filtro de Segurança (Técnicos só veem as suas, exceto Gestores)
+        # 1. Filtro de Segurança
         if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
-             qs = qs.filter(tecnico_responsavel=user.equipe)
+             # Se o usuário for técnico, vê as OS onde ele é responsável OU está na equipe de apoio
+             from django.db.models import Q
+             qs = qs.filter(Q(tecnico_responsavel=user.equipe) | Q(tecnicos=user.equipe)).distinct()
 
         # 2. Filtro MULTI-EMPRESA
         empresa_id = self.request.query_params.get('empresa')
@@ -40,24 +44,34 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        # Prepara os dados extras para salvar
         save_kwargs = {}
-
-        # 1. Auto-atribui o técnico se não vier
         if 'tecnico_responsavel' not in serializer.validated_data:
             if hasattr(self.request.user, 'equipe'):
                 save_kwargs['tecnico_responsavel'] = self.request.user.equipe
 
-        # 2. Atribui a EMPRESA se vier na requisição (JSON ou Query Param)
-        # O Frontend vai mandar no corpo da requisição { ..., "empresa": 1 }
-        # O Serializer já lida com isso se estiver nos fields, mas se falhar, forçamos aqui:
         empresa_id = self.request.data.get('empresa') or self.request.query_params.get('empresa')
         if empresa_id:
             save_kwargs['empresa_id'] = empresa_id
 
         serializer.save(**save_kwargs)
 
-    # ... (Mantenha adicionar_item, finalizar, anexar_arquivo, etc. IGUAIS) ...
+    # === NOVO MÉTODO UPDATE ===
+    # Isso garante que a atualização passe pelo nosso Service, que sabe salvar a lista de técnicos
+    def update(self, request, *args, **kwargs):
+        try:
+            # Chama o service passando o ID (pk) e o JSON do request
+            os = atualizar_ordem_servico(kwargs['pk'], request.data)
+            
+            # Devolve a OS atualizada serializada
+            serializer = self.get_serializer(os)
+            return Response(serializer.data)
+        except ValidationError as e:
+            return Response({"erro": self._format_validation_error(e)}, status=400)
+        except Exception as e:
+            traceback.print_exc()
+            return Response({"erro": str(e)}, status=500)
+
+    # ... (Restante das actions mantidas iguais) ...
     @action(detail=True, methods=['post'], url_path='adicionar-item')
     def adicionar_item(self, request, pk=None):
         try:

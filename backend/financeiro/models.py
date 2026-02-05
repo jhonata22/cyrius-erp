@@ -37,6 +37,7 @@ class LancamentoFinanceiro(TimeStampedModel):
         CONTRATO = 'CONTRATO', 'Mensalidade de Contrato'
         VENDA = 'VENDA', 'Venda de Hardware'
         SERVICO = 'SERVICO', 'Serviço Avulso'
+        TRANSPORTE = 'TRANSPORTE', 'Transporte / Deslocamento'
         CUSTO_TEC = 'CUSTO_TEC', 'Custo Operacional Técnico'
         DESPESA = 'DESPESA', 'Despesa Administrativa'
         COMPRA = 'COMPRA', 'Compra de Estoque'
