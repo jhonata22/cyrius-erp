@@ -105,7 +105,7 @@ export default function Layout({ children }) {
           <div className="text-2xl font-black text-white tracking-tighter flex items-center">
             <span className="text-[#A696D1]">C</span>
             <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0'}`}>
-              YRIUS
+              YRIUS (BETA)
             </span>
           </div>
           <button className="md:hidden text-white/50 hover:text-white" onClick={() => setIsMobileOpen(false)}>

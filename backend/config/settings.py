@@ -140,7 +140,7 @@ USE_TZ = True
 # ARQUIVOS ESTÁTICOS E MÍDIA
 # =========================================================
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 # Pasta onde o 'collectstatic' reunirá os arquivos para produção. 
 # Mudei para 'staticfiles' para não misturar com a pasta de desenvolvimento.
