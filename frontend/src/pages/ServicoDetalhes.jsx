@@ -1,39 +1,40 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'; // Adicionado useMemo
+import { useState, useEffect, useCallback } from 'react'; 
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
-  AlertTriangle, Truck, Download, Printer, QrCode,
-  Edit, Monitor, Users, UserPlus, X // Novos ícones
+  Truck, Printer, QrCode,
+  Edit, Monitor, Users, UserPlus, X 
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
 import estoqueService from '../services/estoqueService'; 
-import equipeService from '../services/equipeService'; // <--- IMPORTANTE: Importar o serviço de equipe
+import equipeService from '../services/equipeService'; 
 
-import { useEmpresa } from '../contexts/EmpresaContext';
+// NÃO IMPORTAMOS MAIS O CONTEXTO GLOBAL
+// import { useEmpresa } from '../contexts/EmpresaContext';
 
 export default function ServicoDetalhes() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { empresaSelecionada } = useEmpresa();
+  // const { empresaSelecionada } = useEmpresa(); // REMOVIDO
 
   const [loading, setLoading] = useState(true);
   const [os, setOs] = useState(null);
   
-  // Dados Auxiliares
+  // Dados Auxiliares (Carregados com base na empresa da OS)
   const [produtos, setProdutos] = useState([]); 
-  const [equipe, setEquipe] = useState([]); // <--- Estado para lista de técnicos disponíveis
+  const [equipe, setEquipe] = useState([]); 
 
   // Modais
   const [modalItemOpen, setModalItemOpen] = useState(false);
   const [modalAnexoOpen, setModalAnexoOpen] = useState(false);
-  const [modalTecnicoOpen, setModalTecnicoOpen] = useState(false); // <--- Modal de Técnicos
+  const [modalTecnicoOpen, setModalTecnicoOpen] = useState(false); 
 
   // Forms dos Modais
   const [itemForm, setItemForm] = useState({ id: null, produto: '', quantidade: 1 });
   const [anexoForm, setAnexoForm] = useState({ arquivo: null, tipo: 'FOTO', descricao: '' });
-  const [tecnicoSelecionado, setTecnicoSelecionado] = useState(''); // <--- ID do técnico selecionado no modal
+  const [tecnicoSelecionado, setTecnicoSelecionado] = useState(''); 
 
   // Edição Geral
   const [editData, setEditData] = useState({
@@ -46,6 +47,8 @@ export default function ServicoDetalhes() {
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // 1. Busca a OS pelo ID (O backend já deve retornar o ID da empresa vinculada)
       const dadosOS = await servicoService.buscarPorId(id);
       setOs(dadosOS);
       
@@ -56,14 +59,16 @@ export default function ServicoDetalhes() {
         desconto: dadosOS.desconto || ''
       });
 
-      // Carregar auxiliares se a OS estiver aberta
+      // 2. Se a OS estiver ativa, carregamos os auxiliares DA EMPRESA DELA
       if (dadosOS.status !== 'CONCLUIDO' && dadosOS.status !== 'CANCELADO') {
+        // Pega o ID da empresa que veio no objeto da OS
+        // Se for nulo, busca global (null)
         const empresaId = dadosOS.empresa || null; 
         
-        // Carrega Produtos e Equipe em paralelo
+        // Carrega Produtos e Equipe filtrados por essa empresa
         const [listaProdutos, listaEquipe] = await Promise.all([
-            estoqueService.listarProdutos(empresaId),
-            equipeService.listar(empresaId) // <--- Busca a equipe
+            estoqueService.listarProdutos(empresaId), // Passa ID para filtrar estoque
+            equipeService.listar(empresaId)           // Passa ID para filtrar equipe
         ]);
 
         setProdutos(listaProdutos);
@@ -90,11 +95,8 @@ export default function ServicoDetalhes() {
     if (!tecnicoSelecionado) return;
 
     try {
-        // Pega os IDs atuais (assumindo que o backend retorna os.tecnicos como lista de objetos)
-        // Se o backend retorna só IDs, remova o .map(t => t.id)
         const idsAtuais = os.tecnicos ? os.tecnicos.map(t => t.id) : [];
         
-        // Evita duplicidade
         if (idsAtuais.includes(parseInt(tecnicoSelecionado))) {
             alert("Este técnico já está na OS.");
             return;
@@ -102,12 +104,11 @@ export default function ServicoDetalhes() {
 
         const novosIds = [...idsAtuais, parseInt(tecnicoSelecionado)];
 
-        // Envia PATCH com a nova lista de IDs
         await servicoService.atualizar(id, { tecnicos: novosIds });
         
         setModalTecnicoOpen(false);
         setTecnicoSelecionado('');
-        carregarDados(); // Recarrega para atualizar a tela
+        carregarDados(); 
     } catch (error) {
         alert("Erro ao adicionar técnico.");
     }
@@ -127,7 +128,7 @@ export default function ServicoDetalhes() {
   };
 
 
-  // --- DEMAIS AÇÕES (MANTIDAS) ---
+  // --- DEMAIS AÇÕES ---
 
   const handleSalvarGeral = async () => {
     try {
@@ -303,8 +304,8 @@ export default function ServicoDetalhes() {
             </table>
           </div>
           <div class="section">
-             <div class="section-title">Resumo Financeiro</div>
-             <table style="width: 50%; margin-left: auto;">
+              <div class="section-title">Resumo Financeiro</div>
+              <table style="width: 50%; margin-left: auto;">
                 <tr><td>Peças</td><td style="text-align:right">${formatMoney(os.total_pecas)}</td></tr>
                 <tr><td>Mão de Obra</td><td style="text-align:right">${formatMoney(editData.valor_mao_de_obra)}</td></tr>
                 <tr><td>Desconto</td><td style="text-align:right; color: red;">- ${formatMoney(editData.desconto)}</td></tr>
@@ -592,7 +593,7 @@ export default function ServicoDetalhes() {
                 </div>
             </div>
 
-            {/* CARD DE TÉCNICOS RESPONSÁVEIS - ATUALIZADO */}
+            {/* CARD DE TÉCNICOS RESPONSÁVEIS */}
             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                  <div className="flex justify-between items-center mb-4">
                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -606,7 +607,6 @@ export default function ServicoDetalhes() {
                  </div>
 
                  <div className="space-y-3">
-                     {/* Se o backend retorna um array 'tecnicos', usamos ele. Se retorna só 'nome_tecnico', tratamos como array de 1 */}
                      {(os.tecnicos && os.tecnicos.length > 0 ? os.tecnicos : (os.nome_tecnico ? [{id: 'unico', nome: os.nome_tecnico}] : [])).map((tec, idx) => (
                          <div key={tec.id || idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                              <div className="flex items-center gap-3">
@@ -651,6 +651,14 @@ export default function ServicoDetalhes() {
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm p-8 relative">
                 <button onClick={() => setModalTecnicoOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-[#302464]"><X size={20} /></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6">Adicionar Técnico</h3>
+                
+                {/* AVISO EQUIPE FILTRADA */}
+                {os.empresa_nome && (
+                    <div className="mb-4 p-2 bg-purple-50 rounded-lg text-center text-xs font-bold text-purple-700">
+                        Equipe de: {os.empresa_nome}
+                    </div>
+                )}
+
                 <form onSubmit={handleAdicionarTecnico}>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecione o membro da equipe</label>

@@ -4,6 +4,10 @@ from .models import Empresa
 from .serializers import EmpresaSerializer
 
 class EmpresaViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Empresa.objects.filter(ativa=True)
+    # Ordena pela Matriz primeiro, depois alfabético
+    queryset = Empresa.objects.filter(ativa=True).order_by('-eh_matriz', 'nome_fantasia')
     serializer_class = EmpresaSerializer
     permission_classes = [IsAuthenticated]
+    
+
+    pagination_class = None

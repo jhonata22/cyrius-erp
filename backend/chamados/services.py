@@ -1,4 +1,3 @@
-#backend/chamados/service.py
 from django.db import transaction
 from django.utils import timezone
 from django.apps import apps
@@ -9,7 +8,9 @@ from decimal import Decimal
 @transaction.atomic
 def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquivos=None):
     Chamado = apps.get_model('chamados', 'Chamado')
+    ChamadoTecnico = apps.get_model('chamados', 'ChamadoTecnico') # <--- Necessário para tabela intermediária
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
+    Equipe = apps.get_model('equipe', 'Equipe')
     
     try:
         chamado = Chamado.objects.select_related('cliente').get(pk=chamado_id)
@@ -31,12 +32,29 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             if campo in arquivos:
                 setattr(chamado, campo, arquivos[campo])
 
-    # 2. ATUALIZAR CAMPOS GERAIS
+    # 2. ATUALIZAR CAMPOS GERAIS (TEXTO)
     campos_texto = ['titulo', 'descricao_detalhada', 'prioridade', 'resolucao']
     for campo in campos_texto:
         if campo in dados_atualizacao:
             setattr(chamado, campo, dados_atualizacao[campo])
     
+    # 3. ATUALIZAR TÉCNICOS (CORREÇÃO CRÍTICA)
+    # Como usamos 'through', não podemos usar chamado.tecnicos.set() direto
+    if 'tecnicos' in dados_atualizacao:
+        novos_ids = dados_atualizacao['tecnicos'] # Espera lista de IDs: [1, 5]
+        
+        # Limpa os técnicos atuais
+        ChamadoTecnico.objects.filter(chamado=chamado).delete()
+        
+        # Insere os novos
+        for tec_id in novos_ids:
+            try:
+                tecnico = Equipe.objects.get(pk=tec_id)
+                ChamadoTecnico.objects.create(chamado=chamado, tecnico=tecnico)
+            except Equipe.DoesNotExist:
+                continue # Ignora se o ID for inválido
+
+    # 4. ATUALIZAR CUSTOS
     chamado.custo_ida = safe_decimal(dados_atualizacao.get('custo_ida', chamado.custo_ida))
     chamado.custo_volta = safe_decimal(dados_atualizacao.get('custo_volta', chamado.custo_volta))
     chamado.valor_servico = safe_decimal(dados_atualizacao.get('valor_servico', chamado.valor_servico))
@@ -71,12 +89,15 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
 
             # Clonar comprovante/laudo para o financeiro
             if chamado.arquivo_conclusao:
-                nome_arquivo = chamado.arquivo_conclusao.name.split('/')[-1]
-                lancamento_entrada.comprovante.save(
-                    f"comp_{nome_arquivo}",
-                    ContentFile(chamado.arquivo_conclusao.read()),
-                    save=True
-                )
+                try:
+                    nome_arquivo = chamado.arquivo_conclusao.name.split('/')[-1]
+                    lancamento_entrada.comprovante.save(
+                        f"comp_{nome_arquivo}",
+                        ContentFile(chamado.arquivo_conclusao.read()),
+                        save=True
+                    )
+                except Exception:
+                    pass # Se falhar ao copiar arquivo, não trava a finalização
             
             chamado.financeiro_gerado = True
 

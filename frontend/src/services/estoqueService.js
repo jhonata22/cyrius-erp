@@ -3,15 +3,21 @@ import api from './api';
 const estoqueService = {
   // --- PRODUTOS ---
 
-  // Método genérico usado pelo Módulo de Serviços
-  listar: async () => {
-    const response = await api.get('/estoque/produtos/');
+  // Método genérico
+  listar: async (empresaId = null) => {
+    const params = {};
+    // Mesmo sendo catálogo global, o backend pode usar o ID para retornar o saldo específico daquela filial
+    if (empresaId) params.empresa = empresaId;
+    
+    const response = await api.get('/estoque/produtos/', { params });
     return response.data;
   },
 
-  // Mantendo compatibilidade com seu código antigo
-  listarProdutos: async () => {
-    const response = await api.get('/estoque/produtos/');
+  listarProdutos: async (empresaId = null) => {
+    const params = {};
+    if (empresaId) params.empresa = empresaId;
+
+    const response = await api.get('/estoque/produtos/', { params });
     return response.data;
   },
 
@@ -30,13 +36,18 @@ const estoqueService = {
   },
 
   // --- FORNECEDORES ---
-  // Rota base definida no urls.py como r'fornecedores' (sem prefixo estoque)
-  listarFornecedores: async () => {
-    const response = await api.get('/fornecedores/'); // Ajustado para bater com urls.py
+  
+  // Agora aceita empresaId para filtrar fornecedores exclusivos da filial (se houver essa regra)
+  listarFornecedores: async (empresaId = null) => {
+    const params = {};
+    if (empresaId) params.empresa = empresaId;
+
+    const response = await api.get('/fornecedores/', { params });
     return response.data;
   },
 
   criarFornecedor: async (dados) => {
+    // 'dados' já deve conter o campo 'empresa' se vinculado
     const response = await api.post('/fornecedores/', dados);
     return response.data;
   },
@@ -47,15 +58,18 @@ const estoqueService = {
   },
 
   // --- MOVIMENTAÇÃO ---
-  // Rota base definida no urls.py como r'estoque/movimentacoes'
-  listarHistorico: async () => {
-    const response = await api.get('/estoque/movimentacoes/');
+  
+  // Fundamental: Filtra o histórico pela empresa selecionada
+  listarHistorico: async (empresaId = null) => {
+    const params = {};
+    if (empresaId) params.empresa = empresaId;
+
+    const response = await api.get('/estoque/movimentacoes/', { params });
     return response.data;
   },
 
   registrarMovimento: async (formData) => {
-    // O Django receberá via multipart/form-data por causa do arquivo
-    // Nota: Certifique-se de que o backend espera '/estoque/movimentacoes/'
+    // O formData já vem montado do frontend com o campo 'empresa' incluso
     const response = await api.post('/estoque/movimentacoes/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

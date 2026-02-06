@@ -17,7 +17,7 @@ class Ativo(models.Model):
     marca_modelo = models.CharField(max_length=100, blank=True)
     
     # === CAMPO QUE FALTAVA (Correção do Erro 1) ===
-    numero_serial = models.CharField(max_length=100, blank=True, null=True, verbose_name="Número de Série / Service Tag")
+    numero_serial = models.CharField(max_length=100, null=True, blank=True)
     
     # === CAMPO QUE FALTAVA (Correção do Erro 2 - Busca) ===
     descricao = models.TextField(blank=True, null=True, verbose_name="Observações / Descrição")

@@ -12,12 +12,15 @@ import {
 import financeiroService from '../services/financeiroService';
 import clienteService from '../services/clienteService';
 
-// 1. IMPORTAR O CONTEXTO
-import { useEmpresa } from '../contexts/EmpresaContext';
+// 1. IMPORTAR O HOOK DE LISTAGEM (SUBSTITUI O CONTEXTO)
+import { useEmpresas } from '../hooks/useEmpresas';
 
 export default function Financeiro() {
-  // 2. PEGAR A EMPRESA SELECIONADA
-  const { empresaSelecionada } = useEmpresa();
+  // 2. BUSCAR A LISTA DE EMPRESAS PARA O DROPDOWN
+  const { empresas, loading: loadingEmpresas } = useEmpresas();
+
+  // 3. ESTADO LOCAL DO FILTRO (Inicia vazio = Todas)
+  const [filtroEmpresa, setFiltroEmpresa] = useState(''); 
 
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
@@ -59,28 +62,25 @@ export default function Financeiro() {
 
   const carregarDadosGlobais = useCallback(async () => {
       try {
-          // Define o ID: se for null, o service entende como "Todas" (se a lógica backend permitir)
-          // ou você pode tratar isso no backend.
-          const empresaId = empresaSelecionada?.id || null;
+          // Passamos o ID da empresa selecionada (ou vazio para todas)
+          const empresaId = filtroEmpresa || null;
 
           const [dadosFin, dadosCli] = await Promise.all([
-              // Passamos o ID da empresa para filtrar a lista
               financeiroService.listar({}, empresaId),
-              clienteService.listar() // Clientes podem ser globais ou filtrados também, dependendo da sua regra
+              clienteService.listar() 
           ]);
           setTodosLancamentos(dadosFin || []);
           setClientes(dadosCli || []);
       } catch (error) {
           console.error("Erro ao carregar lista:", error);
       }
-  }, [empresaSelecionada]); // Recria a função se a empresa mudar
+  }, [filtroEmpresa]); 
 
   const carregarEstatisticas = useCallback(async () => {
       try {
           setLoading(true);
-          const empresaId = empresaSelecionada?.id || null;
+          const empresaId = filtroEmpresa || null;
 
-          // Passamos o ID da empresa para os KPIs
           const stats = await financeiroService.estatisticasGerais(filtroData.mes, filtroData.ano, empresaId);
           
           setDadosDashboard(stats || {
@@ -93,19 +93,19 @@ export default function Financeiro() {
       } finally {
           setLoading(false);
       }
-  }, [filtroData, empresaSelecionada]); // Dependência adicionada aqui também
+  }, [filtroData, filtroEmpresa]);
 
   // Efeito Inicial e de Mudança de Empresa
   useEffect(() => {
-      const empresaId = empresaSelecionada?.id || null;
+      const empresaId = filtroEmpresa || null;
 
-      // Processa recorrencias da empresa selecionada (ou todas)
+      // Processa recorrencias
       financeiroService.processarRecorrencias(empresaId)
           .catch(() => {}) 
           .finally(() => {
               carregarDadosGlobais();
           });
-  }, [carregarDadosGlobais, empresaSelecionada]); // Roda quando monta ou quando troca empresa
+  }, [carregarDadosGlobais, filtroEmpresa]);
 
   // Efeito de Mudança de Filtro de Data ou Estatisticas
   useEffect(() => {
@@ -282,7 +282,10 @@ export default function Financeiro() {
 
   const handleImprimir = () => {
     const periodo = `${filtroData.mes}/${filtroData.ano}`;
-    const empresaNome = empresaSelecionada ? (empresaSelecionada.nome_fantasia || empresaSelecionada.razao_social) : "Todas as Empresas";
+    // Nome da empresa selecionada para o relatório
+    const empresaObj = empresas.find(e => String(e.id) === String(filtroEmpresa));
+    const empresaNome = empresaObj ? empresaObj.nome_fantasia : "Todas as Empresas (Consolidado)";
+    
     const dados = extratoExibicao; 
     let totalEnt = 0;
     let totalSai = 0;
@@ -332,11 +335,13 @@ export default function Financeiro() {
   };
 
   const handleGerarFaturas = async () => {
-    if (!window.confirm("Gerar mensalidades para todos os contratos ativos desta empresa?")) return;
+    const empresaObj = empresas.find(e => String(e.id) === String(filtroEmpresa));
+    const nome = empresaObj ? empresaObj.nome_fantasia : "TODAS AS EMPRESAS";
+    
+    if (!window.confirm(`Gerar mensalidades para: ${nome}?`)) return;
     setGerandoFaturas(true);
     try {
-      const empresaId = empresaSelecionada?.id || null;
-      // Passa o ID para gerar apenas faturas da empresa selecionada
+      const empresaId = filtroEmpresa || null;
       const res = await financeiroService.gerarFaturasMensais(empresaId);
       alert(`Sucesso! ${res.faturas_geradas} faturas geradas.`);
       carregarDadosGlobais();
@@ -357,9 +362,14 @@ export default function Financeiro() {
       data.append('total_parcelas', form.total_parcelas);
       if (form.cliente) data.append('cliente', form.cliente);
       
-      // === VINCULAR LANÇAMENTO À EMPRESA SELECIONADA ===
-      if (empresaSelecionada) {
-          data.append('empresa', empresaSelecionada.id);
+      // === VINCULAR LANÇAMENTO À EMPRESA SELECIONADA NO DROPDOWN ===
+      if (filtroEmpresa) {
+          data.append('empresa', filtroEmpresa);
+      } else {
+          // Se estiver em "Todas", você pode forçar o usuário a escolher
+          // Ou deixar o backend pegar a empresa do usuário logado (padrão)
+          // Aqui vou sugerir um alerta se for crítico:
+          // if(!filtroEmpresa) { alert("Selecione uma empresa antes de lançar!"); return; }
       }
 
       if (form.arquivo_1) data.append('arquivo_1', form.arquivo_1);
@@ -393,6 +403,9 @@ export default function Financeiro() {
   const graficoReceita = dadosDashboard.graficoReceita || [];
   const rankingVisitas = dadosDashboard.rankingVisitas || [];
 
+  // Objeto da empresa selecionada para exibição (nome, etc)
+  const empresaSelecionadaObj = empresas.find(e => String(e.id) === String(filtroEmpresa));
+
   return (
     <div className="animate-in fade-in duration-500 pb-20">
       
@@ -401,13 +414,29 @@ export default function Financeiro() {
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Financeiro</h1>
           <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
-          {/* Indicador visual de contexto (Opcional, pois já tem no topo) */}
-          <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">
-            {empresaSelecionada ? `Filtrado por: ${empresaSelecionada.nome_fantasia}` : 'Visão Geral (Todas as Empresas)'}
-          </p>
+          
+          {/* NOVO SELETOR DE EMPRESA NO HEADER */}
+          <div className="mt-4 flex items-center gap-2 bg-white p-1 pr-4 rounded-xl border border-slate-200 w-fit shadow-sm">
+             <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                <Building2 size={16} />
+             </div>
+             <select 
+                value={filtroEmpresa}
+                onChange={(e) => setFiltroEmpresa(e.target.value)}
+                className="bg-transparent font-bold text-slate-700 text-sm outline-none cursor-pointer min-w-[200px]"
+             >
+                <option value="">🏢 Todas as Empresas (Consolidado)</option>
+                <option disabled>──────────</option>
+                {empresas.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                        {emp.nome_fantasia} {emp.matriz ? '(Matriz)' : ''}
+                    </option>
+                ))}
+             </select>
+          </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto mt-4 xl:mt-0">
            <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
               <select 
                 value={filtroData.mes} 
@@ -842,12 +871,20 @@ export default function Financeiro() {
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative border border-white/20 overflow-y-auto max-h-[90vh]">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464]"><X size={24}/></button>
                 <h3 className="font-black text-[#302464] text-xl mb-6 uppercase tracking-widest text-center">Novo Lançamento</h3>
-                {empresaSelecionada && (
+                
+                {/* AVISO DE VINCULAÇÃO */}
+                {empresaSelecionadaObj ? (
                     <div className="mb-4 p-3 bg-purple-50 rounded-xl text-center">
                         <p className="text-[10px] font-black text-purple-400 uppercase">Vinculado a:</p>
-                        <p className="text-sm font-bold text-[#302464]">{empresaSelecionada.nome_fantasia}</p>
+                        <p className="text-sm font-bold text-[#302464]">{empresaSelecionadaObj.nome_fantasia}</p>
+                    </div>
+                ) : (
+                    <div className="mb-4 p-3 bg-yellow-50 rounded-xl text-center">
+                        <p className="text-[10px] font-black text-yellow-500 uppercase">Atenção</p>
+                        <p className="text-xs font-bold text-yellow-700">Selecione uma empresa no topo antes de lançar.</p>
                     </div>
                 )}
+
                 <form onSubmit={handleSalvar} className="space-y-5">
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
@@ -930,7 +967,9 @@ export default function Financeiro() {
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black shadow-xl shadow-purple-900/20 active:scale-95 transition-all mt-4">Confirmar Lançamento</button>
+                    <button type="submit" disabled={!filtroEmpresa} className="w-full py-5 bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white rounded-3xl font-black shadow-xl shadow-purple-900/20 active:scale-95 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {filtroEmpresa ? "Confirmar Lançamento" : "Selecione a Empresa"}
+                    </button>
                 </form>
             </div>
         </div>

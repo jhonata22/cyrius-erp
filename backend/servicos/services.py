@@ -4,12 +4,6 @@ from django.core.exceptions import ValidationError
 from django.apps import apps 
 from decimal import Decimal, ROUND_HALF_UP
 
-# Tenta importar a função do estoque
-try:
-    from estoque.services import processar_movimentacao_estoque
-except ImportError:
-    pass
-
 def limpar_decimal(valor):
     if valor is None:
         return Decimal('0.00')
@@ -48,9 +42,6 @@ def adicionar_peca_os(os_id, produto_id, quantidade, preco_venda=None):
 
     return item
 
-# ==============================================================================
-# 1. FUNÇÃO DE ATUALIZAÇÃO (ESSENCIAL PARA SALVAR OS TÉCNICOS)
-# ==============================================================================
 @transaction.atomic
 def atualizar_ordem_servico(os_id, dados_atualizacao):
     OrdemServico = apps.get_model('servicos', 'OrdemServico')
@@ -60,7 +51,6 @@ def atualizar_ordem_servico(os_id, dados_atualizacao):
     except OrdemServico.DoesNotExist:
         raise ValidationError("Ordem de Serviço não encontrada.")
 
-    # Atualiza campos simples (texto, valores, datas)
     campos_permitidos = [
         'titulo', 'descricao_problema', 'relatorio_tecnico', 
         'valor_mao_de_obra', 'custo_deslocamento', 'desconto', 
@@ -71,22 +61,18 @@ def atualizar_ordem_servico(os_id, dados_atualizacao):
         if campo in dados_atualizacao:
             setattr(os, campo, dados_atualizacao[campo])
 
-    # === O PULO DO GATO: SALVAR MULTIPLOS TÉCNICOS ===
-    # O Serializer manda 'tecnicos': [1, 2, 3]
+    # Atualiza lista de técnicos (ManyToMany)
     if 'tecnicos' in dados_atualizacao:
-        # O método .set() substitui a lista antiga pela nova
         os.tecnicos.set(dados_atualizacao['tecnicos'])
 
     os.save()
     return os
 
-# ==============================================================================
-# 2. FUNÇÃO DE FINALIZAÇÃO (A QUE VOCÊ ENVIOU, LEVEMENTE AJUSTADA)
-# ==============================================================================
 @transaction.atomic
 def finalizar_ordem_servico(os, usuario_responsavel):
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
     
+    # Importação segura
     try:
         MovimentacaoEstoque = apps.get_model('estoque', 'MovimentacaoEstoque')
     except LookupError:
@@ -95,8 +81,7 @@ def finalizar_ordem_servico(os, usuario_responsavel):
     if os.status in ['FINALIZADO', 'CONCLUIDO']:
         raise ValidationError("OS já finalizada.")
 
-    # === LÓGICA DE TÉCNICO PARA FINANCEIRO ===
-    # 1. Tenta o Responsável. 2. Se não tiver, pega o primeiro da lista.
+    # Define quem recebe a comissão/crédito
     tecnico_para_financeiro = os.tecnico_responsavel
     if not tecnico_para_financeiro and os.tecnicos.exists():
         tecnico_para_financeiro = os.tecnicos.first()
@@ -115,19 +100,15 @@ def finalizar_ordem_servico(os, usuario_responsavel):
         item.produto.save()
         
         if MovimentacaoEstoque:
-            dados_movimentacao = {
-                'produto': item.produto,
-                'quantidade': item.quantidade,
-                'tipo_movimento': 'SAIDA',
-                'usuario': usuario_responsavel,
-                'observacao': f"Baixa OS #{os.pk} (Cliente: {os.cliente.razao_social})",
-                'data_movimento': timezone.now(),
-            }
-            # Verifica suporte a multi-empresa no estoque
-            if hasattr(MovimentacaoEstoque, 'empresa') or 'empresa' in [f.name for f in MovimentacaoEstoque._meta.get_fields()]:
-                dados_movimentacao['empresa'] = os.empresa
-
-            MovimentacaoEstoque.objects.create(**dados_movimentacao)
+            # Cria a movimentação de saída vinculada à empresa da OS
+            MovimentacaoEstoque.objects.create(
+                produto=item.produto,
+                quantidade=item.quantidade,
+                tipo_movimento='SAIDA',
+                usuario=usuario_responsavel,
+                observacao=f"Baixa OS #{os.pk} (Cliente: {os.cliente.razao_social})",
+                empresa=os.empresa 
+            )
 
     # 2. FINANCEIRO: RECEITA
     valor_receita = limpar_decimal(os.valor_total_geral)
@@ -153,7 +134,7 @@ def finalizar_ordem_servico(os, usuario_responsavel):
             valor=limpar_decimal(os.custo_deslocamento),
             status='PENDENTE',
             tipo_lancamento='SAIDA',
-            categoria='DESPESA', # Mude para 'TRANSPORTE' se tiver criado no choices
+            categoria='DESPESA', 
             data_vencimento=timezone.now().date(),
             cliente=os.cliente,
             empresa=os.empresa

@@ -6,7 +6,7 @@ import calendar
 from .models import LancamentoFinanceiro
 
 def calcular_estatisticas_financeiras(mes=None, ano=None, empresa_id=None):
-    Chamado = apps.get_model('chamados', 'Chamado')
+    Chamado = apps.get_model('chamados', 'Chamado') # Lazy load
     Cliente = apps.get_model('clientes', 'Cliente')
     
     hoje = timezone.now().date()
@@ -18,21 +18,20 @@ def calcular_estatisticas_financeiras(mes=None, ano=None, empresa_id=None):
     mes = int(mes)
     ano = int(ano)
 
-    # === FILTRO BASE ===
-    # Se vier empresa_id, filtramos. Se não, pega tudo (comportamento legado ou "Admin Geral")
-    filtros_geral = {}
+    # === FILTRO BASE (FINANCEIRO) ===
+    filtros_fin = {}
     if empresa_id:
-        filtros_geral['empresa_id'] = empresa_id
+        filtros_fin['empresa_id'] = empresa_id
 
     # ==========================================================
-    # 1. SALDO GLOBAL (Com filtro de empresa)
+    # 1. SALDO GLOBAL (Respeitando a empresa)
     # ==========================================================
     global_entradas = LancamentoFinanceiro.objects.filter(
-        tipo_lancamento='ENTRADA', status='PAGO', **filtros_geral
+        tipo_lancamento='ENTRADA', status='PAGO', **filtros_fin
     ).aggregate(t=Sum('valor'))['t'] or 0
     
     global_saidas = LancamentoFinanceiro.objects.filter(
-        tipo_lancamento='SAIDA', status='PAGO', **filtros_geral
+        tipo_lancamento='SAIDA', status='PAGO', **filtros_fin
     ).aggregate(t=Sum('valor'))['t'] or 0
     
     saldo_acumulado = float(global_entradas) - float(global_saidas)
@@ -43,7 +42,7 @@ def calcular_estatisticas_financeiras(mes=None, ano=None, empresa_id=None):
     qs_mes = LancamentoFinanceiro.objects.filter(
         data_vencimento__month=mes, 
         data_vencimento__year=ano,
-        **filtros_geral
+        **filtros_fin
     )
     
     stats_fin = qs_mes.filter(status='PAGO').aggregate(
@@ -61,17 +60,22 @@ def calcular_estatisticas_financeiras(mes=None, ano=None, empresa_id=None):
     resultado_periodo = receita_periodo - despesa_periodo
 
     # ==========================================================
-    # 3. DADOS OPERACIONAIS (Chamados)
+    # 3. DADOS OPERACIONAIS (CHAMADOS)
     # ==========================================================
-    # TODO: Futuramente, filtrar Chamado por empresa também quando o model Chamado tiver o campo.
-    # Por enquanto, mantemos global ou filtramos se possível.
+    # IMPORTANTE: Filtrar chamados pela empresa também
+    filtros_chamado = {'status': 'FINALIZADO'}
+    if empresa_id:
+        filtros_chamado['empresa_id'] = empresa_id
+
     qs_chamados_mes = Chamado.objects.filter(
         data_fechamento__month=mes, 
         data_fechamento__year=ano,
-        status='FINALIZADO' 
+        **filtros_chamado
     )
 
     custo_transporte = qs_chamados_mes.aggregate(total=Sum('custo_transporte'))['total'] or 0
+    
+    # Contratos Ativos (Se o cliente tiver vínculo com empresa no futuro, filtrar aqui tb)
     contratos_ativos = Cliente.objects.filter(tipo_cliente='CONTRATO', ativo=True).count()
 
     raw_ranking = (

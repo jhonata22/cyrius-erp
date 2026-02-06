@@ -61,6 +61,7 @@ class MovimentacaoEstoque(models.Model):
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.SET_NULL, null=True, blank=True)
     
     numero_serial = models.CharField(max_length=100, null=True, blank=True)
+    observacao = models.TextField(null=True, blank=True, verbose_name="Observação/Motivo")
     
     arquivo_1 = models.FileField(upload_to='docs_estoque/', null=True, blank=True)
     arquivo_2 = models.FileField(upload_to='docs_estoque/', null=True, blank=True)

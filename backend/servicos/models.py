@@ -10,7 +10,6 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 class OrdemServico(TimeStampedModel):
-    # ... (Mantenha Status e Tipo iguais) ...
     class Status(models.TextChoices):
         ORCAMENTO = 'ORCAMENTO', 'Orçamento'
         APROVADO = 'APROVADO', 'Aprovado'
@@ -25,35 +24,29 @@ class OrdemServico(TimeStampedModel):
         EXTERNO = 'EXTERNO', 'Projeto Externo / Visita'
         REMOTO = 'REMOTO', 'Acesso Remoto Especializado'
 
-    # === NOVO CAMPO: EMPRESA ===
+    # === VÍNCULO MULTI-EMPRESA ===
     empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, null=True, blank=True, related_name='servicos')
 
-    # Identificação
     titulo = models.CharField(max_length=150, help_text="Ex: Formatação PC, Instalação Câmeras")
     
-    # RELACIONAMENTOS EXTERNOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT, related_name='servicos')
     tecnico_responsavel = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
     ativo = models.ForeignKey('infra.Ativo', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_os')
 
-    # ===== ADICIONE ESTA LINHA AQUI! =====
+    # Lista de Técnicos (Executores)
     tecnicos = models.ManyToManyField('equipe.Equipe', related_name='servicos_participante', blank=True)
-    # =====================================
 
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.LABORATORIO)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ORCAMENTO)
     
-    # Detalhamento
     descricao_problema = models.TextField(verbose_name="Descrição do Pedido/Problema")
     relatorio_tecnico = models.TextField(blank=True, verbose_name="Laudo Técnico / Solução")
     
-    # Datas
     data_entrada = models.DateTimeField(default=timezone.now)
     data_previsao = models.DateField(null=True, blank=True)
     data_conclusao = models.DateTimeField(null=True, blank=True)
     data_finalizacao = models.DateTimeField(null=True, blank=True)
 
-    # Custos e Faturamento
     custo_deslocamento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_terceiros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -79,7 +72,6 @@ class OrdemServico(TimeStampedModel):
         desc = self.desconto
         return (float(pecas) + float(mo)) - float(desc)
 
-# ... Mantenha o restante (ItemServico, AnexoServico, Notificacao) inalterado ...
 class ItemServico(models.Model):
     os = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey('estoque.Produto', on_delete=models.PROTECT)

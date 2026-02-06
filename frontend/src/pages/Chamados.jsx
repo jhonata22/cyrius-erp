@@ -10,7 +10,9 @@ import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 import clienteService from '../services/clienteService';
 import ativoService from '../services/ativoService';
-import { useEmpresa } from '../contexts/EmpresaContext'; // <--- CONTEXTO
+
+// 1. IMPORTAR O HOOK DE EMPRESAS
+import { useEmpresas } from '../hooks/useEmpresas';
 
 // MAPAS VISUAIS
 const PRIORIDADE_MAP = {
@@ -33,13 +35,17 @@ const ABAS_FILTRO = [
     { id: 'TODOS', label: 'Todos', statusBackend: '' },
     { id: 'PENDENTES', label: 'Pendentes', statusBackend: 'ABERTO' },
     { id: 'ANDAMENTO', label: 'Em Andamento', statusBackend: 'EM_ANDAMENTO' },
-    { id: 'VISITAS', label: 'Visitas Agendadas', statusBackend: 'AGENDADO' }, // Novo!
+    { id: 'VISITAS', label: 'Visitas Agendadas', statusBackend: 'AGENDADO' },
     { id: 'CONCLUIDOS', label: 'Concluídos', statusBackend: 'FINALIZADO' },
 ];
 
 export default function Chamados() {
   const navigate = useNavigate();
-  const { empresaSelecionada } = useEmpresa(); // <--- EMPRESA ATUAL
+
+  // 2. CONFIGURAR HOOK DE EMPRESAS
+  const { empresas } = useEmpresas();
+  const [filtroEmpresa, setFiltroEmpresa] = useState('');
+
   const [loading, setLoading] = useState(true);
   
   // Dados Principais
@@ -51,7 +57,7 @@ export default function Chamados() {
   // PAGINAÇÃO E FILTROS
   const [pagina, setPagina] = useState(1);
   const [totalItens, setTotalItens] = useState(0);
-  const [abaAtiva, setAbaAtiva] = useState('PENDENTES'); // Default: Pendentes para focar no trabalho
+  const [abaAtiva, setAbaAtiva] = useState('PENDENTES'); 
   
   const [filtrosData, setFiltrosData] = useState({
     inicio: '',
@@ -67,7 +73,8 @@ export default function Chamados() {
   const [formData, setFormData] = useState({
     cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
     prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '',
-    custo_ida: '', custo_volta: '', tecnicos: []
+    custo_ida: '', custo_volta: '', tecnicos: [],
+    empresa: '' // Adicionado campo empresa no formulário
   });
 
   const custoEstimado = useMemo(() => {
@@ -78,7 +85,8 @@ export default function Chamados() {
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
-      const empresaId = empresaSelecionada?.id || null;
+      
+      const empresaId = filtroEmpresa || null;
 
       // Descobre qual status mandar pro backend baseado na aba ativa
       const statusFiltro = ABAS_FILTRO.find(a => a.id === abaAtiva)?.statusBackend || '';
@@ -89,9 +97,9 @@ export default function Chamados() {
             data_inicio: filtrosData.inicio,
             data_fim: filtrosData.fim,
             status: statusFiltro,
-            search: busca // Se seu backend suportar busca server-side
-        }, empresaId), // Passa ID da empresa
-        equipeService.listar(empresaId), // Assumindo que equipe também filtra
+            search: busca 
+        }, empresaId), 
+        equipeService.listar(empresaId),
         clienteService.listar(empresaId),
         ativoService.listar(empresaId)
       ]);
@@ -109,9 +117,8 @@ export default function Chamados() {
     } finally {
       setLoading(false);
     }
-  }, [pagina, filtrosData, abaAtiva, empresaSelecionada, busca]);
+  }, [pagina, filtrosData, abaAtiva, filtroEmpresa, busca]);
 
-  // Debounce na busca (opcional, para não recarregar a cada tecla se for server-side)
   useEffect(() => { 
       const timer = setTimeout(() => {
           carregarDados();
@@ -126,7 +133,6 @@ export default function Chamados() {
     return ativos.filter(a => (a.cliente === clienteId || a.cliente?.id === clienteId));
   }, [formData.cliente, ativos]);
 
-  // Identifica o cliente selecionado para validar status
   const clienteSelecionado = useMemo(() => {
     if (!formData.cliente) return null;
     return clientes.find(c => c.id === parseInt(formData.cliente));
@@ -134,11 +140,17 @@ export default function Chamados() {
 
   // HANDLERS
   const handleOpenModal = (mode) => {
+    // LÓGICA DE OURO: Define a empresa padrão para o cadastro
+    // Se o filtro global já selecionou uma empresa, usa ela.
+    // Se está vendo "TODAS", pega a primeira da lista (Matriz/Principal) para não dar erro.
+    const empresaPadrao = filtroEmpresa || (empresas.length > 0 ? empresas[0].id : '');
+
     setModalMode(mode);
     setFormData({
       cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
       prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', 
-      custo_ida: '', custo_volta: '', tecnicos: []
+      custo_ida: '', custo_volta: '', tecnicos: [],
+      empresa: empresaPadrao // Preenche com o padrão inteligente
     });
     setIsModalOpen(true);
   };
@@ -163,9 +175,11 @@ export default function Chamados() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validação de Empresa Obrigatória
+    if (!formData.empresa) return alert("Selecione a empresa responsável pelo chamado.");
     if (!formData.cliente) return alert("Selecione um cliente.");
     
-    // === VALIDAÇÃO DE CLIENTE INATIVO ===
     if (clienteSelecionado && !clienteSelecionado.ativo) {
         return alert("Ação bloqueada: Cliente desativado.");
     }
@@ -180,7 +194,9 @@ export default function Chamados() {
         data_agendamento: formData.data_agendamento ? new Date(formData.data_agendamento).toISOString() : null,
         custo_ida: parseFloat(formData.custo_ida || 0),
         custo_volta: parseFloat(formData.custo_volta || 0),
-        empresa: empresaSelecionada?.id // <--- VINCULA À EMPRESA
+        
+        // VINCULA À EMPRESA SELECIONADA NO FORMULÁRIO (E não no filtro global)
+        empresa: formData.empresa 
       };
 
       await chamadoService.criar(payload);
@@ -193,6 +209,9 @@ export default function Chamados() {
   };
 
   const totalPaginas = Math.ceil(totalItens / 10);
+  
+  // Objeto da empresa selecionada no FORMULÁRIO (para exibir no aviso do modal)
+  const empresaNoFormulario = empresas.find(e => String(e.id) === String(formData.empresa));
 
   return (
     <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
@@ -203,13 +222,28 @@ export default function Chamados() {
           <div>
             <div className="flex items-center gap-2">
                 <h1 className="text-3xl font-black text-slate-800 tracking-tight">Atendimentos</h1>
-                {empresaSelecionada && (
-                    <span className="bg-purple-100 text-[#302464] border border-purple-200 text-[10px] font-black px-2 py-0.5 rounded uppercase">
-                        {empresaSelecionada.nome_fantasia}
-                    </span>
-                )}
             </div>
-            <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
+            <div className="h-1.5 w-12 bg-[#7C69AF] mt-2 mb-4 rounded-full"></div>
+            
+            {/* SELETOR DE EMPRESA (FILTRO DE VISUALIZAÇÃO) */}
+            <div className="flex items-center gap-2 bg-white p-1 pr-4 rounded-xl border border-slate-200 w-fit shadow-sm">
+                 <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                    <Building2 size={16} />
+                 </div>
+                 <select 
+                    value={filtroEmpresa}
+                    onChange={(e) => setFiltroEmpresa(e.target.value)}
+                    className="bg-transparent font-bold text-slate-700 text-sm outline-none cursor-pointer min-w-[200px]"
+                 >
+                    <option value="">🏢 Todas as Empresas</option>
+                    <option disabled>──────────</option>
+                    {empresas.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                            {emp.nome_fantasia}
+                        </option>
+                    ))}
+                 </select>
+            </div>
           </div>
           
           <div className="flex flex-wrap gap-3">
@@ -301,8 +335,8 @@ export default function Chamados() {
                       <span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${STATUS_MAP[item.status]}`}>
                         {item.status?.replace('_', ' ')}
                       </span>
-                      {/* Badge da Empresa na Listagem (Opcional, pois já filtramos) */}
-                      {item.empresa_nome && !empresaSelecionada && (
+                      {/* Badge da Empresa na Listagem (Se estiver vendo todas) */}
+                      {item.empresa_nome && !filtroEmpresa && (
                            <span className="text-[9px] font-black px-2 py-0.5 rounded border bg-gray-50 text-gray-500 uppercase">{item.empresa_nome}</span>
                       )}
                     </div>
@@ -362,7 +396,7 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL (Mantido igual, apenas com a lógica de enviar empresaId no submit) */}
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto relative border border-white/20">
@@ -376,17 +410,42 @@ export default function Chamados() {
             </h2>
 
             {/* Aviso de Empresa no Modal */}
-            {empresaSelecionada && (
+            {empresaNoFormulario ? (
                 <div className="mb-6 p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-center gap-3">
                     <Building2 className="text-[#302464]" size={18} />
                     <p className="text-xs font-bold text-[#302464]">
-                        Este chamado será vinculado à filial: <span className="uppercase">{empresaSelecionada.nome_fantasia}</span>
+                        Este chamado será vinculado à filial: <span className="uppercase">{empresaNoFormulario.nome_fantasia}</span>
+                    </p>
+                </div>
+            ) : (
+                <div className="mb-6 p-3 bg-red-50 rounded-xl border border-red-100 flex items-center gap-3">
+                    <AlertTriangle className="text-red-600" size={18} />
+                    <p className="text-xs font-bold text-red-700">
+                        Atenção: Selecione uma filial abaixo.
                     </p>
                 </div>
             )}
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
+              {/* CAMPO DE SELEÇÃO DE EMPRESA NO MODAL (NOVO) */}
+              <div className="md:col-span-2 space-y-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filial Responsável</label>
+                 <select 
+                   name="empresa" 
+                   required 
+                   value={formData.empresa} 
+                   onChange={handleInputChange}
+                   className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 font-bold text-slate-700"
+                 >
+                    {empresas.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                            {emp.nome_fantasia}
+                        </option>
+                    ))}
+                 </select>
+              </div>
+
               <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Solicitante</label>
                  <select 
@@ -524,10 +583,10 @@ export default function Chamados() {
                 type="submit" 
                 disabled={clienteSelecionado && !clienteSelecionado.ativo}
                 className={`md:col-span-2 w-full py-5 rounded-3xl font-black text-lg shadow-2xl transition-all
-                    ${clienteSelecionado && !clienteSelecionado.ativo 
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white shadow-purple-900/20 active:scale-95'
-                    }`}
+                  ${clienteSelecionado && !clienteSelecionado.ativo 
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-[#302464] to-[#7C69AF] text-white shadow-purple-900/20 active:scale-95'
+                  }`}
               >
                 {clienteSelecionado && !clienteSelecionado.ativo 
                     ? 'Cliente Inativo - Bloqueado' 

@@ -3,14 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X
+  Wrench, Menu, X, Building2
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
 import NotificationBell from './NotificationBell';
-
-// 1. IMPORTAÇÃO DO SELETOR DE EMPRESAS
-import EmpresaSelector from './EmpresaSelector';
 
 const scrollbarStyle = `
   .sidebar-scroll::-webkit-scrollbar { width: 5px; }
@@ -19,6 +16,17 @@ const scrollbarStyle = `
   .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
   .sidebar-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
 `;
+
+// ✅ FUNÇÃO AUXILIAR PARA CORRIGIR URLS DE IMAGENS
+const formatImgUrl = (url) => {
+  if (!url) return null;
+  // Se a URL contiver http, removemos o domínio para torná-la relativa
+  // Isso resolve o conflito entre IP interno e IP público
+  if (url.startsWith('http')) {
+    return url.replace(/^https?:\/\/[^/]+/, '');
+  }
+  return url;
+};
 
 const SidebarItem = ({ icon: Icon, text, to, isExpanded, onClick }) => {
   const location = useLocation();
@@ -60,12 +68,13 @@ export default function Layout({ children }) {
             if (data.nome) setUserName(data.nome);
             if (data.cargo) setUserCargo(data.cargo);
             if (data.foto) {
-                setUserPhoto(data.foto);
-                localStorage.setItem('user_photo', data.foto);
+                const fotoFormatada = formatImgUrl(data.foto);
+                setUserPhoto(fotoFormatada);
+                localStorage.setItem('user_photo', fotoFormatada);
             }
             if (data.cargo) localStorage.setItem('cargo', data.cargo);
         } catch (error) {
-            console.error("Erro ao carregar perfil do usuário no Layout", error);
+            console.error("Erro ao carregar perfil", error);
         }
     }
     fetchUserData();
@@ -105,7 +114,7 @@ export default function Layout({ children }) {
           <div className="text-2xl font-black text-white tracking-tighter flex items-center">
             <span className="text-[#A696D1]">C</span>
             <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0'}`}>
-              YRIUS (BETA)
+              YRIUS v2.0
             </span>
           </div>
           <button className="md:hidden text-white/50 hover:text-white" onClick={() => setIsMobileOpen(false)}>
@@ -170,14 +179,6 @@ export default function Layout({ children }) {
             </div>
             
             <div className="flex items-center gap-2 md:gap-5 ml-auto">
-                
-                {/* 2. ALTERADO: SELETOR DE EMPRESAS VISÍVEL APENAS PARA SÓCIOS E GESTORES */}
-                {temPermissao(['SOCIO', 'GESTOR']) && (
-                    <div className="hidden md:block">
-                       <EmpresaSelector />
-                    </div>
-                )}
-                
                 <NotificationBell />
                 <div className="h-8 w-px bg-slate-200/50 hidden md:block"></div>
 
@@ -190,10 +191,10 @@ export default function Layout({ children }) {
                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-[#302464] text-white flex items-center justify-center font-black text-xs md:text-sm border-2 border-white overflow-hidden shadow-sm relative">
                         {userPhoto ? (
                           <img 
-                             src={userPhoto} 
-                             alt="Perfil" 
-                             className="w-full h-full object-cover absolute inset-0"
-                             onError={(e) => { e.target.style.display = 'none'; }} 
+                               src={formatImgUrl(userPhoto)} 
+                               alt="Perfil" 
+                               className="w-full h-full object-cover absolute inset-0"
+                               onError={(e) => { e.target.style.display = 'none'; }} 
                           />
                         ) : null}
                         
@@ -205,7 +206,7 @@ export default function Layout({ children }) {
             </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent hover:scrollbar-thumb-slate-400">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC]">
           <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {children}
           </div>

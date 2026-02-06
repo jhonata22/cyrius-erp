@@ -4,7 +4,8 @@ class Empresa(models.Model):
     razao_social = models.CharField(max_length=200)
     nome_fantasia = models.CharField(max_length=100)
     cnpj = models.CharField(max_length=20, unique=True)
-    
+    eh_matriz = models.BooleanField(default=False, verbose_name="É a Matriz?")
+
     # Identidade Visual (para o Frontend mudar cor/logo)
     logo = models.ImageField(upload_to='logos_empresas/', null=True, blank=True)
     cor_primaria = models.CharField(max_length=7, default='#302464', help_text="Cor HEX (ex: #302464)")

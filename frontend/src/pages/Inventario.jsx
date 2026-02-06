@@ -1,14 +1,22 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Package, Plus, Search, Truck, ArrowUpCircle, ArrowDownCircle, 
-  DollarSign, Edit, Trash2, X, User, Paperclip, FileText, ChevronRight, AlertTriangle, Filter, Building2
+  Edit, Trash2, X, Paperclip, ChevronRight, Building2, AlertTriangle
 } from 'lucide-react';
 import estoqueService from '../services/estoqueService';
 import clienteService from '../services/clienteService';
 
+// 1. IMPORTAR O HOOK
+import { useEmpresas } from '../hooks/useEmpresas';
+
 export default function Inventario() {
   const navigate = useNavigate();
+  
+  // 2. CONFIGURAR HOOK DE EMPRESAS
+  const { empresas } = useEmpresas();
+  const [filtroEmpresa, setFiltroEmpresa] = useState('');
+
   const [activeTab, setActiveTab] = useState('PRODUTOS');
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -22,14 +30,18 @@ export default function Inventario() {
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({});
 
-  const carregarDados = async () => {
+  // 3. CARREGAMENTO COM FILTRO
+  const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
+      const empresaId = filtroEmpresa || null;
+
+      // Note que passamos o empresaId para filtrar Fornecedores e Histórico
       const [p, f, cli, h] = await Promise.all([
-        estoqueService.listarProdutos(),
-        estoqueService.listarFornecedores(),
-        clienteService.listar(),
-        estoqueService.listarHistorico()
+        estoqueService.listarProdutos(), // Produtos são globais (catálogo)
+        estoqueService.listarFornecedores(empresaId), // Fornecedores filtrados
+        clienteService.listar(), // Clientes geralmente globais
+        estoqueService.listarHistorico(empresaId) // Histórico filtrado
       ]);
       setProdutos(p);
       setFornecedores(f);
@@ -40,9 +52,9 @@ export default function Inventario() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroEmpresa]);
 
-  useEffect(() => { carregarDados(); }, []);
+  useEffect(() => { carregarDados(); }, [carregarDados]);
 
   const filteredData = useMemo(() => {
     const b = busca.toLowerCase();
@@ -84,6 +96,21 @@ export default function Inventario() {
     } catch (error) { alert("Erro ao salvar produto."); }
   };
 
+  const handleSalvarFornecedor = async (e) => {
+      e.preventDefault();
+      try {
+          // Vincula à empresa se estiver selecionada
+          const payload = { ...formData };
+          if (filtroEmpresa) payload.empresa = filtroEmpresa;
+
+          await estoqueService.criarFornecedor(payload);
+          carregarDados();
+          setModalType(null);
+      } catch (error) {
+          alert("Erro ao salvar fornecedor.");
+      }
+  };
+
   const handleSalvarMovimento = async (e) => {
     e.preventDefault();
     
@@ -109,6 +136,15 @@ export default function Inventario() {
     if (formData.fornecedor) data.append('fornecedor', formData.fornecedor);
     if (formData.numero_serial) data.append('numero_serial', formData.numero_serial);
     
+    // 4. VÍNCULO DA MOVIMENTAÇÃO COM A EMPRESA
+    // Se tiver filtro selecionado, usa ele. Se não, o backend provavelmente usará a empresa do usuário ou ficará null (global)
+    if (filtroEmpresa) {
+        data.append('empresa', filtroEmpresa);
+    } else {
+        // Se a regra de negócio exigir empresa, você pode bloquear aqui:
+        // return alert("Selecione uma empresa no filtro superior antes de movimentar o estoque.");
+    }
+
     // ANEXOS
     if (formData.arquivo_1) data.append('arquivo_1', formData.arquivo_1);
     if (formData.arquivo_2) data.append('arquivo_2', formData.arquivo_2);
@@ -129,16 +165,42 @@ export default function Inventario() {
     }
   };
 
+  const empresaSelecionadaObj = empresas.find(e => String(e.id) === String(filtroEmpresa));
+
   return (
     <div className="animate-in fade-in duration-500 pb-20">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
-        <div><h1 className="text-3xl font-black text-slate-800 tracking-tight">Estoque</h1><div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div></div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Estoque</h1>
+            <div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
+
+            {/* SELETOR DE EMPRESA */}
+            <div className="mt-4 flex items-center gap-2 bg-white p-1 pr-4 rounded-xl border border-slate-200 w-fit shadow-sm">
+                 <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                    <Building2 size={16} />
+                 </div>
+                 <select 
+                    value={filtroEmpresa}
+                    onChange={(e) => setFiltroEmpresa(e.target.value)}
+                    className="bg-transparent font-bold text-slate-700 text-sm outline-none cursor-pointer min-w-[200px]"
+                 >
+                    <option value="">🏢 Estoque Geral (Todas)</option>
+                    <option disabled>──────────</option>
+                    {empresas.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                            {emp.nome_fantasia}
+                        </option>
+                    ))}
+                 </select>
+            </div>
+        </div>
+
         <button onClick={() => openModal('MOVIMENTO')} className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95"><ArrowUpCircle size={18} /> Movimentar</button>
       </div>
 
       {/* TABS */}
-      <div className="flex p-1.5 bg-slate-200/50 rounded-2xl mb-8 w-full md:w-fit">
+      <div className="flex p-1.5 bg-slate-200/50 rounded-2xl mb-8 w-full md:w-fit overflow-x-auto">
           {['PRODUTOS', 'HISTORICO', 'FORNECEDORES'].map(tab => (
             <button key={tab} onClick={() => { setActiveTab(tab); setBusca(''); }} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === tab ? 'bg-white text-[#302464] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{tab}</button>
           ))}
@@ -167,7 +229,7 @@ export default function Inventario() {
                   </div>
                   <div className="text-right">
                     <span className={`text-2xl font-black ${prod.estoque_atual <= prod.estoque_minimo ? 'text-red-500' : 'text-slate-900'}`}>{prod.estoque_atual}</span>
-                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo</p>
+                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Saldo Global</p>
                   </div>
                 </div>
                 <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-2 h-10">{prod.nome}</h3>
@@ -190,32 +252,34 @@ export default function Inventario() {
         {/* TAB HISTÓRICO */}
         {activeTab === 'HISTORICO' && (
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-2">
-               <table className="w-full text-left text-xs">
-                 <thead className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
-                   <tr><th className="p-6 text-center">Tipo</th><th className="p-6">Produto</th><th className="p-6">Origem/Destino</th><th className="p-6 text-center">Qtd</th><th className="p-6 text-center">Data</th></tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-50">
-                   {filteredData.map(hist => (
-                     <tr key={hist.id} className="hover:bg-slate-50/50 transition-colors">
-                       <td className="p-6 text-center"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${hist.tipo_movimento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{hist.tipo_movimento}</span></td>
-                       <td className="p-6">
-                           <p className="font-bold text-slate-700">{hist.nome_produto}</p>
-                           <p className="text-[9px] font-mono text-slate-400">{hist.numero_serial || 'S/N'}</p>
-                           
-                           {/* AQUI ESTÁ A NOVIDADE: Visualizar anexos no histórico */}
-                           <div className="flex gap-2 mt-1">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
+                    <tr><th className="p-6 text-center">Tipo</th><th className="p-6">Produto</th><th className="p-6">Origem/Destino</th><th className="p-6 text-center">Qtd</th><th className="p-6 text-center">Data</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filteredData.map(hist => (
+                      <tr key={hist.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-6 text-center"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${hist.tipo_movimento === 'ENTRADA' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{hist.tipo_movimento}</span></td>
+                        <td className="p-6">
+                            <p className="font-bold text-slate-700">{hist.nome_produto}</p>
+                            <p className="text-[9px] font-mono text-slate-400">{hist.numero_serial || 'S/N'}</p>
+                            
+                            <div className="flex gap-2 mt-1">
                                 {hist.arquivo_1 && <a href={hist.arquivo_1} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 1</a>}
                                 {hist.arquivo_2 && <a href={hist.arquivo_2} target="_blank" rel="noopener noreferrer" className="text-[#302464] hover:scale-110 transition-transform bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[8px] font-bold"><Paperclip size={8}/> Anexo 2</a>}
-                           </div>
-                       </td>
-                       <td className="p-6 text-slate-500 font-bold">{hist.nome_cliente || hist.nome_fornecedor || 'Interno'}</td>
-                       <td className="p-6 text-center font-black text-slate-700">{hist.quantidade}</td>
-                       <td className="p-6 text-center text-slate-400 font-mono text-[10px]">{new Date(hist.data_movimento).toLocaleDateString()}</td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </div>
+                            </div>
+                        </td>
+                        <td className="p-6 text-slate-500 font-bold">{hist.nome_cliente || hist.nome_fornecedor || 'Interno'}</td>
+                        <td className="p-6 text-center font-black text-slate-700">{hist.quantidade}</td>
+                        <td className="p-6 text-center text-slate-400 font-mono text-[10px]">{new Date(hist.data_movimento).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                    {filteredData.length === 0 && (
+                        <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum histórico encontrado para este filtro.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
         )}
 
         {/* TAB FORNECEDORES */}
@@ -245,6 +309,20 @@ export default function Inventario() {
                   {formData.tipo_movimento === 'ENTRADA' ? <ArrowDownCircle className="text-emerald-500"/> : <ArrowUpCircle className="text-red-500"/>}
                   Lançar Movimento
                 </h3>
+                
+                {/* INFO DA EMPRESA */}
+                {empresaSelecionadaObj ? (
+                    <div className="mb-4 p-3 bg-purple-50 rounded-xl text-center border border-purple-100">
+                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Estoque de:</p>
+                        <p className="text-sm font-bold text-[#302464]">{empresaSelecionadaObj.nome_fantasia}</p>
+                    </div>
+                ) : (
+                    <div className="mb-4 p-3 bg-yellow-50 rounded-xl text-center border border-yellow-100 flex flex-col items-center">
+                        <AlertTriangle className="text-yellow-500 mb-1" size={20} />
+                        <p className="text-[10px] font-black text-yellow-600 uppercase tracking-widest">Atenção</p>
+                        <p className="text-xs font-bold text-yellow-700">Nenhuma empresa selecionada. O movimento será registrado sem vínculo específico?</p>
+                    </div>
+                )}
 
                 <div className="flex p-1 bg-slate-100 rounded-2xl mb-8 font-black text-[10px] uppercase tracking-widest">
                   <button onClick={() => setFormData({...formData, tipo_movimento: 'ENTRADA', cliente: '', fornecedor: ''})} className={`flex-1 py-3 rounded-xl transition-all ${formData.tipo_movimento === 'ENTRADA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
@@ -257,7 +335,7 @@ export default function Inventario() {
                     <select required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/5"
                       value={formData.produto} onChange={e => setFormData({...formData, produto: e.target.value})}>
                       <option value="">Selecione um item...</option>
-                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Saldo: {p.estoque_atual})</option>)}
+                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome} (Saldo Global: {p.estoque_atual})</option>)}
                     </select>
                   </div>
 
@@ -300,7 +378,7 @@ export default function Inventario() {
                     </div>
                   )}
 
-                  {/* NOVO BLOCO DE ANEXOS */}
+                  {/* BLOCO DE ANEXOS */}
                   <div className="grid grid-cols-2 gap-4">
                       <div className="bg-slate-50 p-3 rounded-2xl">
                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">
@@ -351,7 +429,8 @@ export default function Inventario() {
                     {modalType === 'PRODUTO' ? (editId ? 'Editar Produto' : 'Novo Produto') : 'Novo Fornecedor'}
                 </h3>
                 
-                <form onSubmit={modalType === 'PRODUTO' ? handleSalvarProduto : (e) => { e.preventDefault(); estoqueService.criarFornecedor(formData).then(carregarDados); setModalType(null); }} className="space-y-4">
+                {/* Altera o submit handler dependendo do tipo */}
+                <form onSubmit={modalType === 'PRODUTO' ? handleSalvarProduto : handleSalvarFornecedor} className="space-y-4">
                     {modalType === 'PRODUTO' ? (
                       <>
                         <input required placeholder="Nome do Item" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
@@ -362,6 +441,11 @@ export default function Inventario() {
                       </>
                     ) : (
                       <>
+                        {filtroEmpresa && (
+                            <div className="p-3 bg-purple-50 rounded-xl mb-2 text-center text-xs text-[#302464] font-bold border border-purple-100">
+                                Fornecedor vinculado a: {empresaSelecionadaObj?.nome_fantasia}
+                            </div>
+                        )}
                         <input required placeholder="Razão Social" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} />
                         <input placeholder="Telefone" className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} />
                       </>

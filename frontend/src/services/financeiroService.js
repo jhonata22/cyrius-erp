@@ -1,12 +1,10 @@
 import api from './api';
 
 const financeiroService = {
-  // GET /api/financeiro/
-  // Agora aceita filtros extras e o ID da empresa
+  // GET /api/lancamentos/
   listar: async (filtros = {}, empresaId = null) => {
     const params = { ...filtros };
     
-    // Se tiver empresa selecionada, manda na query string (?empresa=1)
     if (empresaId) {
       params.empresa = empresaId;
     }
@@ -15,22 +13,19 @@ const financeiroService = {
     return response.data;
   },
 
-  // GET /api/financeiro/estatisticas/
+  // GET /api/lancamentos/estatisticas/
   estatisticasGerais: async (mes = null, ano = null, empresaId = null) => {
     const params = {};
     if (mes) params.mes = mes;
     if (ano) params.ano = ano;
-    
-    // Filtra estatísticas pelo CNPJ selecionado
     if (empresaId) params.empresa = empresaId;
     
     const response = await api.get('/lancamentos/estatisticas/', { params });
     return response.data;
   },
 
-  // POST /api/financeiro/gerar-mensalidades/
+  // POST /api/lancamentos/gerar-mensalidades/
   gerarFaturasMensais: async (empresaId = null) => {
-    // Envia o ID no corpo para o backend saber para qual empresa gerar
     const payload = {};
     if (empresaId) payload.empresa_id = empresaId;
 
@@ -38,35 +33,33 @@ const financeiroService = {
     return response.data;
   },
 
-  // POST /api/financeiro/
+  // POST /api/lancamentos/
   criar: async (dados) => {
-    // Aqui assumimos que o objeto 'dados' já vem com o campo 'empresa' 
-    // preenchido pelo formulário ou pelo contexto antes de chamar esta função.
+    // O payload 'dados' já deve conter 'empresa': id vindo do formulário
     const response = await api.post('/lancamentos/', dados);
     return response.data;
   },
 
-  // PATCH /api/financeiro/{id}/
+  // PATCH /api/lancamentos/{id}/
   atualizar: async (id, dados) => {
     const response = await api.patch(`/lancamentos/${id}/`, dados);
     return response.data;
   },
 
-  // DELETE /api/financeiro/{id}/
+  // DELETE /api/lancamentos/{id}/
   excluir: async (id) => {
     await api.delete(`/lancamentos/${id}/`);
   },
 
-  // POST /api/financeiro/baixar-lote/
+  // POST /api/lancamentos/baixar-lote/
   baixarEmLote: async (ids) => {
     const response = await api.post('/lancamentos/baixar-lote/', { ids });
     return response.data;
   },
 
-  // POST /api/financeiro/processar-recorrencias/
+  // POST /api/lancamentos/processar-recorrencias/
   processarRecorrencias: async (empresaId = null) => {
     const params = {};
-    // Processa apenas as recorrencias desta empresa
     if (empresaId) params.empresa = empresaId;
 
     const response = await api.post('/lancamentos/processar-recorrencias/', {}, { params });

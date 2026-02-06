@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'; // Adicionei useCallback para boas práticas
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Wrench, Truck, Monitor, Calendar, 
-  User, Search, Clock, CheckCircle, XCircle, AlertCircle 
+  Plus, Wrench, Truck, Monitor, 
+  Search, Clock, CheckCircle, XCircle, AlertCircle, Building2, User, AlertTriangle 
 } from 'lucide-react';
 
 import servicoService from '../services/servicoService';
@@ -10,20 +10,23 @@ import clienteService from '../services/clienteService';
 import equipeService from '../services/equipeService';
 import ativoService from '../services/ativoService'; 
 
-// 1. IMPORTAR O CONTEXTO
-import { useEmpresa } from '../contexts/EmpresaContext';
+// 1. IMPORTAR O HOOK DE EMPRESAS
+import { useEmpresas } from '../hooks/useEmpresas';
 
 export default function Servicos() {
   const navigate = useNavigate();
   
-  // 2. PEGAR EMPRESA SELECIONADA
-  const { empresaSelecionada } = useEmpresa();
+  // 2. CONFIGURAR HOOK E SELETOR LOCAL
+  const { empresas } = useEmpresas();
+  const [filtroEmpresa, setFiltroEmpresa] = useState('');
 
   const [servicos, setServicos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
   const [ativos, setAtivos] = useState([]); 
   const [loading, setLoading] = useState(true);
+  
+  // NOVOS FILTROS
   const [filtroStatus, setFiltroStatus] = useState('TODOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -34,26 +37,22 @@ export default function Servicos() {
     titulo: '',
     tipo: 'LABORATORIO',
     descricao_problema: '',
-    tecnico_responsavel: ''
+    tecnicos: [],
+    empresa: '' // Adicionado campo empresa ao formulário
   });
 
-  // 3. ATUALIZAR O CARREGAMENTO DE DADOS
-  // Usamos useCallback para que a função não seja recriada a cada render, permitindo usá-la no useEffect
+  // 3. CARREGAR DADOS COM FILTRO DE EMPRESA
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
       
-      const empresaId = empresaSelecionada?.id || null; // Pega o ID ou null (Todas)
+      const empresaId = filtroEmpresa || null; 
 
-      // Carrega Serviços, Clientes, Equipe e ATIVOS
       const [listaServicos, listaClientes, listaEquipe, listaAtivos] = await Promise.all([
-        // Passamos o filtro de empresa para o serviço de OS
         servicoService.listar({}, empresaId), 
-        
-        // Dependendo da sua regra de negócio, clientes e ativos também poderiam ser filtrados aqui
-        clienteService.listar(), 
-        equipeService.listar(),
-        ativoService.listar() 
+        clienteService.listar(empresaId), 
+        equipeService.listar(empresaId), 
+        ativoService.listar(empresaId) 
       ]);
 
       setServicos(listaServicos);
@@ -68,12 +67,11 @@ export default function Servicos() {
     } finally {
       setLoading(false);
     }
-  }, [empresaSelecionada]); // <--- RECARREGA SE MUDAR A EMPRESA
+  }, [filtroEmpresa]); 
 
-  // 4. ATUALIZAR O USE EFFECT
   useEffect(() => {
     carregarDados();
-  }, [carregarDados]); // Depende da função que já depende da empresa
+  }, [carregarDados]);
 
   // --- FILTRO INTELIGENTE DE ATIVOS ---
   const ativosDoCliente = useMemo(() => {
@@ -81,8 +79,42 @@ export default function Servicos() {
     return ativos.filter(a => a.cliente === parseInt(formData.cliente) || a.cliente?.id === parseInt(formData.cliente));
   }, [formData.cliente, ativos]);
 
+  // --- LÓGICA DE MULTI-SELEÇÃO DE TÉCNICOS ---
+  const toggleTecnico = (tecnicoId) => {
+      setFormData(prev => {
+          const jaSelecionado = prev.tecnicos.includes(tecnicoId);
+          if (jaSelecionado) {
+              return { ...prev, tecnicos: prev.tecnicos.filter(id => id !== tecnicoId) };
+          } else {
+              return { ...prev, tecnicos: [...prev.tecnicos, tecnicoId] };
+          }
+      });
+  };
+
+  // --- LÓGICA DE ABERTURA DO MODAL (CORRIGIDA) ---
+  const handleOpenModal = () => {
+    // Se o filtro global já estiver selecionado, usa ele.
+    // Se estiver em "TODAS", pega a primeira empresa da lista como padrão.
+    const empresaPadrao = filtroEmpresa || (empresas.length > 0 ? empresas[0].id : '');
+
+    setFormData({
+        cliente: '', 
+        ativo: '', 
+        titulo: '', 
+        tipo: 'LABORATORIO',
+        descricao_problema: '', 
+        tecnicos: [],
+        empresa: empresaPadrao // Preenche com o padrão inteligente
+    });
+    setIsModalOpen(true);
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
+
+    if (!formData.empresa) return alert("Erro: Selecione a empresa responsável pela O.S.");
+    if (!formData.cliente) return alert("Erro: Selecione um cliente.");
+
     try {
       // Prepara o payload
       const payload = {
@@ -90,15 +122,9 @@ export default function Servicos() {
         cliente: parseInt(formData.cliente),
         ativo: formData.ativo ? parseInt(formData.ativo) : null,
         
-        // 5. VINCULAR A NOVA OS À EMPRESA SELECIONADA
-        empresa: empresaSelecionada?.id // Se for null (todas), o backend decide (ou vc bloqueia criar sem selecionar)
+        // VINCULA À EMPRESA SELECIONADA NO FORMULÁRIO (Ignora o filtro visual)
+        empresa: formData.empresa 
       };
-
-      if (formData.tecnico_responsavel) {
-          payload.tecnico_responsavel = parseInt(formData.tecnico_responsavel);
-      } else {
-          delete payload.tecnico_responsavel;
-      }
 
       const novaOs = await servicoService.criar(payload);
       
@@ -117,6 +143,7 @@ export default function Servicos() {
         case 'EM_EXECUCAO': return 'bg-purple-50 text-purple-600 border-purple-100';
         case 'AGUARDANDO_PECA': return 'bg-red-50 text-red-500 border-red-100 animate-pulse';
         case 'CONCLUIDO': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        case 'CANCELADO': return 'bg-slate-100 text-slate-500 border-slate-200';
         default: return 'bg-slate-50 text-slate-500 border-slate-100';
     }
   };
@@ -131,10 +158,14 @@ export default function Servicos() {
 
   const servicosFiltrados = servicos.filter(os => {
       if (filtroStatus === 'TODOS') return true;
-      if (filtroStatus === 'ABERTOS') return ['ORCAMENTO', 'APROVADO', 'EM_EXECUCAO', 'AGUARDANDO_PECA'].includes(os.status);
+      if (filtroStatus === 'ORCAMENTO') return os.status === 'ORCAMENTO';
+      if (filtroStatus === 'ANDAMENTO') return ['APROVADO', 'EM_EXECUCAO', 'AGUARDANDO_PECA'].includes(os.status);
       if (filtroStatus === 'FINALIZADOS') return ['CONCLUIDO', 'CANCELADO'].includes(os.status);
       return true;
   });
+
+  // Identifica a empresa selecionada no form para exibir o nome no aviso
+  const empresaNoFormulario = empresas.find(e => String(e.id) === String(formData.empresa));
 
   return (
     <div className="animate-in fade-in duration-500 pb-20">
@@ -145,36 +176,53 @@ export default function Servicos() {
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
             <Wrench className="text-[#7C69AF]" /> Gestão de Serviços
           </h1>
-          {/* 6. INDICADOR VISUAL DE EMPRESA */}
-          <div className="flex items-center gap-2 mt-1">
-             <p className="text-slate-400 font-medium">Laboratório, Projetos e Manutenções Externas</p>
-             {empresaSelecionada && (
-                <span className="bg-purple-50 text-[#302464] text-[10px] font-black px-2 py-0.5 rounded border border-purple-100 uppercase tracking-wide">
-                    {empresaSelecionada.nome_fantasia}
-                </span>
-             )}
+          
+          {/* SELETOR DE EMPRESA NO HEADER (FILTRO VISUAL) */}
+          <div className="mt-4 flex items-center gap-2 bg-white p-1 pr-4 rounded-xl border border-slate-200 w-fit shadow-sm">
+             <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                <Building2 size={16} />
+             </div>
+             <select 
+                value={filtroEmpresa}
+                onChange={(e) => setFiltroEmpresa(e.target.value)}
+                className="bg-transparent font-bold text-slate-700 text-sm outline-none cursor-pointer min-w-[200px]"
+             >
+                <option value="">🏢 Todas as Empresas</option>
+                <option disabled>──────────</option>
+                {empresas.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                        {emp.nome_fantasia}
+                    </option>
+                ))}
+             </select>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
-            <div className="bg-white p-1 rounded-xl flex shadow-sm border border-slate-100">
-                {['TODOS', 'ABERTOS', 'FINALIZADOS'].map(tab => (
+        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto mt-4 xl:mt-0">
+            {/* TABS DE STATUS */}
+            <div className="bg-white p-1 rounded-xl flex shadow-sm border border-slate-100 overflow-x-auto">
+                {[
+                    { id: 'TODOS', label: 'Todos' },
+                    { id: 'ORCAMENTO', label: 'Orçamentos' },
+                    { id: 'ANDAMENTO', label: 'Em Andamento' },
+                    { id: 'FINALIZADOS', label: 'Finalizados' }
+                ].map(tab => (
                     <button
-                        key={tab}
-                        onClick={() => setFiltroStatus(tab)}
-                        className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all
-                            ${filtroStatus === tab 
+                        key={tab.id}
+                        onClick={() => setFiltroStatus(tab.id)}
+                        className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap
+                            ${filtroStatus === tab.id 
                                 ? 'bg-[#302464] text-white shadow-md' 
                                 : 'text-slate-400 hover:text-[#302464] hover:bg-slate-50'
                             }`}
                     >
-                        {tab}
+                        {tab.label}
                     </button>
                 ))}
             </div>
 
             <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenModal}
                 className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all active:scale-95"
             >
                 <Plus size={18} /> Nova O.S.
@@ -213,11 +261,16 @@ export default function Servicos() {
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-wide truncate">
                             {os.nome_cliente}
                         </p>
-                        {/* Exibe o nome do ativo se existir */}
                         {os.nome_ativo && (
                            <p className="text-[#7C69AF] text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-1">
                               <Monitor size={10} /> {os.nome_ativo}
                            </p>
+                        )}
+                        {/* Exibe o nome da empresa se estiver vendo todas */}
+                        {os.empresa_nome && !filtroEmpresa && (
+                            <p className="mt-2 text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded w-fit uppercase font-bold">
+                                {os.empresa_nome}
+                            </p>
                         )}
                     </div>
 
@@ -230,11 +283,18 @@ export default function Servicos() {
                         </div>
                         
                         <div className="text-right">
-                             {os.nome_tecnico && (
+                             {(os.tecnicos && os.tecnicos.length > 0) ? (
                                 <p className="text-[9px] font-bold mb-1 text-[#302464]">
-                                    Resp: {os.nome_tecnico.split(' ')[0]}
+                                    {os.tecnicos.length} Técnicos
                                 </p>
+                             ) : os.nome_tecnico ? (
+                                <p className="text-[9px] font-bold mb-1 text-[#302464]">
+                                    {os.nome_tecnico.split(' ')[0]}
+                                </p>
+                             ) : (
+                                <p className="text-[9px] font-bold mb-1 text-slate-300">Sem Técnico</p>
                              )}
+
                              <p className="text-[9px] font-bold mt-1 text-slate-300">
                                 {new Date(os.created_at || os.data_entrada).toLocaleDateString()}
                              </p>
@@ -248,7 +308,7 @@ export default function Servicos() {
                     <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
                         <Wrench size={32} />
                     </div>
-                    <p className="text-slate-400 font-bold">Nenhuma ordem de serviço encontrada.</p>
+                    <p className="text-slate-400 font-bold">Nenhuma ordem de serviço encontrada neste filtro.</p>
                 </div>
             )}
         </div>
@@ -257,30 +317,53 @@ export default function Servicos() {
       {/* MODAL NOVA OS */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-8 relative">
+             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-8 relative overflow-y-auto max-h-[90vh]">
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors">
                     <XCircle size={24} />
                 </button>
 
-                <h2 className="text-2xl font-black text-[#302464] mb-1">Abrir Nova OS</h2>
-                <div className="flex items-center gap-2 mb-8">
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Iniciando atendimento</p>
-                    {empresaSelecionada && (
-                        <span className="bg-purple-100 text-[#302464] text-[9px] font-black px-2 py-0.5 rounded uppercase">
-                            Em: {empresaSelecionada.nome_fantasia}
-                        </span>
-                    )}
-                </div>
+                <h2 className="text-2xl font-black text-[#302464] mb-6">Abrir Nova OS</h2>
+                
+                {/* AVISO DE EMPRESA SELECIONADA */}
+                {empresaNoFormulario ? (
+                    <div className="mb-6 p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-center gap-3">
+                        <Building2 className="text-[#302464]" size={18} />
+                        <p className="text-xs font-bold text-[#302464]">
+                            Vinculado à filial: <span className="uppercase">{empresaNoFormulario.nome_fantasia}</span>
+                        </p>
+                    </div>
+                ) : (
+                    <div className="mb-6 p-3 bg-red-50 rounded-xl border border-red-100 flex items-center gap-3">
+                        <AlertTriangle className="text-red-600" size={18} />
+                        <p className="text-xs font-bold text-red-700">
+                            Atenção: Selecione uma filial abaixo.
+                        </p>
+                    </div>
+                )}
 
                 <form onSubmit={handleCreate} className="space-y-4">
                     
-                    {/* CAMPO CLIENTE */}
+                    {/* CAMPO DE SELEÇÃO DE EMPRESA (NOVO) */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filial Responsável</label>
+                        <select 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
+                            value={formData.empresa}
+                            onChange={e => setFormData({...formData, empresa: e.target.value})}
+                            required
+                        >
+                            {empresas.map(emp => (
+                                <option key={emp.id} value={emp.id}>{emp.nome_fantasia}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente</label>
                         <select 
                             className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
                             value={formData.cliente}
-                            onChange={e => setFormData({...formData, cliente: e.target.value, ativo: ''})} // Limpa o ativo ao mudar cliente
+                            onChange={e => setFormData({...formData, cliente: e.target.value, ativo: ''})} 
                             required
                         >
                             <option value="">Selecione o Cliente...</option>
@@ -290,7 +373,6 @@ export default function Servicos() {
                         </select>
                     </div>
 
-                    {/* CAMPO ATIVO */}
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
                             <Monitor size={10} /> Equipamento / Ativo (Opcional)
@@ -308,45 +390,55 @@ export default function Servicos() {
                         </select>
                     </div>
 
-                    {/* GRID: TÉCNICO E TIPO */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnico Resp.</label>
-                            <select 
-                                className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
-                                value={formData.tecnico_responsavel}
-                                onChange={e => setFormData({...formData, tecnico_responsavel: e.target.value})}
-                            >
-                                <option value="">Eu mesmo (Automático)</option>
-                                {tecnicos.map(t => (
-                                    <option key={t.id} value={t.id}>{t.nome}</option>
-                                ))}
-                            </select>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnicos Responsáveis</label>
+                        <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-32 overflow-y-auto custom-scrollbar">
+                            {tecnicos.length === 0 && <span className="text-xs text-slate-400 italic">Nenhum técnico disponível na empresa selecionada.</span>}
+                            {tecnicos.map(t => {
+                                const isSelected = formData.tecnicos.includes(t.id);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={t.id}
+                                        onClick={() => toggleTecnico(t.id)}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border
+                                            ${isSelected 
+                                                ? 'bg-[#302464] text-white border-[#302464]' 
+                                                : 'bg-white text-slate-500 border-slate-200 hover:border-[#302464]'
+                                            }`}
+                                    >
+                                        <User size={12} />
+                                        {t.nome}
+                                        {isSelected && <CheckCircle size={10} className="text-emerald-400"/>}
+                                    </button>
+                                );
+                            })}
                         </div>
+                    </div>
 
-                        <div className="space-y-1">
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-1 space-y-1">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo</label>
                             <select 
                                 className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none"
                                 value={formData.tipo}
                                 onChange={e => setFormData({...formData, tipo: e.target.value})}
                             >
-                                <option value="LABORATORIO">Laboratório</option>
-                                <option value="EXTERNO">Externo / Projeto</option>
+                                <option value="LABORATORIO">Lab</option>
+                                <option value="EXTERNO">Externo</option>
                                 <option value="REMOTO">Remoto</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Título do Serviço</label>
-                        <input 
-                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
-                            placeholder="Ex: Formatação Notebook Dell"
-                            value={formData.titulo}
-                            onChange={e => setFormData({...formData, titulo: e.target.value})}
-                            required
-                        />
+                        <div className="col-span-2 space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Título do Serviço</label>
+                            <input 
+                                className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
+                                placeholder="Ex: Formatação"
+                                value={formData.titulo}
+                                onChange={e => setFormData({...formData, titulo: e.target.value})}
+                                required
+                            />
+                        </div>
                     </div>
 
                     <div className="space-y-1">
@@ -360,7 +452,11 @@ export default function Servicos() {
                         />
                     </div>
 
-                    <button className="w-full py-4 bg-[#302464] hover:bg-[#7C69AF] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all mt-4">
+                    <button 
+                        type="submit"
+                        disabled={!formData.empresa}
+                        className="w-full py-4 bg-[#302464] hover:bg-[#7C69AF] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-900/20 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         Iniciar Ordem de Serviço
                     </button>
                 </form>

@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
-  Info, Briefcase, Users, History 
+  Info, Briefcase, Users, History, Building2, 
+  Trash2, Plus, AlertTriangle
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
-import clienteService from '../services/clienteService';
+// import clienteService from '../services/clienteService'; // Não usado diretamente se o chamado já traz o cliente
 import ModalFinalizar from '../components/ModalFinalizar';
 
 const STATUS_MAP = {
@@ -33,7 +34,11 @@ export default function ChamadoDetalhes() {
   
   const [chamado, setChamado] = useState(null);
   const [cliente, setCliente] = useState(null);
-  const [tecnicos, setTecnicos] = useState([]);
+  
+  // Listas para seleção
+  const [todosTecnicos, setTodosTecnicos] = useState([]); // Lista completa para o select
+  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); // Objetos dos técnicos do chamado
+
   const [isFinalizarOpen, setIsFinalizarOpen] = useState(false);
 
   const [editData, setEditData] = useState({
@@ -41,7 +46,8 @@ export default function ChamadoDetalhes() {
     prioridade: '', 
     data_agendamento: '',
     custo_ida: 0, 
-    custo_volta: 0
+    custo_volta: 0,
+    tecnicos: [] // Array de IDs
   });
 
   const custoTotal = useMemo(() => {
@@ -53,34 +59,74 @@ export default function ChamadoDetalhes() {
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
+      // Busca o chamado
       const dados = await chamadoService.buscarPorId(id);
+      
+      // Busca lista completa de técnicos daquela empresa para permitir adição
+      const listaEquipe = await equipeService.listar(dados.empresa || null);
+
       setChamado(dados);
-      setCliente(dados.cliente); // O serializer já manda 'nome_exibicao' aqui dentro
-      setTecnicos(dados.tecnicos || []);
+      setCliente(dados.cliente); 
+      setTodosTecnicos(listaEquipe);
+
+      // Mapeia os técnicos atuais (que vêm como objeto) para estado local
+      setTecnicosSelecionados(dados.tecnicos || []);
 
       setEditData({
         status: dados.status,
         prioridade: dados.prioridade,
         custo_ida: dados.custo_ida || 0,
         custo_volta: dados.custo_volta || 0,
-        data_agendamento: dados.data_agendamento ? dados.data_agendamento.slice(0, 16) : ''
+        data_agendamento: dados.data_agendamento ? dados.data_agendamento.slice(0, 16) : '',
+        tecnicos: dados.tecnicos ? dados.tecnicos.map(t => t.id) : [] // Inicializa IDs
       });
+
     } catch (error) { 
       console.error("Erro ao carregar detalhes:", error);
+      alert("Chamado não encontrado ou erro de conexão.");
+      navigate('/chamados');
     } finally { 
       setLoading(false); 
     }
-  }, [id]);
+  }, [id, navigate]);
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
+  // --- GERENCIAMENTO DE TÉCNICOS ---
+  const handleAddTecnico = (tecnicoId) => {
+      if (!tecnicoId) return;
+      const id = parseInt(tecnicoId);
+      
+      // Verifica se já está na lista
+      if (editData.tecnicos.includes(id)) return;
+
+      // Adiciona ao array de IDs
+      const novosIds = [...editData.tecnicos, id];
+      setEditData(prev => ({ ...prev, tecnicos: novosIds }));
+
+      // Adiciona ao array de Objetos (para visualização imediata)
+      const tecnicoObj = todosTecnicos.find(t => t.id === id);
+      if (tecnicoObj) {
+          setTecnicosSelecionados(prev => [...prev, tecnicoObj]);
+      }
+  };
+
+  const handleRemoveTecnico = (tecnicoId) => {
+      const novosIds = editData.tecnicos.filter(id => id !== tecnicoId);
+      setEditData(prev => ({ ...prev, tecnicos: novosIds }));
+      setTecnicosSelecionados(prev => prev.filter(t => t.id !== tecnicoId));
+  };
+
+  // --- SALVAR ---
   const handleSalvar = async () => {
     try {
       const payload = { ...editData };
       if (!payload.data_agendamento) payload.data_agendamento = null;
+      
+      // Envia os dados atualizados
       await chamadoService.atualizar(id, payload);
-      alert("Atualizado com sucesso!");
-      carregarDados();
+      alert("Chamado atualizado com sucesso!");
+      carregarDados(); // Recarrega para garantir sincronia
     } catch (error) { 
       console.error(error);
       alert("Erro ao salvar alterações."); 
@@ -100,46 +146,57 @@ export default function ChamadoDetalhes() {
   };
 
   if (loading) return <div className="p-20 text-center animate-pulse font-black text-[#7C69AF]">Carregando chamado...</div>;
-  if (!chamado) return <div className="p-20 text-center text-slate-400">Chamado não encontrado.</div>;
+  if (!chamado) return null;
 
   const isVisita = chamado.tipo_atendimento === 'VISITA';
+  const isLocked = chamado.status === 'FINALIZADO' || chamado.status === 'CANCELADO';
 
   return (
     <div className="max-w-6xl mx-auto pb-10 sm:pb-20 animate-in fade-in duration-500 px-2 sm:px-0">
       
       {/* HEADER RESPONSIVO */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 sm:mb-8 px-2 sm:px-0">
-        <button 
-          onClick={() => navigate('/chamados')} 
-          className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] transition-all p-2 -ml-2"
-        >
-          <ArrowLeft size={18} /> Voltar
-        </button>
+        <div className="flex flex-col gap-1">
+            <button 
+            onClick={() => navigate('/chamados')} 
+            className="flex items-center gap-2 text-slate-400 hover:text-[#302464] font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] transition-all p-2 -ml-2 w-fit"
+            >
+            <ArrowLeft size={18} /> Voltar
+            </button>
+            {/* BADGE DA EMPRESA */}
+            {chamado.empresa_nome && (
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-lg w-fit mt-1">
+                    <Building2 size={12} /> {chamado.empresa_nome}
+                </div>
+            )}
+        </div>
         
         <div className="flex flex-row gap-2 sm:gap-3 w-full md:w-auto">
-            {chamado.status !== 'FINALIZADO' && (
+            {!isLocked && (
               <button 
                 onClick={() => setIsFinalizarOpen(true)} 
-                className="flex-1 bg-emerald-500 text-white px-4 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 bg-emerald-500 text-white px-4 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg active:scale-95 flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
               >
                 <Check size={18} /> Finalizar
               </button>
             )}
-            <button 
-              onClick={handleSalvar} 
-              className="flex-1 bg-[#302464] text-white px-4 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-xl active:scale-95 flex items-center justify-center gap-2"
-            >
-              <Save size={18} /> Salvar
-            </button>
+            {!isLocked && (
+                <button 
+                onClick={handleSalvar} 
+                className="flex-1 bg-[#302464] text-white px-4 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-xl active:scale-95 flex items-center justify-center gap-2 hover:bg-[#4B3C8A] transition-colors"
+                >
+                <Save size={18} /> Salvar
+                </button>
+            )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         
-        {/* COLUNA PRINCIPAL */}
+        {/* COLUNA PRINCIPAL (Detalhes) */}
         <div className="lg:col-span-8 space-y-6">
           
-          <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100 relative">
+          <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
             <div className={`absolute top-0 right-0 px-4 sm:px-6 py-2 rounded-bl-2xl sm:rounded-bl-3xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${STATUS_MAP[chamado.status]?.color || 'bg-slate-100'}`}>
               {chamado.status.replace('_', ' ')}
             </div>
@@ -159,6 +216,7 @@ export default function ChamadoDetalhes() {
               {chamado.descricao_detalhada || "Sem descrição detalhada."}
             </div>
 
+            {/* RESOLUÇÃO (Se finalizado) */}
             {chamado.status === 'FINALIZADO' && chamado.resolucao && (
                <div className="mt-6 bg-emerald-50 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-emerald-100">
                   <h3 className="text-emerald-700 font-black text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -168,7 +226,7 @@ export default function ChamadoDetalhes() {
                </div>
             )}
 
-            {/* GRID DE DATAS RESPONSIVO */}
+            {/* GRID DE DATAS E INFO */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8 pt-8 border-t border-slate-50">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-purple-50 rounded-xl text-[#7C69AF]"><Clock size={18} /></div>
@@ -196,7 +254,7 @@ export default function ChamadoDetalhes() {
             </div>
           </div>
 
-          {/* CARD DE CUSTOS RESPONSIVO */}
+          {/* CARD DE CUSTOS (Apenas Visita) */}
           {isVisita && (
               <div className="bg-gradient-to-br from-[#302464] to-[#7C69AF] p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
                   <Truck className="absolute -right-4 -bottom-4 text-white opacity-10 hidden sm:block" size={120} />
@@ -210,7 +268,7 @@ export default function ChamadoDetalhes() {
                       <label className="text-[9px] font-black text-[#A696D1] uppercase tracking-widest mb-2 block">Data da Visita</label>
                       <input 
                         type="datetime-local" 
-                        disabled={chamado.status === 'FINALIZADO'}
+                        disabled={isLocked}
                         className="w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-4 py-3.5 font-bold focus:bg-white focus:text-[#302464] transition-all outline-none disabled:opacity-50 text-sm" 
                         value={editData.data_agendamento} 
                         onChange={e => setEditData({...editData, data_agendamento: e.target.value})} 
@@ -222,7 +280,7 @@ export default function ChamadoDetalhes() {
                           <label className="text-[8px] font-black uppercase text-[#A696D1] mb-1">Ida (R$)</label>
                           <input 
                             type="number" step="0.01" min="0"
-                            disabled={chamado.status === 'FINALIZADO'}
+                            disabled={isLocked}
                             className="w-full bg-transparent border-b border-white/30 text-left sm:text-center font-bold outline-none focus:border-white transition-colors disabled:opacity-50" 
                             value={editData.custo_ida} 
                             onChange={e => setEditData({...editData, custo_ida: e.target.value})} 
@@ -232,7 +290,7 @@ export default function ChamadoDetalhes() {
                           <label className="text-[8px] font-black uppercase text-[#A696D1] mb-1">Volta (R$)</label>
                           <input 
                             type="number" step="0.01" min="0"
-                            disabled={chamado.status === 'FINALIZADO'}
+                            disabled={isLocked}
                             className="w-full bg-transparent border-b border-white/30 text-left sm:text-center font-bold outline-none focus:border-white transition-colors disabled:opacity-50" 
                             value={editData.custo_volta} 
                             onChange={e => setEditData({...editData, custo_volta: e.target.value})} 
@@ -248,7 +306,7 @@ export default function ChamadoDetalhes() {
           )}
         </div>
 
-        {/* COLUNA LATERAL - EMPILHA NO MOBILE */}
+        {/* COLUNA LATERAL - CONTROLES */}
         <div className="lg:col-span-4 space-y-6">
           
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
@@ -256,17 +314,17 @@ export default function ChamadoDetalhes() {
               <Settings size={14} /> Painel de Controle
             </h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">Status</label>
                 <select 
                   value={editData.status} 
                   onChange={e => setEditData({...editData, status: e.target.value})} 
-                  disabled={chamado.status === 'FINALIZADO'}
+                  disabled={isLocked}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]/20 disabled:opacity-50 text-sm"
                 >
                   {Object.entries(STATUS_MAP).map(([key, val]) => (
-                    <option key={key} value={key}>{val.label}</option>
+                    <option key={key} value={key}>{val.label.replace(/^[^\s]+\s/, '')}</option>
                   ))}
                 </select>
               </div>
@@ -276,11 +334,11 @@ export default function ChamadoDetalhes() {
                 <select 
                   value={editData.prioridade} 
                   onChange={e => setEditData({...editData, prioridade: e.target.value})} 
-                  disabled={chamado.status === 'FINALIZADO'}
+                  disabled={isLocked}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]/20 disabled:opacity-50 text-sm"
                 >
                   {Object.entries(PRIORIDADE_MAP).map(([key, val]) => (
-                    <option key={key} value={key}>{val.label}</option>
+                    <option key={key} value={key}>{val.label.replace(/^[^\s]+\s/, '')}</option>
                   ))}
                 </select>
               </div>
@@ -288,62 +346,86 @@ export default function ChamadoDetalhes() {
           </div>
 
           {cliente && (
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Briefcase size={14} /> Cliente
+            <div className={`bg-white p-6 rounded-3xl shadow-sm border ${!cliente.ativo ? 'border-red-200 bg-red-50' : 'border-slate-100'}`}>
+              <h3 className={`text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${!cliente.ativo ? 'text-red-400' : 'text-slate-400'}`}>
+                {cliente.ativo ? <><Briefcase size={14} /> Cliente</> : <><AlertTriangle size={14} /> Cliente Inativo</>}
               </h3>
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-[#302464] font-black text-xl shrink-0">
-                  {/* Pega a inicial do nome correto */}
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 ${!cliente.ativo ? 'bg-red-200 text-red-700' : 'bg-purple-100 text-[#302464]'}`}>
                   {(cliente.nome_exibicao || cliente.razao_social).charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  {/* AQUI ESTÁ A ALTERAÇÃO: Usa nome_exibicao (Fantasia) se existir, senão Razão */}
-                  <p className="font-black text-slate-800 text-sm leading-tight truncate">
+                  <p className={`font-black text-sm leading-tight truncate ${!cliente.ativo ? 'text-red-700' : 'text-slate-800'}`}>
                       {cliente.nome_exibicao || cliente.razao_social}
                   </p>
                   
-                  {/* Se for fantasia, mostra a razão social embaixo em cinza */}
                   {cliente.nome_fantasia && (
-                       <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{cliente.razao_social}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{cliente.razao_social}</p>
                   )}
                   
                   <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{cliente.cnpj_cpf}</p>
-                  <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase mt-1 inline-block ${cliente.tipo_cliente === 'AVULSO' ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                    {cliente.tipo_cliente || 'CONTRATO'}
-                  </span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 font-medium flex items-start gap-2 bg-slate-50 p-4 rounded-2xl leading-relaxed">
+              <p className="text-xs text-slate-500 font-medium flex items-start gap-2 bg-slate-50/50 p-4 rounded-2xl leading-relaxed">
                 <MapPin size={16} className="shrink-0 mt-0.5 text-[#7C69AF]"/> 
                 {cliente.endereco}
               </p>
             </div>
           )}
 
+          {/* CARD DE EQUIPE TÉCNICA (Com edição) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Users size={14} /> Equipe Técnica
               </h3>
-              {tecnicos.length > 0 ? (
-                <div className="space-y-3">
-                  {tecnicos.map(tec => (
-                    <div key={tec.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 group">
-                      <div className="w-8 h-8 rounded-full bg-[#302464] flex items-center justify-center text-white font-bold text-xs shrink-0 group-hover:scale-110 transition-transform">
-                        {tec.nome.charAt(0)}
+              
+              <div className="space-y-3">
+                  {tecnicosSelecionados.map(tec => (
+                    <div key={tec.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 group">
+                      <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#302464] flex items-center justify-center text-white font-bold text-xs shrink-0">
+                            {tec.nome.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-700 truncate">{tec.nome}</p>
+                            <p className="text-[9px] text-slate-400 uppercase font-black">{tec.cargo}</p>
+                          </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-700 truncate">{tec.nome}</p>
-                        <p className="text-[9px] text-slate-400 uppercase font-black">{tec.cargo}</p>
-                      </div>
+                      {!isLocked && (
+                          <button onClick={() => handleRemoveTecnico(tec.id)} className="text-slate-300 hover:text-red-500 p-1">
+                              <Trash2 size={14} />
+                          </button>
+                      )}
                     </div>
                   ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 bg-slate-50 rounded-2xl border-dashed border border-slate-200">
-                  <p className="text-[10px] text-slate-400 font-black uppercase">Sem técnicos</p>
-                </div>
-              )}
+                  
+                  {tecnicosSelecionados.length === 0 && (
+                     <div className="text-center py-4 text-xs text-slate-400 font-bold bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                         Nenhum técnico atribuído
+                     </div>
+                  )}
+
+                  {!isLocked && (
+                      <div className="mt-4 pt-4 border-t border-slate-100">
+                          <label className="text-[9px] font-bold text-slate-400 mb-2 block uppercase">Adicionar Técnico</label>
+                          <div className="flex gap-2">
+                              <select 
+                                  className="flex-1 bg-slate-50 text-xs font-bold text-slate-600 rounded-xl p-2 border border-slate-200 outline-none"
+                                  onChange={(e) => handleAddTecnico(e.target.value)}
+                                  value=""
+                              >
+                                  <option value="">Selecione...</option>
+                                  {todosTecnicos.map(t => (
+                                      <option key={t.id} value={t.id}>{t.nome}</option>
+                                  ))}
+                              </select>
+                              <div className="bg-[#302464] text-white p-2 rounded-xl flex items-center justify-center">
+                                  <Plus size={14} />
+                              </div>
+                          </div>
+                      </div>
+                  )}
+              </div>
           </div>
 
         </div>

@@ -1,23 +1,19 @@
 import api from './api';
 
 const chamadoService = {
-  // ATUALIZADO: Agora aceita um objeto de filtros e o ID da empresa
+  // GET /api/chamados/?empresa=1&status=ABERTO
   listar: async (filtros = {}, empresaId = null) => {
-    // Cria uma cópia dos filtros para não alterar o original
     const params = { ...filtros };
 
-    // Se a empresa estiver selecionada, adiciona ao parâmetro
     if (empresaId) {
       params.empresa = empresaId;
     }
 
-    // O Axios converte automaticamente o objeto params em query string
-    // Ex: /chamados/?page=1&status=ABERTO&empresa=1
     const response = await api.get('/chamados/', { params });
     return response.data;
   },
 
-  // --- NOVO MÉTODO: LISTAR POR CLIENTE ---
+  // Útil para histórico de um cliente específico
   listarPorCliente: async (clienteId, pagina = 1) => {
     const response = await api.get('/chamados/', {
         params: {
@@ -36,9 +32,9 @@ const chamadoService = {
   criar: async (dados) => {
     const payload = { ...dados };
     if (payload.data_agendamento) {
-      // Garante formato ISO correto
       payload.data_agendamento = new Date(payload.data_agendamento).toISOString();
     }
+    // Payload já contém 'empresa': id
     const response = await api.post('/chamados/', payload);
     return response.data;
   },
@@ -60,7 +56,7 @@ const chamadoService = {
     return response.data;
   },
 
-  // ESTATÍSTICAS DO DASHBOARD
+  // Estatísticas para Dashboard
   getDashboardStats: async (mesAno, empresaId = null) => {
     const params = { mes: mesAno };
     if (empresaId) params.empresa = empresaId;
@@ -69,8 +65,7 @@ const chamadoService = {
     return response.data; 
   },
   
-  // ESTATÍSTICAS PARA A TELA DE CHAMADOS (MÉTODO NOVO SUGERIDO)
-  // Se você usar estatísticas na tela de listagem, use este padrão:
+  // Rota alternativa de estatísticas
   estatisticas: async (mes, empresaId = null) => {
     const params = { mes };
     if (empresaId) params.empresa = empresaId;

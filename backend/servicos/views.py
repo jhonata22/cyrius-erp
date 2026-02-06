@@ -8,7 +8,7 @@ from utils.permissions import IsFuncionario
 from .models import OrdemServico, ItemServico, AnexoServico, Notificacao
 from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, NotificacaoSerializer
 
-# IMPORTANTE: Adicione atualizar_ordem_servico aqui
+# Importa a lógica de negócio
 from .services import finalizar_ordem_servico, adicionar_peca_os, atualizar_ordem_servico
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
@@ -17,17 +17,18 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Otimiza queries e inclui técnicos no prefetch
         qs = OrdemServico.objects.all().select_related(
             'cliente', 'tecnico_responsavel', 'ativo', 'empresa'
-        ).prefetch_related('itens', 'anexos', 'tecnicos').order_by('-created_at') # Adicionado 'tecnicos' no prefetch
+        ).prefetch_related('itens', 'anexos', 'tecnicos').order_by('-created_at')
 
-        # 1. Filtro de Segurança
+        # 1. Filtro de Segurança (Quem vê o quê)
         if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
-             # Se o usuário for técnico, vê as OS onde ele é responsável OU está na equipe de apoio
              from django.db.models import Q
+             # Técnico vê OS onde é responsável OU onde está na equipe de apoio
              qs = qs.filter(Q(tecnico_responsavel=user.equipe) | Q(tecnicos=user.equipe)).distinct()
 
-        # 2. Filtro MULTI-EMPRESA
+        # 2. Filtro MULTI-EMPRESA (Navegação no Front)
         empresa_id = self.request.query_params.get('empresa')
         if empresa_id:
             qs = qs.filter(empresa_id=empresa_id)
@@ -45,24 +46,23 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         save_kwargs = {}
+        # Auto-atribui responsável se não vier
         if 'tecnico_responsavel' not in serializer.validated_data:
             if hasattr(self.request.user, 'equipe'):
                 save_kwargs['tecnico_responsavel'] = self.request.user.equipe
 
+        # Grava a empresa selecionada no front
         empresa_id = self.request.data.get('empresa') or self.request.query_params.get('empresa')
         if empresa_id:
             save_kwargs['empresa_id'] = empresa_id
 
         serializer.save(**save_kwargs)
 
-    # === NOVO MÉTODO UPDATE ===
-    # Isso garante que a atualização passe pelo nosso Service, que sabe salvar a lista de técnicos
+    # === UPDATE CUSTOMIZADO ===
     def update(self, request, *args, **kwargs):
         try:
-            # Chama o service passando o ID (pk) e o JSON do request
+            # Usa o service para garantir atualização de técnicos (ManyToMany)
             os = atualizar_ordem_servico(kwargs['pk'], request.data)
-            
-            # Devolve a OS atualizada serializada
             serializer = self.get_serializer(os)
             return Response(serializer.data)
         except ValidationError as e:
@@ -71,7 +71,6 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             return Response({"erro": str(e)}, status=500)
 
-    # ... (Restante das actions mantidas iguais) ...
     @action(detail=True, methods=['post'], url_path='adicionar-item')
     def adicionar_item(self, request, pk=None):
         try:
@@ -91,6 +90,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     def finalizar(self, request, pk=None):
         os = self.get_object()
         try:
+            # Service gera financeiro e baixa estoque
             os_atualizada = finalizar_ordem_servico(os, request.user)
             return Response(OrdemServicoSerializer(os_atualizada).data)
         except ValidationError as e:

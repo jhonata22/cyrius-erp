@@ -28,7 +28,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     itens = ItemServicoSerializer(many=True, read_only=True)
     anexos = AnexoServicoSerializer(many=True, read_only=True)
 
-    # Configuração para salvar lista de IDs de técnicos
+    # Permite escrita com IDs [1, 2] e leitura manual via to_representation
     tecnicos = serializers.PrimaryKeyRelatedField(
         many=True, 
         queryset=Equipe.objects.all(),
@@ -60,7 +60,6 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
              
         return representation
 
-# === ADICIONE ISTO NO FINAL PARA CORRIGIR O ERRO DE IMPORT ===
 class NotificacaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notificacao

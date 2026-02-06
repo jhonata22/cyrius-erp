@@ -1,9 +1,10 @@
 from rest_framework import serializers
+from django.db import transaction
 from .models import Chamado, ChamadoTecnico
 from clientes.models import Cliente
 from infra.models import Ativo
 from equipe.models import Equipe
-from core.models import Empresa # <--- IMPORTANDO DO CORE
+from core.models import Empresa 
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
     nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
@@ -16,7 +17,14 @@ class ChamadoSerializer(serializers.ModelSerializer):
     # IDs no POST
     cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
     ativo = serializers.PrimaryKeyRelatedField(queryset=Ativo.objects.all(), required=False, allow_null=True)
-    tecnicos = serializers.PrimaryKeyRelatedField(queryset=Equipe.objects.all(), many=True, required=False)
+    
+    # Técnicos (Lista de IDs para escrita)
+    tecnicos = serializers.PrimaryKeyRelatedField(
+        queryset=Equipe.objects.all(), 
+        many=True, 
+        required=False,
+        write_only=True # Importante: Só serve para entrada
+    )
     
     # === MULTI-EMPRESA ===
     empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all(), required=False, allow_null=True)
@@ -55,6 +63,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         
+        # ... (Mantive sua lógica de representação igual) ...
         if instance.cliente:
             nome_exibicao = instance.cliente.nome if instance.cliente.nome else instance.cliente.razao_social
             representation['cliente'] = {
@@ -82,3 +91,18 @@ class ChamadoSerializer(serializers.ModelSerializer):
             ]
 
         return representation
+
+    # === CORREÇÃO CRÍTICA: CREATE CUSTOMIZADO ===
+    @transaction.atomic
+    def create(self, validated_data):
+        # Remove tecnicos do validated_data pois o M2M through não aceita direto
+        tecnicos_data = validated_data.pop('tecnicos', [])
+        
+        # Cria o Chamado
+        chamado = Chamado.objects.create(**validated_data)
+        
+        # Cria as relações na tabela intermediária
+        for tecnico in tecnicos_data:
+            ChamadoTecnico.objects.create(chamado=chamado, tecnico=tecnico)
+            
+        return chamado

@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal, InvalidOperation 
 from .models import MovimentacaoEstoque
 
-# ... (Funções auxiliares add_months e to_decimal IGUAIS) ...
 def add_months(sourcedate, months):
     import calendar
     month = sourcedate.month - 1 + months
@@ -29,8 +28,6 @@ def processar_movimentacao_estoque(
     cliente=None, fornecedor=None, preco_unitario=0, 
     numero_serial=None, arquivos=None, 
     gerar_financeiro=True, dados_financeiros=None,
-    
-    # NOVO PARAMETRO
     empresa_id=None 
 ):
     print(f"--- SERVICE: Processando {tipo_movimento} (Empresa ID: {empresa_id}) ---")
@@ -41,7 +38,7 @@ def processar_movimentacao_estoque(
     produto.refresh_from_db() 
     estoque_atual_decimal = to_decimal(produto.estoque_atual)
 
-    # 1. Atualiza Saldo (GLOBAL POR ENQUANTO)
+    # 1. Atualiza Saldo
     if tipo_movimento == 'SAIDA':
         if estoque_atual_decimal < qtd_decimal:
             raise ValidationError(f"Estoque insuficiente. Disp: {estoque_atual_decimal}")
@@ -51,7 +48,7 @@ def processar_movimentacao_estoque(
     
     produto.save()
 
-    # 2. Cria Registro de Movimentação (COM EMPRESA)
+    # 2. Cria Registro de Movimentação
     arquivo_1 = arquivos.get('arquivo_1') if arquivos else None
     arquivo_2 = arquivos.get('arquivo_2') if arquivos else None
 
@@ -66,12 +63,10 @@ def processar_movimentacao_estoque(
         numero_serial=numero_serial,
         arquivo_1=arquivo_1,
         arquivo_2=arquivo_2,
-        
-        # VINCULAÇÃO
-        empresa_id=empresa_id
+        empresa_id=empresa_id # <--- VÍNCULO IMPORTANTE
     )
 
-    # 3. Gera Financeiro (COM EMPRESA)
+    # 3. Gera Financeiro
     valor_total = qtd_decimal * preco_decimal
 
     if gerar_financeiro and valor_total > 0:
@@ -81,15 +76,14 @@ def processar_movimentacao_estoque(
             dados_fin = dados_financeiros or {}
             total_parcelas = int(dados_fin.get('total_parcelas', 1))
             
-            # ... (Lógica de descrição igual) ...
             desc_base = f"Movimentação Estoque {produto.nome}"
             tipo_lanc = 'SAIDA' if tipo_movimento == 'ENTRADA' else 'ENTRADA'
-            categoria = 'COMPRA' if tipo_movimento == 'ENTRADA' else 'VENDA'
+            # Ajuste de categoria para bater com seu TextChoices
+            categoria = 'COMPRA' if tipo_movimento == 'ENTRADA' else 'VENDA' 
             
             entidade_kw = {}
             if cliente: entidade_kw['cliente'] = cliente
-            # Se fornecedor não for None e o model financeiro aceitar, passe. 
-            # (Se seu Financeiro não tem campo fornecedor, ignore ou adapte).
+            if fornecedor: entidade_kw['fornecedor'] = fornecedor
 
             valor_parcela = valor_total / Decimal(total_parcelas)
             grupo_id = uuid.uuid4()
@@ -101,7 +95,7 @@ def processar_movimentacao_estoque(
                     descricao=f"{desc_base} ({i+1}/{total_parcelas})" if total_parcelas > 1 else desc_base,
                     valor=valor_parcela,
                     tipo_lancamento=tipo_lanc,
-                    categoria='SERVICO', # Ou ajuste para categoria correta
+                    categoria=categoria, 
                     status='PENDENTE',
                     data_vencimento=vencimento,
                     grupo_parcelamento=grupo_id,
@@ -111,11 +105,13 @@ def processar_movimentacao_estoque(
                     arquivo_1=movimentacao.arquivo_1,
                     arquivo_2=movimentacao.arquivo_2,
                     
-                    # VINCULAÇÃO MULTI-EMPRESA NO FINANCEIRO
+                    # AQUI A MÁGICA ACONTECE: O financeiro nasce na empresa certa
                     empresa_id=empresa_id
                 )
             
         except Exception as e:
-            print(f"ERRO AO GERAR FINANCEIRO DO ESTOQUE: {e}")
+            # Importante: Logar o erro mas não travar o estoque se o financeiro falhar (ou dar raise se for critico)
+            print(f"ERRO CRÍTICO AO GERAR FINANCEIRO DO ESTOQUE: {e}")
+            # raise e # Descomente se quiser que o erro financeiro aborte a movimentação
 
     return movimentacao

@@ -1,15 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from 'react'; // Adicionado useRef
+import { useState, useEffect, useCallback, useRef } from 'react'; 
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { User, Lock, Save, Camera, Shield, ArrowLeft, Briefcase, DollarSign, Calendar } from 'lucide-react';
 import equipeService from '../services/equipeService';
 
+// ✅ FUNÇÃO PARA NORMALIZAR URLS (TRANSFORMA EM CAMINHO RELATIVO)
+const formatImgUrl = (url) => {
+  if (!url) return null;
+  if (typeof url !== 'string') return url;
+  // Remove o protocolo e o domínio (ex: http://192.168.../media/ -> /media/)
+  if (url.startsWith('http')) {
+    return url.replace(/^https?:\/\/[^/]+/, '');
+  }
+  return url;
+};
+
 export default function Perfil() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const fileInputRef = useRef(null); // Ref para o input de arquivo
+  const fileInputRef = useRef(null); 
   
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false); // Estado para feedback de upload
+  const [uploading, setUploading] = useState(false); 
   
   const [perfil, setPerfil] = useState({
     nome: '',
@@ -32,6 +43,12 @@ export default function Perfil() {
       } else {
         data = await equipeService.getMe();
       }
+      
+      // ✅ APLICA FORMATAÇÃO NA FOTO AO CARREGAR
+      if (data && data.foto) {
+        data.foto = formatImgUrl(data.foto);
+      }
+      
       setPerfil(data);
     } catch (error) {
       console.error("Erro ao carregar perfil", error);
@@ -46,27 +63,23 @@ export default function Perfil() {
     carregarPerfil();
   }, [carregarPerfil]);
 
-  // --- FUNÇÃO PARA ALTERAR A FOTO ---
   const handleFotoClick = () => {
-    fileInputRef.current.click(); // Abre a janela de seleção de arquivo
+    fileInputRef.current.click();
   };
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Opcional: Validar tamanho ou tipo aqui
     try {
       setUploading(true);
       const formData = new FormData();
       formData.append('foto', file);
 
-      // Envia apenas a foto para o endpoint de atualização
-      // Nota: Certifique-se que seu service/backend aceita multipart/form-data
       await equipeService.atualizar(isOutroPerfil ? id : null, formData);
       
       alert("Foto atualizada com sucesso!");
-      carregarPerfil(); // Recarrega para exibir a nova imagem
+      carregarPerfil(); 
     } catch (error) {
       console.error("Erro no upload", error);
       alert("Erro ao atualizar foto.");
@@ -87,7 +100,7 @@ export default function Perfil() {
       if (senhas.password) payload.password = senhas.password;
 
       delete payload.estatisticas_mes; 
-      delete payload.foto; // Removemos a URL da string para não conflitar com o arquivo
+      delete payload.foto; // Removemos para evitar envio de string de URL antiga
 
       await equipeService.atualizar(isOutroPerfil ? id : null, payload);
       
@@ -105,7 +118,6 @@ export default function Perfil() {
   return (
     <div className="max-w-4xl mx-auto pb-20 animate-in fade-in duration-500">
       
-      {/* INPUT DE ARQUIVO ESCONDIDO */}
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -133,13 +145,12 @@ export default function Perfil() {
             <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-purple-900/5 text-center relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-full h-24 bg-[#302464]"></div>
                 
-                {/* CONTAINER DA FOTO COM TRIGGER DE CLIQUE */}
                 <div 
                     onClick={handleFotoClick}
                     className={`relative w-32 h-32 mx-auto mt-8 rounded-3xl border-4 border-white shadow-lg bg-slate-100 flex items-center justify-center overflow-hidden cursor-pointer transition-transform active:scale-95 ${uploading ? 'animate-pulse' : ''}`}
                 >
                     {perfil.foto ? (
-                        <img src={perfil.foto} alt="Foto" className="w-full h-full object-cover" />
+                        <img src={formatImgUrl(perfil.foto)} alt="Foto" className="w-full h-full object-cover" />
                     ) : (
                         <User size={48} className="text-slate-300" />
                     )}
