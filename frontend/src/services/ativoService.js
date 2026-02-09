@@ -1,8 +1,12 @@
 import api from './api';
 
 const ativoService = {
-  listar: async () => {
-    const response = await api.get('/ativos/');
+  listar: async (clienteId) => {
+    const params = {};
+    if (clienteId) {
+      params.cliente = clienteId;
+    }
+    const response = await api.get('/ativos/', { params });
     return response.data;
   },
 
@@ -18,8 +22,26 @@ const ativoService = {
   },
 
   atualizar: async (id, dados) => {
-    // ATENÇÃO: A barra no final aqui também
-    const response = await api.patch(`/ativos/${id}/`, dados);
+    // Copia os dados para um novo objeto para não modificar o estado original
+    const payload = { ...dados };
+
+    // 1. A chateação do Django: Garante que o ID do cliente seja enviado
+    if (payload.cliente && typeof payload.cliente === 'object') {
+      payload.cliente_id = payload.cliente.id;
+      delete payload.cliente; // Remove o objeto aninhado
+    } else {
+      payload.cliente_id = payload.cliente; // Garante que o ID seja enviado
+      delete payload.cliente;
+    }
+
+    // 2. Limpeza de Campos Read-only (Evita warnings e potenciais erros)
+    // O backend vai ignorar isso, mas é uma boa prática enviar um payload limpo.
+    delete payload.nome_cliente; 
+    delete payload.historico_servicos;
+
+    console.log("DEBUG: Payload enviado para a API:", payload);
+
+    const response = await api.patch(`/ativos/${id}/`, payload);
     return response.data;
   },
 

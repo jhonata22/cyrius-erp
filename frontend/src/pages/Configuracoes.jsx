@@ -2,40 +2,61 @@ import { useState, useEffect } from 'react';
 import { 
   Settings, Lock, User, Save, ShieldCheck, 
   UserCircle, Mail, Briefcase, Fingerprint, 
-  Sparkles, Camera, AtSign 
+  Sparkles, Camera, AtSign, Building, Plus, X
 } from 'lucide-react';
 import equipeService from '../services/equipeService';
-import authService from '../services/authService';
+import empresaService from '../services/empresaService';
 
 export default function Configuracoes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [isSocio, setIsSocio] = useState(false);
   
   const [formData, setFormData] = useState({
     nome: '',
-    username: '', // Novo campo
+    username: '',
     password: '',
     confirmPassword: '',
-    foto: null // Novo campo
+    foto: null
   });
 
-  const [preview, setPreview] = useState(null); // Para mostrar a foto antes de salvar
+  const [preview, setPreview] = useState(null);
+
+  // State for company management
+  const [modalOpen, setModalOpen] = useState(false);
+  const [empresas, setEmpresas] = useState([]);
+  const [empresaFormData, setEmpresaFormData] = useState({ id: null, nome_fantasia: '', razao_social: '', cnpj: '' });
 
   useEffect(() => {
     equipeService.getMe()
       .then(dados => {
+        console.log('DEBUG: User Cargo:', dados.cargo);
         setUserData(dados);
         setFormData(prev => ({ 
             ...prev, 
             nome: dados.nome,
-            username: dados.username // O serializer precisa retornar isso (source='usuario.username')
+            username: dados.username
         }));
         if (dados.foto) setPreview(dados.foto);
+
+        if (dados.cargo === 'SOCIO') {
+          setIsSocio(true);
+          loadEmpresas();
+        }
       })
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadEmpresas = async () => {
+    try {
+      const data = await empresaService.listar();
+      setEmpresas(data);
+    } catch (error) {
+      console.error("Erro ao carregar empresas", error);
+    }
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -54,7 +75,6 @@ export default function Configuracoes() {
     try {
         setSaving(true);
         
-        // Para enviar arquivos, precisamos de FormData
         const dataToSend = new FormData();
         dataToSend.append('nome', formData.nome);
         dataToSend.append('username', formData.username);
@@ -63,7 +83,6 @@ export default function Configuracoes() {
 
         const res = await equipeService.updateMe(dataToSend);
         
-        // Atualiza a foto no cache local para o Layout pegar
         if (res.foto) localStorage.setItem('user_photo', res.foto);
         if (formData.username) localStorage.setItem('username', formData.username);
 
@@ -73,6 +92,22 @@ export default function Configuracoes() {
         alert(err.response?.data?.erro || "Erro ao salvar.");
     } finally {
         setSaving(false);
+    }
+  };
+
+  const handleSaveEmpresa = async (e) => {
+    e.preventDefault();
+    try {
+      if (empresaFormData.id) {
+        await empresaService.atualizar(empresaFormData.id, empresaFormData);
+      } else {
+        await empresaService.criar(empresaFormData);
+      }
+      alert("Empresa salva com sucesso!");
+      setModalOpen(false);
+      loadEmpresas();
+    } catch (error) {
+      alert("Erro ao salvar empresa");
     }
   };
 
@@ -89,7 +124,6 @@ export default function Configuracoes() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* COLUNA ESQUERDA: FOTO E INFO */}
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm text-center">
                 <div className="relative w-32 h-32 mx-auto mb-6 group cursor-pointer">
@@ -111,13 +145,21 @@ export default function Configuracoes() {
                 <h3 className="font-black text-slate-800 text-xl">{userData?.nome}</h3>
                 <p className="text-xs font-bold text-[#7C69AF] uppercase tracking-widest mt-1">{userData?.cargo}</p>
             </div>
+            {isSocio && (
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-3 mb-4">
+                  <Building className="text-[#7C69AF]" size={18} /> Filiais & Multi-empresas
+                </h3>
+                <button onClick={() => setModalOpen(true)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all">
+                  Gerenciar
+                </button>
+              </div>
+            )}
         </div>
 
-        {/* COLUNA DIREITA: FORMULÁRIO */}
         <div className="lg:col-span-2">
             <form onSubmit={handleUpdate} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
                 
-                {/* DADOS DE ACESSO */}
                 <div className="space-y-6">
                     <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
                         <UserCircle className="text-[#7C69AF]" size={18} /> Dados de Acesso
@@ -140,7 +182,6 @@ export default function Configuracoes() {
                     </div>
                 </div>
 
-                {/* SEGURANÇA */}
                 <div className="space-y-6 pt-8 border-t border-slate-50">
                     <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
                         <Fingerprint className="text-[#7C69AF]" size={18} /> Alterar Senha
@@ -163,6 +204,57 @@ export default function Configuracoes() {
             </form>
         </div>
       </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-slate-800">Gerenciar Empresas</h2>
+              <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {empresas.map(empresa => (
+                <div key={empresa.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
+                  <div>
+                    <p className="font-bold text-slate-700">{empresa.nome_fantasia}</p>
+                    <p className="text-xs text-slate-500">{empresa.cnpj}</p>
+                  </div>
+                  <button onClick={() => setEmpresaFormData(empresa)} className="text-xs font-bold text-[#7C69AF]">Editar</button>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleSaveEmpresa} className="space-y-4 pt-6 border-t">
+              <h3 className="text-lg font-bold text-slate-700">{empresaFormData.id ? 'Editar Empresa' : 'Nova Empresa'}</h3>
+              <input
+                className="w-full bg-slate-100 border-none rounded-2xl px-5 py-3.5 font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-100"
+                value={empresaFormData.nome_fantasia}
+                onChange={e => setEmpresaFormData({ ...empresaFormData, nome_fantasia: e.target.value })}
+                placeholder="Nome Fantasia"
+              />
+              <input
+                className="w-full bg-slate-100 border-none rounded-2xl px-5 py-3.5 font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-100"
+                value={empresaFormData.razao_social}
+                onChange={e => setEmpresaFormData({ ...empresaFormData, razao_social: e.target.value })}
+                placeholder="Razão Social"
+              />
+              <input
+                className="w-full bg-slate-100 border-none rounded-2xl px-5 py-3.5 font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-100"
+                value={empresaFormData.cnpj}
+                onChange={e => setEmpresaFormData({ ...empresaFormData, cnpj: e.target.value })}
+                placeholder="CNPJ"
+              />
+              <div className="flex justify-end gap-4">
+                <button type="button" onClick={() => setEmpresaFormData({ id: null, nome_fantasia: '', razao_social: '', cnpj: '' })} className="text-xs font-bold text-slate-500">Limpar</button>
+                <button type="submit" className="bg-[#302464] text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase">Salvar Empresa</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -54,24 +54,9 @@ export default function AtivoDetalhes() {
   // --- AÇÃO: SALVAR (ATUALIZAR) ---
   const handleSalvar = async () => {
     try {
-      const payload = { ...editData };
-
-      if (payload.cliente && typeof payload.cliente === 'object') {
-          payload.cliente = payload.cliente.id;
-      }
-      
-      delete payload.id;
-      delete payload.created_at;
-      delete payload.updated_at;
-      delete payload.historico_servicos; 
-      delete payload.historico_os;
-      delete payload.nome_cliente;
-
-      await ativoService.atualizar(id, payload);
+      await ativoService.atualizar(id, editData);
       alert("✅ Ficha técnica atualizada com sucesso!");
-      
       carregarDados();
-
     } catch (error) {
       console.error("Erro ao salvar:", error);
       const msg = error.response?.data ? JSON.stringify(error.response.data) : "Erro de conexão.";

@@ -15,7 +15,7 @@ COPY . .
 
 # O segredo: passamos variáveis falsas apenas para o build não quebrar
 # se o seu settings.py exigir DATABASE_URL ou SECRET_KEY
-RUN python manage.py collectstatic --noinput --settings=config.settings
+
 
 EXPOSE 8000
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application", "--workers", "3"]

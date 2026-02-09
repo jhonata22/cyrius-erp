@@ -14,6 +14,7 @@ import clienteService from '../services/clienteService';
 import documentacaoService from '../services/documentacaoService';
 import equipeService from '../services/equipeService';
 import chamadoService from '../services/chamadoService';
+import ativoService from '../services/ativoService';
 
 export default function Documentacao() {
   const { id } = useParams();
@@ -71,11 +72,12 @@ export default function Documentacao() {
       } else {
         const [dadosCliente, dadosAtivos] = await Promise.all([
           clienteService.buscarPorId(id),
-          documentacaoService.listarAtivos()
+          ativoService.listar(id)
         ]);
         
+        console.log('Ativos loaded:', dadosAtivos);
         setCliente(dadosCliente);
-        setAtivos(dadosAtivos.filter(a => a.cliente === parseInt(id)));
+        setAtivos(dadosAtivos || []);
 
         if (dadosCliente.documentacao_tecnica) {
           const doc = dadosCliente.documentacao_tecnica;
@@ -607,7 +609,7 @@ export default function Documentacao() {
                     <button onClick={() => setModalAberto('ativo')} className="bg-[#302464] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-[#7C69AF] transition-all active:scale-95">+ Adicionar Dispositivo</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {ativos.map(a => (
+                    {(ativos || []).map(a => (
                         <div key={a.id} onClick={() => navigate(`/ativos/${a.id}`)} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="p-3 bg-slate-50 text-[#7C69AF] rounded-xl group-hover:bg-[#302464] group-hover:text-white transition-all shadow-inner"><Monitor size={20}/></div>
