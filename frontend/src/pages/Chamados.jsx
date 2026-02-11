@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   AlertTriangle, ChevronRight, Search, Info, Monitor, Filter,
@@ -41,10 +41,10 @@ const ABAS_FILTRO = [
 
 export default function Chamados() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // 2. CONFIGURAR HOOK DE EMPRESAS
   const { empresas } = useEmpresas();
-  const [filtroEmpresa, setFiltroEmpresa] = useState('');
 
   const [loading, setLoading] = useState(true);
   
@@ -55,17 +55,19 @@ export default function Chamados() {
   const [ativos, setAtivos] = useState([]);
   
   // PAGINAÇÃO E FILTROS
-  const [pagina, setPagina] = useState(1);
+  const [pagina, setPagina] = useState(parseInt(searchParams.get('page') || '1'));
   const [totalItens, setTotalItens] = useState(0);
-  const [abaAtiva, setAbaAtiva] = useState('PENDENTES'); 
+  const [abaAtiva, setAbaAtiva] = useState(searchParams.get('tab') || 'TODOS'); 
+  const [contadores, setContadores] = useState({ PENDENTES: 0, ANDAMENTO: 0, VISITAS: 0 }); 
+  const [filtroEmpresa, setFiltroEmpresa] = useState(searchParams.get('empresa') || '');
   
   const [filtrosData, setFiltrosData] = useState({
-    inicio: '',
-    fim: ''
+    inicio: searchParams.get('inicio') || '',
+    fim: searchParams.get('fim') || ''
   });
   
   // UI
-  const [busca, setBusca] = useState('');
+  const [busca, setBusca] = useState(searchParams.get('q') || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('REMOTO'); 
   
@@ -91,7 +93,10 @@ export default function Chamados() {
       // Descobre qual status mandar pro backend baseado na aba ativa
       const statusFiltro = ABAS_FILTRO.find(a => a.id === abaAtiva)?.statusBackend || '';
 
-      const [responseChamados, e, cli, atv] = await Promise.all([
+      const [
+        responseChamados, e, cli, atv,
+        pend, and, vis
+      ] = await Promise.all([
         chamadoService.listar({
             page: pagina,
             data_inicio: filtrosData.inicio,
@@ -101,8 +106,17 @@ export default function Chamados() {
         }, empresaId), 
         equipeService.listar(empresaId),
         clienteService.listar(empresaId),
-        ativoService.listar(empresaId)
+        ativoService.listar(empresaId),
+        chamadoService.listar({ status: 'ABERTO', page_size: 1 }, empresaId),
+        chamadoService.listar({ status: 'EM_ANDAMENTO', page_size: 1 }, empresaId),
+        chamadoService.listar({ status: 'AGENDADO', page_size: 1 }, empresaId),
       ]);
+
+      setContadores({
+        PENDENTES: pend.count || 0,
+        ANDAMENTO: and.count || 0,
+        VISITAS: vis.count || 0,
+      });
 
       const listaTratada = responseChamados?.results || (Array.isArray(responseChamados) ? responseChamados : []);
       setChamados(listaTratada);
@@ -258,19 +272,31 @@ export default function Chamados() {
 
         {/* ABAS DE FILTRO DE STATUS */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {ABAS_FILTRO.map(aba => (
-                <button
-                    key={aba.id}
-                    onClick={() => { setAbaAtiva(aba.id); setPagina(1); }}
-                    className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border
-                        ${abaAtiva === aba.id 
-                            ? 'bg-[#302464] text-white border-[#302464] shadow-md' 
-                            : 'bg-white text-slate-400 border-slate-200 hover:border-[#7C69AF] hover:text-[#7C69AF]'
-                        }`}
-                >
-                    {aba.label}
-                </button>
-            ))}
+            {ABAS_FILTRO.map(aba => {
+                const count = aba.id === 'PENDENTES' ? contadores.PENDENTES :
+                              aba.id === 'ANDAMENTO' ? contadores.ANDAMENTO :
+                              aba.id === 'VISITAS' ? contadores.VISITAS : 0;
+                return (
+                    <button
+                        key={aba.id}
+                        onClick={() => { setAbaAtiva(aba.id); setPagina(1); }}
+                        className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border flex items-center
+                            ${abaAtiva === aba.id 
+                                ? 'bg-[#302464] text-white border-[#302464] shadow-md' 
+                                : 'bg-white text-slate-400 border-slate-200 hover:border-[#7C69AF] hover:text-[#7C69AF]'
+                            }`}
+                    >
+                        {aba.label}
+                        {count > 0 && (
+                            <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] ${ 
+                                abaAtiva === aba.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                                {count}
+                            </span>
+                        )}
+                    </button>
+                )
+            })}
         </div>
 
         {/* BARRA DE PESQUISA E DATAS */}
