@@ -540,9 +540,9 @@ export default function ServicoDetalhes() {
                                         alt={anexo.descricao || 'Foto do anexo'}
                                         className="w-full h-full object-cover rounded-lg bg-slate-200"
                                         onError={(e) => {
-                                            e.target.onerror = null; // Previne loops
-                                            e.target.src = 'https://via.placeholder.com/300x200.png?text=IMAGEM+NÃO+ENCONTRADA';
-                                            e.target.alt = 'Arquivo não encontrado no ambiente de desenvolvimento';
+                                            e.target.onerror = null; // Prevent infinite loop
+                                            e.target.src = 'https://via.placeholder.com/150?text=Arquivo+Nao+Encontrado';
+                                            e.target.alt = 'Arquivo não encontrado';
                                         }}
                                     />
                                 ) : (
