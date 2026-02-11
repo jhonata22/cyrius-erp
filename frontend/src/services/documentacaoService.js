@@ -16,8 +16,8 @@ const documentacaoService = {
   },
 
   // Busca lista de ativos para a aba Inventário
-  listarAtivos: async () => {
-    const response = await api.get('/ativos/');
+  listarAtivos: async (clienteId) => {
+    const response = await api.get(`/ativos/?cliente=${clienteId}`);
     return response.data;
   },
   

@@ -17,7 +17,15 @@ const ativoService = {
   },
 
   criar: async (dados) => {
-    const response = await api.post('/ativos/', dados);
+    const payload = { ...dados };
+
+    // Mapeia o campo 'cliente' para 'cliente_id' para compatibilidade com o backend.
+    if (payload.cliente) {
+        payload.cliente_id = payload.cliente;
+        delete payload.cliente;
+    }
+
+    const response = await api.post('/ativos/', payload);
     return response.data;
   },
 

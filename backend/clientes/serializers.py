@@ -38,7 +38,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     contratos = ContratoClienteSerializer(many=True, read_only=True)
     nome_exibicao = serializers.SerializerMethodField()
     
-    documentacao_tecnica = DocumentacaoTecnicaSerializer(read_only=True)
+    documentacao_tecnica = serializers.SerializerMethodField()
 
     class Meta:
         model = Cliente
@@ -46,6 +46,17 @@ class ClienteSerializer(serializers.ModelSerializer):
 
     def get_nome_exibicao(self, obj):
         return obj.nome if obj.nome else obj.razao_social
+
+    def get_documentacao_tecnica(self, obj):
+        """
+        Retorna os dados da documentação técnica associada, ou null se não existir.
+        Trata o caso de RelatedObjectDoesNotExist para relações OneToOne reversas.
+        """
+        try:
+            doc = obj.documentacao_tecnica
+            return DocumentacaoTecnicaSerializer(doc).data
+        except DocumentacaoTecnica.DoesNotExist:
+            return None
 
     # === VALIDAÇÕES DE SEGURANÇA E LIMPEZA ===
 

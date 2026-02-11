@@ -60,9 +60,21 @@ export default function Documentacao() {
   };
 
   const carregarDados = useCallback(async () => {
+    // Limpa o estado anterior para evitar "piscar" de dados antigos
+    setLoading(true);
+    setCliente(null);
+    setActiveTab('geral');
+    setTextos({
+      configuracao_mikrotik: '',
+      topologia_rede: '',
+      estrutura_servidores: '',
+      rotina_backup: '',
+      pontos_fracos_melhorias: ''
+    });
+    setDocId(null);
+    setAtivos([]);
+    
     try {
-      setLoading(true);
-
       const usuarioLogado = await equipeService.getMe();
       setCurrentUser(usuarioLogado);
 
@@ -72,10 +84,9 @@ export default function Documentacao() {
       } else {
         const [dadosCliente, dadosAtivos] = await Promise.all([
           clienteService.buscarPorId(id),
-          ativoService.listar(id)
+          documentacaoService.listarAtivos(id) // Corrigido para usar o service correto com filtro
         ]);
         
-        console.log('Ativos loaded:', dadosAtivos);
         setCliente(dadosCliente);
         setAtivos(dadosAtivos || []);
 
@@ -92,7 +103,7 @@ export default function Documentacao() {
         }
       }
     } catch (error) {
-      console.error(error);
+      console.error("Falha ao carregar dados:", error);
     } finally {
       setLoading(false);
     }
@@ -179,13 +190,57 @@ export default function Documentacao() {
       }
   };
 
+  // Função para recarregar os dados do cliente ATUAL sem resetar a UI
+  const refreshCurrentClientData = async () => {
+    if (!id) return;
+    try {
+      // setLoading(true); // Opcional: pode causar um "piscar" do loading.
+      const [dadosCliente, dadosAtivos] = await Promise.all([
+        clienteService.buscarPorId(id),
+        documentacaoService.listarAtivos(id)
+      ]);
+      
+      setCliente(dadosCliente);
+      setAtivos(dadosAtivos || []);
+
+      if (dadosCliente.documentacao_tecnica) {
+        const doc = dadosCliente.documentacao_tecnica;
+        setDocId(doc.id);
+        setTextos({
+          configuracao_mikrotik: doc.configuracao_mikrotik || '',
+          topologia_rede: doc.topologia_rede || '', 
+          estrutura_servidores: doc.estrutura_servidores || '',
+          rotina_backup: doc.rotina_backup || '',
+          pontos_fracos_melhorias: doc.pontos_fracos_melhorias || ''
+        });
+      } else {
+        setDocId(null);
+        setTextos({
+          configuracao_mikrotik: '',
+          topologia_rede: '',
+          estrutura_servidores: '',
+          rotina_backup: '',
+          pontos_fracos_melhorias: ''
+        });
+      }
+    } catch (e) {
+      console.error("Falha ao atualizar dados do cliente:", e);
+      alert("Não foi possível recarregar os dados. Por favor, atualize a página.");
+    } finally {
+      // setLoading(false);
+    }
+  };
+
   const handleSalvarTextos = async () => {
     try {
       const payload = { cliente: parseInt(id), ...textos };
-      if (docId) await documentacaoService.atualizar(docId, payload);
-      else await documentacaoService.criar(payload);
+      if (docId) {
+        await documentacaoService.atualizar(docId, payload);
+      } else {
+        await documentacaoService.criar(payload);
+      }
       alert("Dossiê Cyrius Atualizado!");
-      carregarDados();
+      await refreshCurrentClientData();
     } catch (error) {
       alert("Erro ao salvar textos.");
     }
@@ -194,29 +249,33 @@ export default function Documentacao() {
   const handleSalvarModal = async (e) => {
     e.preventDefault();
     try {
-      let url = '';
       let payload;
+      let url = '';
 
-      if (modalAberto === 'contrato') {
+      if (modalAberto === 'ativo') {
+        payload = { ...formTemp, cliente: parseInt(id) };
+        await ativoService.criar(payload);
+      } 
+      else if (modalAberto === 'contrato') {
         url = '/contratos/';
         const formData = new FormData();
         formData.append('cliente', id);
         formData.append('arquivo', formTemp.arquivo);
         formData.append('descricao', formTemp.descricao);
         payload = formData;
-      } else {
+        await documentacaoService.salvarItem(url, payload);
+      } 
+      else {
         payload = { ...formTemp, cliente: parseInt(id) };
         if (modalAberto === 'contato') url = '/contatos/';
         if (modalAberto === 'provedor') url = '/provedores/';
-        if (modalAberto === 'email') url = '/emails/'; 
-        if (modalAberto === 'ativo') url = '/ativos/';
+        if (modalAberto === 'email') url = '/emails/';
+        await documentacaoService.salvarItem(url, payload);
       }
-
-      await documentacaoService.salvarItem(url, payload);
       alert("Registro adicionado!");
       setModalAberto(null);
       setFormTemp({});
-      carregarDados();
+      await refreshCurrentClientData();
     } catch (error) {
       console.error(error);
       alert("Erro ao salvar. Verifique os campos.");
@@ -227,7 +286,7 @@ export default function Documentacao() {
     if (!window.confirm("Deseja remover permanentemente?")) return;
     try {
       await documentacaoService.excluirItem(url, itemId);
-      carregarDados();
+      await refreshCurrentClientData();
     } catch (error) {
       alert("Erro ao excluir.");
     }
