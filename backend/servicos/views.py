@@ -129,6 +129,17 @@ class ItemServicoViewSet(viewsets.ModelViewSet):
             raise ValidationError("Operação bloqueada: Ordem de Serviço já finalizada.")
         instance.delete()
 
+class AnexoServicoViewSet(viewsets.ModelViewSet):
+    queryset = AnexoServico.objects.all()
+    serializer_class = AnexoServicoSerializer
+    permission_classes = [IsFuncionario]
+
+    def perform_destroy(self, instance):
+        # Bloquear exclusão se a OS principal estiver concluída/finalizada
+        if instance.os.status in [OrdemServico.Status.CONCLUIDO, OrdemServico.Status.FINALIZADO]:
+            raise ValidationError("Operação bloqueada: A Ordem de Serviço já foi concluída.")
+        instance.delete()
+
 class NotificacaoViewSet(viewsets.ModelViewSet):
     serializer_class = NotificacaoSerializer
     permission_classes = [IsFuncionario]

@@ -28,6 +28,7 @@ from estoque.views import (
 from servicos.views import (
     OrdemServicoViewSet, 
     ItemServicoViewSet, 
+    AnexoServicoViewSet,
     NotificacaoViewSet
 )
 from chamados.views import ChamadoViewSet
@@ -66,6 +67,7 @@ router.register(r'ativos', AtivoViewSet)
 # --- Serviços (OS) ---
 router.register(r'servicos', OrdemServicoViewSet, basename='servicos')
 router.register(r'itens-servico', ItemServicoViewSet)
+router.register(r'anexos-servico', AnexoServicoViewSet)
 router.register(r'notificacoes', NotificacaoViewSet, basename='notificacao')
 
 # --- Financeiro ---

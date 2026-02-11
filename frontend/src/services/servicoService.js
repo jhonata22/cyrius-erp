@@ -57,6 +57,12 @@ const servicoService = {
     return response.data;
   },
 
+  // Remove anexo da OS
+  removerAnexo: async (anexoId) => {
+    const response = await api.delete(`/anexos-servico/${anexoId}/`);
+    return response.data;
+  },
+
   // 3. Lógica de Finalização e Anexos
 
   /**

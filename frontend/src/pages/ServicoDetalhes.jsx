@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
-  Truck, Printer, QrCode,
+  Truck, Printer, QrCode, Download,
   Edit, Monitor, Users, UserPlus, X 
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
@@ -225,6 +225,17 @@ export default function ServicoDetalhes() {
       carregarDados();
     } catch (error) {
       alert("Erro ao enviar arquivo.");
+    }
+  };
+
+  const handleExcluirAnexo = async (anexoId) => {
+    if(!window.confirm("Tem certeza que deseja remover este anexo?")) return;
+
+    try {
+        await servicoService.removerAnexo(anexoId);
+        carregarDados();
+    } catch (error) {
+        alert("Erro ao excluir anexo.");
     }
   };
 
@@ -519,20 +530,49 @@ export default function ServicoDetalhes() {
                     )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {os.anexos.map(anexo => (
-                        <div key={anexo.id} className="group relative bg-slate-50 rounded-2xl p-4 border border-slate-100 hover:shadow-lg transition-all">
-                             <div className="mb-3 text-[#7C69AF]">
-                                {anexo.tipo === 'FOTO' ? <Image size={24}/> : <FileText size={24}/>}
-                             </div>
-                             <p className="font-bold text-slate-700 text-xs truncate mb-1">{anexo.tipo}</p>
-                             <p className="text-[10px] text-slate-400 truncate">{anexo.descricao || 'Sem descrição'}</p>
-                             <a href={anexo.arquivo} target="_blank" rel="noopener noreferrer" className="absolute top-2 right-2 p-1.5 bg-white rounded-lg text-slate-400 hover:text-[#302464] shadow-sm opacity-0 group-hover:opacity-100 transition-all">
-                                <Download size={14} />
-                             </a>
-                        </div>
-                    ))}
-                    {os.anexos.length === 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {(os.anexos && Array.isArray(os.anexos) && os.anexos.length > 0) ? (
+                        os.anexos.map(anexo => (
+                            <div key={anexo.id} className="group relative bg-slate-50 rounded-2xl p-3 border border-slate-100 hover:shadow-lg transition-all flex flex-col aspect-square">
+                                {anexo.tipo === 'FOTO' ? (
+                                    <img 
+                                        src={anexo.arquivo} 
+                                        alt={anexo.descricao || 'Foto do anexo'}
+                                        className="w-full h-full object-cover rounded-lg bg-slate-200"
+                                        onError={(e) => {
+                                            e.target.onerror = null; // Previne loops
+                                            e.target.src = 'https://via.placeholder.com/300x200.png?text=IMAGEM+NÃO+ENCONTRADA';
+                                            e.target.alt = 'Arquivo não encontrado no ambiente de desenvolvimento';
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="flex-grow flex flex-col items-center justify-center text-center p-2">
+                                        <FileText size={32} className="text-[#7C69AF] mb-2"/>
+                                        <p className="font-bold text-slate-600 text-xs truncate mb-1" title={anexo.descricao}>{anexo.tipo}</p>
+                                        <p className="text-[10px] text-slate-400 truncate">{anexo.descricao || 'Sem descrição'}</p>
+                                    </div>
+                                )}
+                                <a 
+                                    href={anexo.arquivo} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-lg text-slate-500 hover:text-[#302464] shadow-md opacity-0 group-hover:opacity-100 transition-all"
+                                    title="Baixar anexo (pode não existir em dev)"
+                                >
+                                    <Download size={14} />
+                                </a>
+                                {!isLocked && (
+                                    <button
+                                        onClick={() => handleExcluirAnexo(anexo.id)}
+                                        className="absolute bottom-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-lg text-red-500 hover:bg-red-100 shadow-md opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Excluir anexo"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        ))
+                    ) : (
                         <p className="col-span-full text-center text-slate-400 text-xs py-4">Nenhum anexo.</p>
                     )}
                 </div>

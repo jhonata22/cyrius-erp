@@ -19,6 +19,14 @@ class AnexoServicoSerializer(serializers.ModelSerializer):
         model = AnexoServico
         fields = '__all__'
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.arquivo:
+            request = self.context.get('request')
+            if request:
+                representation['arquivo'] = request.build_absolute_uri(instance.arquivo.url)
+        return representation
+
 class OrdemServicoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
     nome_tecnico = serializers.CharField(source='tecnico_responsavel.nome', read_only=True)
