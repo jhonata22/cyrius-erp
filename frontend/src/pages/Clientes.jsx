@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, MapPin, Calendar, Building2, 
-  ChevronRight, DollarSign, X, Camera, Store, FileText 
+  ChevronRight, DollarSign, X, Camera, Store, FileText, Lock 
 } from 'lucide-react';
 
 import clienteService from '../services/clienteService';
@@ -221,16 +221,26 @@ export default function Clientes() {
             <div 
               key={cliente.id} 
               onClick={() => navigate(`/documentacao/${cliente.id}`)}
-              className="group bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
+              className={`group bg-white p-6 rounded-[2.2rem] border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden
+                ${!cliente.ativo ? 'border-red-100 opacity-60 grayscale-[0.2]' : 'border-slate-100'}
+              `}
             >
+              {/* BADGE */}
               <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest
-                ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}>
-                {cliente.tipo_cliente}
+                ${!cliente.ativo 
+                   ? 'bg-red-50 text-red-600' 
+                   : cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'
+                }`}>
+                {!cliente.ativo ? 'BLOQUEADO' : cliente.tipo_cliente}
               </div>
 
+              {/* AVATAR & INFO */}
               <div className="flex items-center gap-4 mb-6">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-inner overflow-hidden shrink-0
-                  ${cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'}`}>
+                  ${!cliente.ativo 
+                     ? 'bg-slate-200 text-slate-400' 
+                     : cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'
+                  }`}>
                    {cliente.foto ? (
                        <img src={cliente.foto} alt={cliente.nome_exibicao} className="w-full h-full object-cover" />
                    ) : (
@@ -269,8 +279,12 @@ export default function Clientes() {
                 )}
               </div>
 
+              {/* FOOTER */}
               <div className="mt-6 pt-4 border-t border-slate-50 flex justify-between items-center text-slate-300 group-hover:text-[#7C69AF] transition-colors">
-                 <span className="text-[10px] font-black uppercase tracking-widest">Ficha Técnica</span>
+                 <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                    {!cliente.ativo && <Lock size={12} className="text-red-400" />}
+                    Ficha Técnica
+                 </span>
                  <ChevronRight size={18} />
               </div>
             </div>
