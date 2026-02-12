@@ -669,7 +669,7 @@ export default function Documentacao() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {(ativos || []).map(a => (
-                        <div key={a.id} onClick={() => navigate(`/ativos/${a.id}`)} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden">
+                        <div key={a.id} onClick={() => navigate(`/ativos/${a.codigo_identificacao}`)} className="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="p-3 bg-slate-50 text-[#7C69AF] rounded-xl group-hover:bg-[#302464] group-hover:text-white transition-all shadow-inner"><Monitor size={20}/></div>
                                 <span className="text-[8px] font-black bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-widest text-slate-400 border border-slate-50">{a.tipo}</span>

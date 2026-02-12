@@ -27,7 +27,15 @@ export default function AtivoDetalhes() {
     try {
       setLoadingAtivo(true);
       
-      const dadosAtivo = await ativoService.buscarPorId(id);
+      // Verifica se o ID parece ser um código hexadecimal ou um ID numérico
+      const isHexCode = /^[0-9A-F]{6}$/i.test(id);
+      let dadosAtivo;
+
+      if (isHexCode) {
+        dadosAtivo = await ativoService.buscarPorCodigo(id);
+      } else {
+        dadosAtivo = await ativoService.buscarPorId(id);
+      }
       
       setAtivo(dadosAtivo);
       setEditData({ ...dadosAtivo });
@@ -35,7 +43,7 @@ export default function AtivoDetalhes() {
       setHistoricoChamados(dadosAtivo.historico_servicos || []);
 
       try {
-        const osResults = await servicoService.listar({ ativo: id });
+        const osResults = await servicoService.listar({ ativo: dadosAtivo.id });
         setHistoricoOS(osResults);
       } catch (err) {
         console.warn("Nenhuma OS encontrada ou erro na busca:", err);
@@ -44,17 +52,19 @@ export default function AtivoDetalhes() {
     } catch (error) {
       console.error("Erro fatal ao carregar:", error);
       alert("Erro ao carregar dados do ativo. Verifique se ele existe.");
+      navigate(-1); // Volta para a página anterior em caso de erro grave
     } finally {
       setLoadingAtivo(false);
     }
-  }, [id]);
+  }, [id, navigate]);
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
   // --- AÇÃO: SALVAR (ATUALIZAR) ---
   const handleSalvar = async () => {
     try {
-      await ativoService.atualizar(id, editData);
+      if (!ativo?.id) return alert("Erro: ID do ativo não encontrado para salvar.");
+      await ativoService.atualizar(ativo.id, editData);
       alert("✅ Ficha técnica atualizada com sucesso!");
       carregarDados();
     } catch (error) {
@@ -69,7 +79,8 @@ export default function AtivoDetalhes() {
       if (!window.confirm("⚠️ Tem certeza absoluta? Essa ação não pode ser desfeita.")) return;
       
       try {
-          await ativoService.excluir(id);
+          if (!ativo?.id) return alert("Erro: ID do ativo não encontrado para excluir.");
+          await ativoService.excluir(ativo.id);
           alert("Ativo removido com sucesso.");
           navigate(-1); 
       } catch (error) {
@@ -99,7 +110,10 @@ export default function AtivoDetalhes() {
                 <div class="etiqueta">
                     <h2>${ativo?.nome}</h2>
                     ${svgData}
-                    <div class="footer">ID: ${ativo?.id} | ${ativo?.tipo}<br/><strong>CYRIUS ERP - PATRIMÔNIO</strong></div>
+                    <div class="footer">
+                        <h3 style="margin: 5px 0; font-size: 16px;">ID: ${ativo.codigo_identificacao}</h3>
+                        <strong style="font-size: 8px;">CYRIUS ERP - PATRIMÔNIO</strong>
+                    </div>
                 </div>
                 <script>window.onload = function() { window.print(); window.close(); }</script>
             </body>
@@ -112,7 +126,7 @@ export default function AtivoDetalhes() {
   
   if (!ativo) return <div className="p-20 text-center text-red-500 font-bold">Ativo não localizado.</div>;
 
-  const qrValue = window.location.href; 
+  const qrValue = `${window.location.origin}/track/${ativo.codigo_identificacao || 'ERROR'}` 
 
   return (
     // AJUSTE: Adicionado px-4 para não colar na borda em mobile
@@ -167,6 +181,10 @@ export default function AtivoDetalhes() {
              <p className="text-[#A696D1] text-[10px] font-black uppercase tracking-[0.2em] mt-2 mb-6 border border-[#A696D1]/30 rounded-full py-1 px-3 inline-block bg-[#302464]/50 backdrop-blur-md">
                 {editData.tipo}
              </p>
+
+             <div className="font-mono text-3xl font-black tracking-[0.5em] text-white/90 mt-6 border-2 border-white/20 rounded-xl py-2">
+                {ativo.codigo_identificacao || 'GERANDO...'}
+             </div>
              
              <button onClick={handleImprimirEtiqueta} className="w-full text-[10px] font-bold bg-[#7C69AF] hover:bg-white hover:text-[#302464] py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg">
                 <Printer size={14} /> IMPRIMIR ETIQUETA

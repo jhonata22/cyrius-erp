@@ -1,4 +1,5 @@
 from django.db import models
+import secrets
 
 class Ativo(models.Model):
     class TipoAtivo(models.TextChoices):
@@ -16,6 +17,15 @@ class Ativo(models.Model):
     tipo = models.CharField(max_length=20, choices=TipoAtivo.choices)
     marca_modelo = models.CharField(max_length=100, blank=True)
     
+    codigo_identificacao = models.CharField(
+        max_length=6, 
+        unique=True, 
+        db_index=True, 
+        editable=False, 
+        null=True, 
+        blank=True
+    )
+
     # === CAMPO QUE FALTAVA (Correção do Erro 1) ===
     numero_serial = models.CharField(max_length=100, null=True, blank=True)
     
@@ -42,3 +52,11 @@ class Ativo(models.Model):
 
     def __str__(self): 
         return f"{self.nome} ({self.tipo})"
+
+    def save(self, *args, **kwargs):
+        if not self.codigo_identificacao:
+            code = secrets.token_hex(3).upper()
+            while Ativo.objects.filter(codigo_identificacao=code).exists():
+                code = secrets.token_hex(3).upper()
+            self.codigo_identificacao = code
+        super().save(*args, **kwargs)

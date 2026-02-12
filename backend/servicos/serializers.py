@@ -31,6 +31,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
     nome_tecnico = serializers.CharField(source='tecnico_responsavel.nome', read_only=True)
     nome_ativo = serializers.CharField(source='ativo.nome', read_only=True)
+    codigo_identificacao_ativo = serializers.CharField(source='ativo.codigo_identificacao', read_only=True)
     empresa_nome = serializers.CharField(source='empresa.nome_fantasia', read_only=True)
 
     itens = ItemServicoSerializer(many=True, read_only=True)

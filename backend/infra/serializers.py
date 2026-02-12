@@ -23,7 +23,8 @@ class AtivoSerializer(serializers.ModelSerializer):
             'marca_modelo', 'numero_serial', 'descricao',
             'processador', 'memoria_ram', 'armazenamento', 
             'sistema_operacional', 'anydesk_id', 'usuario_local', 
-            'senha_local', 'ip_local', 'historico_servicos'
+            'senha_local', 'ip_local', 'historico_servicos',
+            'codigo_identificacao'
         ]
 
     def get_historico_servicos(self, obj):

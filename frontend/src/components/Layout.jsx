@@ -3,11 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X, Building2
+  Wrench, Menu, X, Building2, ScanLine
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
 import NotificationBell from './NotificationBell';
+import AtivoScanner from './AtivoScanner';
 
 const scrollbarStyle = `
   .sidebar-scroll::-webkit-scrollbar { width: 5px; }
@@ -53,6 +54,7 @@ const SidebarItem = ({ icon: Icon, text, to, isExpanded, onClick }) => {
 };
 
 export default function Layout({ children }) {
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
@@ -172,10 +174,13 @@ export default function Layout({ children }) {
                   <Menu size={24} />
                 </button>
 
-                <div className="relative flex-1 max-w-96 group hidden sm:block">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7C69AF] transition-colors" size={18} />
-                    <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-2.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-500/5 transition-all text-sm" />
-                </div>
+                <button
+                  onClick={() => setIsScannerOpen(true)}
+                  className="flex items-center sm:gap-3 p-3 sm:px-4 sm:py-2.5 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-[#302464] hover:border-[#302464]/50 transition-all shadow-sm group"
+                >
+                  <ScanLine size={20} />
+                  <span className="hidden sm:inline font-bold text-sm">Localizar Ativo</span>
+                </button>
             </div>
             
             <div className="flex items-center gap-2 md:gap-5 ml-auto">
@@ -212,6 +217,7 @@ export default function Layout({ children }) {
           </div>
         </main>
       </div>
+      <AtivoScanner isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} />
     </div>
   );
 }

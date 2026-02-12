@@ -406,7 +406,7 @@ export default function ServicoDetalhes() {
                 
                 {os.ativo && (
                     <div 
-                        onClick={() => navigate(`/ativos/${os.ativo}`)}
+                        onClick={() => navigate(`/ativos/${os.codigo_identificacao_ativo}`)}
                         className="flex items-center gap-2 mt-2 text-[#7C69AF] hover:text-[#302464] bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg w-fit cursor-pointer transition-colors border border-purple-100 group"
                     >
                         <Monitor size={14} className="group-hover:scale-110 transition-transform" />

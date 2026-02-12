@@ -10,6 +10,13 @@ const ativoService = {
     return response.data;
   },
 
+  buscarPorCodigo: async (codigo) => {
+    const response = await api.get('/ativos/buscar-por-codigo/', { 
+      params: { codigo }
+    });
+    return response.data;
+  },
+
   buscarPorId: async (id) => {
     // ATENÇÃO: A barra no final é OBRIGATÓRIA no Django
     const response = await api.get(`/ativos/${id}/`);
