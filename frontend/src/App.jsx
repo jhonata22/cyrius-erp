@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { ChamadosProvider } from './contexts/ChamadosContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 
@@ -54,8 +55,17 @@ function App() {
       <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
       <Route path="/fornecedores/:id" element={<RotaProtegida><FornecedorDetalhes /></RotaProtegida>} />
       <Route path="/ativos/:id" element={<RotaProtegida><AtivoDetalhes /></RotaProtegida>} />
-      <Route path="/chamados" element={<RotaProtegida><Chamados /></RotaProtegida>} />
-      <Route path="/chamados/:id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
+      <Route
+        path="/chamados"
+        element={
+            <ChamadosProvider>
+               <Outlet /> 
+            </ChamadosProvider>
+        }
+      >
+        <Route index element={<RotaProtegida><Chamados /></RotaProtegida>} />
+        <Route path=":id" element={<RotaProtegida><ChamadoDetalhes /></RotaProtegida>} />
+      </Route>
       
       
       {/* A documentação é aberta a todos, mas a aba CONTRATOS é protegida internamente */}

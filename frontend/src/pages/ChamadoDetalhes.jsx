@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useChamados } from '../contexts/ChamadosContext';
 import { 
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
@@ -28,6 +29,7 @@ const PRIORIDADE_MAP = {
 };
 
 export default function ChamadoDetalhes() {
+  const { carregarDados: recarregarLista } = useChamados();
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -126,6 +128,7 @@ export default function ChamadoDetalhes() {
       // Envia os dados atualizados
       await chamadoService.atualizar(id, payload);
       alert("Chamado atualizado com sucesso!");
+      recarregarLista(); // Recarrega a lista no contexto
       carregarDados(); // Recarrega para garantir sincronia
     } catch (error) { 
       console.error(error);
@@ -138,6 +141,7 @@ export default function ChamadoDetalhes() {
       await chamadoService.finalizar(id, dadosFinalizacao);
       alert("Chamado finalizado com sucesso!");
       setIsFinalizarOpen(false);
+      recarregarLista(); // Recarrega a lista no contexto
       carregarDados();
     } catch (error) {
       console.error(error);
