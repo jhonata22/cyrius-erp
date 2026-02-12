@@ -9,6 +9,7 @@ import {
 import QRCode from "react-qr-code"; 
 import ativoService from '../services/ativoService';
 import servicoService from '../services/servicoService'; 
+import chamadoService from '../services/chamadoService';
 
 export default function AtivoDetalhes() {
   const { id } = useParams();
@@ -40,13 +41,26 @@ export default function AtivoDetalhes() {
       setAtivo(dadosAtivo);
       setEditData({ ...dadosAtivo });
 
-      setHistoricoChamados(dadosAtivo.historico_servicos || []);
+      // Limpa dados antigos e busca o histórico de forma assíncrona
+      setHistoricoChamados([]);
+      setHistoricoOS([]);
 
-      try {
-        const osResults = await servicoService.listar({ ativo: dadosAtivo.id });
-        setHistoricoOS(osResults);
-      } catch (err) {
-        console.warn("Nenhuma OS encontrada ou erro na busca:", err);
+      if (dadosAtivo && dadosAtivo.id) {
+          try {
+              const chamadosResponse = await chamadoService.listar({ ativo: dadosAtivo.id });
+              // A API pode retornar a lista direto ou um objeto de paginação
+              setHistoricoChamados(chamadosResponse.results || chamadosResponse || []); 
+          } catch (err) {
+              console.warn("Nenhum chamado encontrado para este ativo ou erro na busca:", err);
+              setHistoricoChamados([]); // Garante que é uma array em caso de erro
+          }
+    
+          try {
+            const osResults = await servicoService.listar({ ativo: dadosAtivo.id });
+            setHistoricoOS(osResults);
+          } catch (err) {
+            console.warn("Nenhuma OS encontrada ou erro na busca:", err);
+          }
       }
 
     } catch (error) {

@@ -16,6 +16,7 @@ class ChamadoTecnicoSerializer(serializers.ModelSerializer):
 class ChamadoSerializer(serializers.ModelSerializer):
     # IDs no POST
     cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
+    tecnico = serializers.PrimaryKeyRelatedField(queryset=Equipe.objects.all(), required=False, allow_null=True) # Tornando técnico não obrigatório temporariamente
     ativo = serializers.PrimaryKeyRelatedField(queryset=Ativo.objects.all(), required=False, allow_null=True)
     
     # Técnicos (Lista de IDs para escrita)
@@ -33,6 +34,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
 
     # Campos de leitura
     nome_cliente = serializers.SerializerMethodField()
+    nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True) # Nome do técnico responsável
     nome_ativo = serializers.CharField(source='ativo.nome', read_only=True)
     tipo_ativo = serializers.CharField(source='ativo.tipo', read_only=True)
     tecnicos_nomes = serializers.SerializerMethodField()
@@ -43,6 +45,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
             'id', 'empresa', 'empresa_nome', 
             'cliente', 'nome_cliente', 
             'ativo', 'nome_ativo', 'tipo_ativo',
+            'tecnico', 'nome_tecnico',
             'titulo', 'descricao_detalhada', 'origem', 
             'status', 'prioridade', 'tipo_atendimento', 
             'data_agendamento', 'custo_ida', 'custo_volta', 
@@ -51,7 +54,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
             'resolucao', 'valor_servico',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes']
+        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes', 'nome_tecnico']
 
     def get_tecnicos_nomes(self, obj):
         return [t.nome for t in obj.tecnicos.all()]
@@ -82,7 +85,14 @@ class ChamadoSerializer(serializers.ModelSerializer):
             representation['ativo'] = {
                 "id": instance.ativo.id,
                 "nome": instance.ativo.nome,
-                "tipo": instance.ativo.tipo
+                "tipo": instance.ativo.tipo,
+                "codigo_identificacao": instance.ativo.codigo_identificacao
+            }
+
+        if instance.tecnico:
+            representation['tecnico'] = {
+                "id": instance.tecnico.id,
+                "nome": instance.tecnico.nome
             }
             
         if instance.tecnicos.exists():

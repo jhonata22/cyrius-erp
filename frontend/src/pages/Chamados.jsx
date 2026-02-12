@@ -43,8 +43,9 @@ export default function Chamados() {
   // ESTADO COMPLETO DO FORMULÁRIO (Corrige erro de undefined)
   const [formData, setFormData] = useState({
     cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
-    prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', 
+    prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
     custo_ida: '', custo_volta: '', tecnicos: [],
+    tecnico: '', // Técnico responsável principal
     empresa: ''
   });
 
@@ -81,8 +82,9 @@ export default function Chamados() {
     setModalMode(mode);
     setFormData({
       cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
-      prioridade: 'MEDIA', origem: 'TELEFONE', data_agendamento: '', 
+      prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
       custo_ida: '', custo_volta: '', tecnicos: [],
+      tecnico: '',
       empresa: empresaPadrao
     });
     setIsModalOpen(true);
@@ -105,13 +107,14 @@ export default function Chamados() {
     e.preventDefault();
     if (!formData.empresa) return alert("Selecione a empresa responsável pelo chamado.");
     if (!formData.cliente) return alert("Selecione um cliente.");
+    if (!formData.tecnico) return alert("O técnico responsável é obrigatório.");
     if (clienteSelecionado && !clienteSelecionado.ativo) return alert("Ação bloqueada: Cliente desativado.");
     if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
     try {
       const payload = {
         ...formData,
-        status: modalMode === 'VISITA' ? 'AGENDADO' : 'ABERTO',
+        status: modalMode === 'VISITA' ? 'AGENDADO' : 'EM_ANDAMENTO',
         tipo_atendimento: modalMode,
         data_agendamento: formData.data_agendamento ? new Date(formData.data_agendamento).toISOString() : null,
         custo_ida: parseFloat(formData.custo_ida || 0),
@@ -119,10 +122,10 @@ export default function Chamados() {
         empresa: formData.empresa 
       };
 
-      await chamadoService.criar(payload);
+      const novoChamado = await chamadoService.criar(payload);
       setIsModalOpen(false);
-      carregarDados(); 
       alert("Chamado criado com sucesso!");
+      navigate(`/chamados/${novoChamado.id}`); // Redireciona para os detalhes
     } catch (err) {
       alert("Erro ao salvar o chamado. Verifique os dados.");
     }
@@ -342,6 +345,42 @@ export default function Chamados() {
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome || c.razao_social}</option>)}
                  </select>
                 </div>
+
+                {/* === INÍCIO: CAMPOS RESTAURADOS === */}
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnico Responsável</label>
+                    <select name="tecnico" required value={formData.tecnico} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700">
+                        <option value="">Selecione...</option>
+                        {equipe.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                    </select>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Canal de Comunicação</label>
+                    <select name="origem" value={formData.origem} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700">
+                        <option value="TELEFONE">Telefone</option>
+                        <option value="WHATSAPP">WhatsApp</option>
+                        <option value="EMAIL">E-mail</option>
+                        <option value="SISTEMA">Sistema</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </div>
+                
+                <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ativo Vinculado (Opcional)</label>
+                    <select 
+                        name="ativo"
+                        value={formData.ativo}
+                        onChange={handleInputChange}
+                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-medium text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!formData.cliente || ativosDoCliente.length === 0}
+                    >
+                        <option value="">{formData.cliente ? 'Nenhum ativo vinculado' : 'Selecione um cliente primeiro'}</option>
+                        {ativosDoCliente.map(a => <option key={a.id} value={a.id}>{a.nome + (a.tipo ? ` (${a.tipo})` : '')}</option>)}
+                    </select>
+                </div>
+                {/* === FIM: CAMPOS RESTAURADOS === */}
+
                 {/* ... Demais campos (titulo, descricao, etc) ... */}
                 <div className="md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto</label>

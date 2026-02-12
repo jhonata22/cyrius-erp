@@ -54,6 +54,18 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             except Equipe.DoesNotExist:
                 continue # Ignora se o ID for inválido
 
+    # 3.1 ATUALIZAR TÉCNICO RESPONSÁVEL (FK)
+    if 'tecnico' in dados_atualizacao:
+        tecnico_id = dados_atualizacao.get('tecnico')
+        if tecnico_id:
+            try:
+                tecnico_responsavel = Equipe.objects.get(pk=tecnico_id)
+                chamado.tecnico = tecnico_responsavel
+            except Equipe.DoesNotExist:
+                chamado.tecnico = None
+        else:
+            chamado.tecnico = None
+
     # 4. ATUALIZAR CUSTOS
     chamado.custo_ida = safe_decimal(dados_atualizacao.get('custo_ida', chamado.custo_ida))
     chamado.custo_volta = safe_decimal(dados_atualizacao.get('custo_volta', chamado.custo_volta))

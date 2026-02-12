@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
   Info, Briefcase, Users, History, Building2, 
-  Trash2, Plus, AlertTriangle
+  Trash2, Plus, AlertTriangle, Monitor
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
@@ -49,7 +49,8 @@ export default function ChamadoDetalhes() {
     data_agendamento: '',
     custo_ida: 0, 
     custo_volta: 0,
-    tecnicos: [] // Array de IDs
+    tecnico: '', // ID do técnico responsável
+    tecnicos: [] // Array de IDs da equipe
   });
 
   const custoTotal = useMemo(() => {
@@ -80,7 +81,8 @@ export default function ChamadoDetalhes() {
         custo_ida: dados.custo_ida || 0,
         custo_volta: dados.custo_volta || 0,
         data_agendamento: dados.data_agendamento ? dados.data_agendamento.slice(0, 16) : '',
-        tecnicos: dados.tecnicos ? dados.tecnicos.map(t => t.id) : [] // Inicializa IDs
+        tecnico: dados.tecnico ? dados.tecnico.id : '', // Popula o ID do técnico principal
+        tecnicos: dados.tecnicos ? dados.tecnicos.map(t => t.id) : [] // Inicializa IDs da equipe M2M
       });
 
     } catch (error) { 
@@ -346,6 +348,21 @@ export default function ChamadoDetalhes() {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">Técnico Responsável</label>
+                <select 
+                  value={editData.tecnico}
+                  onChange={e => setEditData({...editData, tecnico: e.target.value})} 
+                  disabled={isLocked}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]/20 disabled:opacity-50 text-sm"
+                >
+                  <option value="">Ninguém</option>
+                  {todosTecnicos.map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -374,6 +391,31 @@ export default function ChamadoDetalhes() {
                 <MapPin size={16} className="shrink-0 mt-0.5 text-[#7C69AF]"/> 
                 {cliente.endereco}
               </p>
+            </div>
+          )}
+
+          {chamado.ativo && (
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Monitor size={14} /> Ativo Vinculado
+              </h3>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 bg-blue-100 text-blue-600">
+                  <Monitor size={24} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-black text-sm leading-tight truncate text-slate-800">
+                      {chamado.ativo.nome}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase truncate">{chamado.ativo.tipo}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => navigate(`/ativos/${chamado.ativo.codigo_identificacao || chamado.ativo.id}`)}
+                className="w-full text-center bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors py-3 rounded-xl text-xs font-bold"
+              >
+                Ver Ficha do Ativo
+              </button>
             </div>
           )}
 

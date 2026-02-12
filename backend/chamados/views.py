@@ -67,6 +67,10 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filtro)
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
+
+        ativo_id = self.request.query_params.get('ativo')
+        if ativo_id:
+            queryset = queryset.filter(ativo_id=ativo_id)
             
         return queryset
 

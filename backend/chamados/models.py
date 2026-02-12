@@ -27,6 +27,13 @@ class Chamado(TimeStampedModel):
         VISITA = 'VISITA', 'Visita Técnica'
         LABORATORIO = 'LABORATORIO', 'Laboratório Interno'
 
+    class CanalComunicacao(models.TextChoices):
+        WHATSAPP = 'WHATSAPP', 'WhatsApp'
+        EMAIL = 'EMAIL', 'E-mail'
+        TELEFONE = 'TELEFONE', 'Telefone'
+        SISTEMA = 'SISTEMA', 'Sistema'
+        OUTRO = 'OUTRO', 'Outro'
+
     # === MULTI-EMPRESAS (Ajustado para CORE) ===
     empresa = models.ForeignKey(
         'core.Empresa',  # <--- APONTANDO PARA O APP CORE
@@ -61,9 +68,9 @@ class Chamado(TimeStampedModel):
 
     titulo = models.CharField(max_length=100)
     descricao_detalhada = models.TextField(max_length=500)
-    origem = models.CharField(max_length=50, default='TELEFONE')
+    origem = models.CharField(max_length=50, choices=CanalComunicacao.choices, default=CanalComunicacao.WHATSAPP)
     
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ABERTO)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.EM_ANDAMENTO)
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
     tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
     
