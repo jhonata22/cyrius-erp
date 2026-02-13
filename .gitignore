@@ -17,6 +17,8 @@ backend/db.sqlite3
 .env
 backend/.env
 
+cyrius-erp\docker-compose.yml
+
 backend/media/
 backend/fotos_equipe/
 backend/docs_estoque/
