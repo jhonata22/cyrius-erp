@@ -50,7 +50,7 @@ class OrdemServicoAdmin(admin.ModelAdmin):
     )
     
     # Adicione campos de busca no Cliente e Equipe para estes autocompletes funcionarem
-    autocomplete_fields = ['cliente', 'tecnico_responsavel', 'ativo']
+    autocomplete_fields = ['cliente', 'tecnico_responsavel', 'ativos']
     
     readonly_fields = ('created_at', 'updated_at', 'get_valor_total')
     
@@ -58,7 +58,7 @@ class OrdemServicoAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Identificação', {
-            'fields': ('titulo', 'cliente', 'tecnico_responsavel', 'ativo', 'status', 'tipo')
+            'fields': ('titulo', 'cliente', 'tecnico_responsavel', 'ativos', 'status', 'tipo')
         }),
         ('Detalhamento', {
             'fields': ('descricao_problema', 'relatorio_tecnico')

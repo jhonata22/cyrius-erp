@@ -19,8 +19,8 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Otimiza queries e inclui técnicos no prefetch
         qs = OrdemServico.objects.all().select_related(
-            'cliente', 'tecnico_responsavel', 'ativo', 'empresa'
-        ).prefetch_related('itens', 'anexos', 'tecnicos').order_by('-created_at')
+            'cliente', 'tecnico_responsavel', 'empresa'
+        ).prefetch_related('itens', 'anexos', 'tecnicos', 'ativos').order_by('-created_at')
 
         # 1. Filtro de Segurança (Quem vê o quê)
         if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
@@ -38,7 +38,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         cliente_id = self.request.query_params.get('cliente')
         
         if ativo_id:
-            qs = qs.filter(ativo_id=ativo_id)
+            qs = qs.filter(ativos__id=ativo_id)
         if cliente_id:
             qs = qs.filter(cliente_id=cliente_id)
 

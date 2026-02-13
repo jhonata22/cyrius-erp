@@ -31,7 +31,7 @@ class OrdemServico(TimeStampedModel):
     
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT, related_name='servicos')
     tecnico_responsavel = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
-    ativo = models.ForeignKey('infra.Ativo', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_os')
+    ativos = models.ManyToManyField('infra.Ativo', related_name='historico_os', blank=True)
 
     # Lista de Técnicos (Executores)
     tecnicos = models.ManyToManyField('equipe.Equipe', related_name='servicos_participante', blank=True)
