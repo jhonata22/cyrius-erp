@@ -368,7 +368,7 @@ export default function Servicos() {
                         >
                             <option value="">Selecione o Cliente...</option>
                             {clientes.map(c => (
-                                <option key={c.id} value={c.id}>{c.razao_social}</option>
+                                <option key={c.id} value={c.id}>{c.nome_fantasia || c.nome || c.razao_social}</option>
                             ))}
                         </select>
                     </div>

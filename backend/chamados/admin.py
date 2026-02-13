@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Chamado, ChamadoTecnico, ApontamentoHoras, EquipamentoEntrada
+from .models import Chamado, ChamadoTecnico, ApontamentoHoras, EquipamentoEntrada, AssuntoChamado
 
 # Permite visualizar/editar os técnicos dentro da tela do Chamado
 class ChamadoTecnicoInline(admin.TabularInline):
@@ -56,3 +56,8 @@ class ChamadoTecnicoAdmin(admin.ModelAdmin):
 @admin.register(ApontamentoHoras)
 class ApontamentoHorasAdmin(admin.ModelAdmin):
     list_display = ('id', 'chamado_tecnico', 'data_apontamento', 'horas_gastas')
+@admin.register(AssuntoChamado)
+class AssuntoChamadoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'titulo', 'ativo', 'created_at')
+    search_fields = ('titulo',)
+    list_editable = ('ativo',)

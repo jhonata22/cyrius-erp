@@ -76,7 +76,7 @@ const chamadoService = {
 
   listarAssuntos: async () => {
     const response = await api.get('/assuntos/');
-    return response.data.results || response.data;
+    return response.data?.results || response.data || [];
   },
 };
 
