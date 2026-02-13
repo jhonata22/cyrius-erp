@@ -146,6 +146,9 @@ class Chamado(TimeStampedModel):
 
         super().save(*args, **kwargs)
 
+        if self.tecnico:
+            ChamadoTecnico.objects.get_or_create(chamado=self, tecnico=self.tecnico)
+
 class ChamadoTecnico(models.Model):
     chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE)
     tecnico = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT)

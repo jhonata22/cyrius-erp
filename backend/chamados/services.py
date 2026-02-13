@@ -39,20 +39,26 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             setattr(chamado, campo, dados_atualizacao[campo])
     
     # 3. ATUALIZAR TÉCNICOS (CORREÇÃO CRÍTICA)
-    # Como usamos 'through', não podemos usar chamado.tecnicos.set() direto
+    # Abordagem não-destrutiva para sincronizar a equipe técnica
     if 'tecnicos' in dados_atualizacao:
-        novos_ids = dados_atualizacao['tecnicos'] # Espera lista de IDs: [1, 5]
+        novos_ids_str = dados_atualizacao.get('tecnicos', [])
+        novos_ids = {int(tid) for tid in novos_ids_str if tid}
         
-        # Limpa os técnicos atuais
-        ChamadoTecnico.objects.filter(chamado=chamado).delete()
+        atuais_ids = {tec.id for tec in chamado.tecnicos.all()}
         
-        # Insere os novos
-        for tec_id in novos_ids:
+        # Adicionar novos técnicos
+        ids_para_adicionar = novos_ids - atuais_ids
+        for tec_id in ids_para_adicionar:
             try:
-                tecnico = Equipe.objects.get(pk=tec_id)
-                ChamadoTecnico.objects.create(chamado=chamado, tecnico=tecnico)
+                tecnico_obj = Equipe.objects.get(pk=tec_id)
+                ChamadoTecnico.objects.create(chamado=chamado, tecnico=tecnico_obj)
             except Equipe.DoesNotExist:
-                continue # Ignora se o ID for inválido
+                continue
+
+        # Remover técnicos que não estão mais na lista
+        ids_para_remover = atuais_ids - novos_ids
+        if ids_para_remover:
+            ChamadoTecnico.objects.filter(chamado=chamado, tecnico_id__in=ids_para_remover).delete()
 
     # 3.1 ATUALIZAR TÉCNICO RESPONSÁVEL (FK)
     if 'tecnico' in dados_atualizacao:

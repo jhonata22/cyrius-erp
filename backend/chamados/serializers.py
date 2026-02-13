@@ -114,7 +114,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
         tecnicos_data = validated_data.pop('tecnicos', [])
         chamado = Chamado.objects.create(**validated_data)
         for tecnico in tecnicos_data:
-            ChamadoTecnico.objects.create(chamado=chamado, tecnico=tecnico)
+            ChamadoTecnico.objects.get_or_create(chamado=chamado, tecnico=tecnico)
         return chamado
 
     @transaction.atomic

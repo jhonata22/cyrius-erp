@@ -69,57 +69,33 @@ export default function Dashboard() {
     const fetchDados = async () => {
         setLoading(true);
         try {
-            const [stats, resChamados, resServicos, resResolvidos] = await Promise.all([
+            const [stats, resServicos] = await Promise.all([
                 chamadoService.getDashboardStats(mesFiltro),
-                chamadoService.listar({ limit: 50 }), 
                 servicoService.listar(),
-                chamadoService.listar({ status: 'FINALIZADO', limit: 100 })
             ]);
             
-            const listaChamados = Array.isArray(resChamados) ? resChamados : (resChamados.results || []);
-            const listaServicos = Array.isArray(resServicos) ? resServicos : (resServicos.results || []);
-            const resolvidosParaRanking = Array.isArray(resResolvidos) ? resResolvidos : (resResolvidos.results || []);
+            setData(stats);
 
-            setPendentes(listaChamados.filter(c => c.status === 'ABERTO').slice(0, 5));
-            setEmAndamento(listaChamados.filter(c => ['EM_ANDAMENTO', 'AGENDADO', 'EM_CURSO'].includes(c.status)).slice(0, 5));
-            
+            setPendentes(stats.ultimos_pendentes || []);
+            setEmAndamento(stats.em_andamento || []);
+            setUltimoResolvido(stats.ultimos_resolvidos?.[0] || null);
+            setRankingTecnicos(stats.ranking_tecnicos || []);
+
+            const listaServicos = Array.isArray(resServicos) ? resServicos : (resServicos.results || []);
             const statusServicos = ['ORCAMENTO', 'APROVADO', 'EM_EXECUCAO', 'AGUARDANDO_PECA'];
             setServicosAtivos(listaServicos.filter(s => statusServicos.includes(s.status)).slice(0, 5));
 
-            const resolvidosFiltrados = resolvidosParaRanking.filter(r => r.status === 'FINALIZADO');
-            setUltimoResolvido(resolvidosFiltrados[0] || null);
-
-            // ✅ CORREÇÃO DO RANKING PARA M2M (TRATANDO ARRAY DE TECNICOS)
-            const contagem = {};
-            resolvidosParaRanking.forEach(chamado => {
-                // No seu Serializer, tecnicos é um array de objetos: [{"id":..., "nome":...}]
-                if (chamado.tecnicos && Array.isArray(chamado.tecnicos)) {
-                    chamado.tecnicos.forEach(tec => {
-                        const nome = tec.nome;
-                        if (nome && nome.trim() !== "" && !nome.toLowerCase().includes("atribuído")) {
-                            contagem[nome] = (contagem[nome] || 0) + 1;
-                        }
-                    });
-                }
-            });
-
-            const rankingOrdenado = Object.entries(contagem)
-                .map(([nome, total]) => ({ nome, total }))
-                .sort((a, b) => b.total - a.total)
-                .slice(0, 5);
-
-            setRankingTecnicos(rankingOrdenado);
-            setData(stats);
-
         } catch (err) {
             console.error("Erro dashboard:", err);
-            setData({ total: 0, abertos: 0, emAndamento: 0, finalizados: 0, grafico: [] });
+            setData({ total: 0, abertos: 0, emAndamento: 0, finalizados: 0, grafico: [], ultimos_pendentes: [], em_andamento: [] });
         } finally {
             setLoading(false);
         }
     };
     fetchDados();
-  }, [mesFiltro]);
+}, [mesFiltro]);
+
+  const maisAntigo = data?.ultimos_pendentes?.[data.ultimos_pendentes.length - 1];
 
   if (loading || !data) return (
     <div className="flex flex-col h-64 items-center justify-center space-y-4">
@@ -273,6 +249,25 @@ export default function Dashboard() {
                      </div>
                  ) : (
                      <p className="text-emerald-600/50 text-[10px] font-black uppercase text-center py-4">Nenhum concluído recentemente</p>
+                 )}
+            </div>
+
+            {/* NOVO CARD: MAIS ANTIGO NA FILA */}
+            <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] shadow-sm mt-6">
+                 <h3 className="font-black text-amber-800 text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <AlertCircle size={14} className="text-amber-500"/> Atenção: Mais Antigo na Fila
+                 </h3>
+                 {maisAntigo ? (
+                     <div onClick={() => navigate(`/chamados/${maisAntigo.id}`)} className="cursor-pointer group">
+                        <p className="text-sm font-black text-amber-900 line-clamp-1 group-hover:underline">{maisAntigo.titulo}</p>
+                        <p className="text-[10px] font-bold text-amber-700 uppercase mt-1">{maisAntigo.nome_cliente}</p>
+                        <div className="mt-4 flex items-center justify-between text-[10px] font-black text-amber-800/40">
+                            <span className="flex items-center gap-1 uppercase tracking-widest"><Clock size={10}/> Aberto há {Math.floor((new Date() - new Date(maisAntigo.created_at)) / (1000 * 60 * 60 * 24))} dias</span>
+                            <ChevronRight size={14} />
+                        </div>
+                     </div>
+                 ) : (
+                     <p className="text-amber-600/50 text-[10px] font-black uppercase text-center py-4">Nenhum chamado pendente</p>
                  )}
             </div>
         </div>

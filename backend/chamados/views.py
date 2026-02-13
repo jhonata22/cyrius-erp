@@ -130,14 +130,14 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             # Filtro específico para o ranking (Status + Data + Empresa)
             ranking_filter = Q(
                 chamado__status='FINALIZADO', 
-                chamado__data_abertura__range=(data_inicio, data_fim)
+                chamado__data_fechamento__range=(data_inicio, data_fim)
             )
             if empresa_id:
                 ranking_filter &= Q(chamado__empresa_id=empresa_id)
 
             ranking_raw = (
                 Equipe.objects.filter(ranking_filter)
-                .annotate(total_resolvido=Count('chamado', filter=ranking_filter))
+                .annotate(total_resolvido=Count('chamado', filter=ranking_filter, distinct=True))
                 .filter(total_resolvido__gt=0)
                 .order_by('-total_resolvido')[:5]
             )
