@@ -1,0 +1,1 @@
+# This file is intentionally left blank. URL routing is handled in config/urls.py.

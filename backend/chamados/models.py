@@ -2,6 +2,20 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
+class AssuntoChamado(models.Model):
+    titulo = models.CharField(max_length=100, unique=True)
+    ativo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['titulo']
+        db_table = 'TB_ASSUNTO_CHAMADO'
+        verbose_name = 'Assunto de Chamado'
+        verbose_name_plural = 'Assuntos de Chamados'
+
+    def __str__(self):
+        return self.titulo
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,6 +61,8 @@ class Chamado(TimeStampedModel):
 
     # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
+
+    assunto = models.ForeignKey(AssuntoChamado, on_delete=models.PROTECT, null=True, blank=True)
 
     ativo = models.ForeignKey(
         'infra.Ativo', 
@@ -108,6 +124,9 @@ class Chamado(TimeStampedModel):
         return self.protocolo or f"ID {self.pk}"
 
     def save(self, *args, **kwargs):
+        if self.assunto:
+            self.titulo = self.assunto.titulo
+            
         ida = float(self.custo_ida or 0)
         volta = float(self.custo_volta or 0)
         self.custo_transporte = ida + volta

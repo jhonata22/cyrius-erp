@@ -11,8 +11,8 @@ import calendar
 import traceback
 
 # MODELOS E SERIALIZERS
-from .models import Chamado
-from .serializers import ChamadoSerializer
+from .models import Chamado, AssuntoChamado
+from .serializers import ChamadoSerializer, AssuntoChamadoSerializer
 from .services import atualizar_chamado
 from equipe.models import Equipe  # Importação corrigida
 
@@ -20,6 +20,10 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+class AssuntoChamadoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AssuntoChamado.objects.filter(ativo=True)
+    serializer_class = AssuntoChamadoSerializer
 
 class ChamadoViewSet(viewsets.ModelViewSet):
     queryset = Chamado.objects.all().order_by('-created_at')

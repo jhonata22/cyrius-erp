@@ -1,4 +1,4 @@
-import { useState, useMemo, useLayoutEffect } from 'react';
+import { useState, useMemo, useLayoutEffect, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
@@ -28,7 +28,6 @@ const STATUS_MAP = {
 export default function Chamados() {
   const navigate = useNavigate();
   
-  // CONSUMINDO TUDO DO CONTEXTO (Inclusive ABAS_FILTRO para não quebrar o map)
   const {
     loading, chamados, equipe, clientes, ativos, pagina, setPagina, totalItens,
     abaAtiva, setAbaAtiva, contadores, filtroEmpresa, setFiltroEmpresa,
@@ -39,19 +38,33 @@ export default function Chamados() {
   // ESTADO LOCAL DO MODAL
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('REMOTO');
+  const [assuntos, setAssuntos] = useState([]);
+  const [isNovoAssunto, setIsNovoAssunto] = useState(false);
   
-  // ESTADO COMPLETO DO FORMULÁRIO (Corrige erro de undefined)
   const [formData, setFormData] = useState({
-    cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
+    cliente: '', ativo: '', assunto: '', novo_assunto: '', descricao_detalhada: '',
     prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
     custo_ida: '', custo_volta: '', tecnicos: [],
-    tecnico: '', // Técnico responsável principal
+    tecnico: '', 
     empresa: ''
   });
 
-  // RESTAURA O SCROLL INSTANTANEAMENTE
+  useEffect(() => {
+    if (isModalOpen) {
+      const fetchAssuntos = async () => {
+        try {
+          const data = await chamadoService.listarAssuntos();
+          console.log("Assuntos carregados:", data);
+          setAssuntos(data);
+        } catch (error) {
+          console.error("Erro ao buscar assuntos", error);
+        }
+      };
+      fetchAssuntos();
+    }
+  }, [isModalOpen]);
+
   useLayoutEffect(() => {
-    // Only restore if not loading and we have a stored position
     if (!loading && scrollPos > 0) {
       window.scrollTo(0, scrollPos);
     }
@@ -61,10 +74,6 @@ export default function Chamados() {
     setScrollPos(window.scrollY);
     navigate(`/chamados/${id}`);
   };
-
-  const custoEstimado = useMemo(() => {
-    return (parseFloat(formData.custo_ida || 0) + parseFloat(formData.custo_volta || 0));
-  }, [formData.custo_ida, formData.custo_volta]);
 
   const ativosDoCliente = useMemo(() => {
     if (!formData.cliente) return [];
@@ -80,8 +89,9 @@ export default function Chamados() {
   const handleOpenModal = (mode) => {
     const empresaPadrao = filtroEmpresa || (empresas.length > 0 ? empresas[0].id : '');
     setModalMode(mode);
+    setIsNovoAssunto(false);
     setFormData({
-      cliente: '', ativo: '', titulo: '', descricao_detalhada: '',
+      cliente: '', ativo: '', assunto: '', novo_assunto: '', descricao_detalhada: '',
       prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
       custo_ida: '', custo_volta: '', tecnicos: [],
       tecnico: '',
@@ -99,8 +109,16 @@ export default function Chamados() {
     }
   };
 
-  const toggleTecnico = (id) => {
-    setFormData(prev => ({ ...prev, tecnicos: prev.tecnicos.includes(id) ? prev.tecnicos.filter(t => t !== id) : [...prev.tecnicos, id] }));
+  const handleNovoAssuntoToggle = () => {
+    setIsNovoAssunto(prev => {
+        const isNew = !prev;
+        if (isNew) {
+            setFormData(f => ({ ...f, assunto: '' }));
+        } else {
+            setFormData(f => ({ ...f, novo_assunto: '' }));
+        }
+        return isNew;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -108,6 +126,8 @@ export default function Chamados() {
     if (!formData.empresa) return alert("Selecione a empresa responsável pelo chamado.");
     if (!formData.cliente) return alert("Selecione um cliente.");
     if (!formData.tecnico) return alert("O técnico responsável é obrigatório.");
+    if (isNovoAssunto && !formData.novo_assunto) return alert("O novo assunto é obrigatório.");
+    if (!isNovoAssunto && !formData.assunto) return alert("Selecione um assunto.");
     if (clienteSelecionado && !clienteSelecionado.ativo) return alert("Ação bloqueada: Cliente desativado.");
     if (modalMode === 'VISITA' && !formData.data_agendamento) return alert("Defina data/hora da visita.");
 
@@ -122,17 +142,23 @@ export default function Chamados() {
         empresa: formData.empresa 
       };
 
+      if (isNovoAssunto) {
+        delete payload.assunto;
+      } else {
+        delete payload.novo_assunto;
+      }
+      delete payload.titulo;
+
       const novoChamado = await chamadoService.criar(payload);
       setIsModalOpen(false);
       alert("Chamado criado com sucesso!");
-      navigate(`/chamados/${novoChamado.id}`); // Redireciona para os detalhes
+      navigate(`/chamados/${novoChamado.id}`);
     } catch (err) {
       alert("Erro ao salvar o chamado. Verifique os dados.");
     }
   };
 
   const totalPaginas = Math.ceil(totalItens / 10);
-  const empresaNoFormulario = empresas.find(e => String(e.id) === String(formData.empresa));
 
   return (
     <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
@@ -172,7 +198,6 @@ export default function Chamados() {
           </div>
         </div>
 
-        {/* ABAS DE FILTRO - AGORA USANDO ABAS_FILTRO DO CONTEXTO */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
             {ABAS_FILTRO.map(aba => {
                 const count = aba.id === 'PENDENTES' ? contadores.PENDENTES :
@@ -317,21 +342,34 @@ export default function Chamados() {
         )}
       </div>
 
-      {/* MODAL (Código já estava correto no anterior, mantido aqui apenas para contexto) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#302464]/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
-           {/* ... Seu código do modal aqui, usando as funções handleInputChange, handleSubmit, etc ... */}
-           {/* Como não mudou, vou abreviar para não estourar o limite, mas use o do seu último código funcional */}
            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto relative border border-white/20">
              <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-[#302464] transition-colors"><X size={24} /></button>
              <h2 className="text-2xl font-black text-[#302464] mb-8 flex items-center gap-3">
                {modalMode === 'VISITA' ? <Truck className="text-[#7C69AF]" /> : <Plus className="text-[#7C69AF]" />}
                {modalMode === 'VISITA' ? 'Agendar Visita Técnica' : 'Novo Chamado Remoto'}
              </h2>
-             {/* ... form ... */}
              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* ... inputs ... */}
-                {/* Copie o form do código anterior que estava funcionando, ou me peça para gerar o form completo se precisar */}
+                {modalMode === 'VISITA' && (
+                  <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 animate-in slide-in-from-top-2 mb-2">
+                    <div className="flex gap-4 items-center mb-4">
+                      <Truck className="text-[#7C69AF]" size={24} />
+                      <h3 className="font-black text-[#302464] text-sm uppercase tracking-widest">Detalhes do Agendamento</h3>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-[#302464] uppercase tracking-widest block mb-1">Data e Hora da Visita</label>
+                      <input 
+                        type="datetime-local" 
+                        name="data_agendamento" 
+                        required 
+                        value={formData.data_agendamento} 
+                        onChange={handleInputChange} 
+                        className="w-full bg-white px-5 py-4 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464] shadow-sm"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="md:col-span-2 space-y-1">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filial Responsável</label>
                  <select name="empresa" required value={formData.empresa} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700">
@@ -346,7 +384,43 @@ export default function Chamados() {
                  </select>
                 </div>
 
-                {/* === INÍCIO: CAMPOS RESTAURADOS === */}
+                <div className="md:col-span-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto</label>
+                        <div className="flex items-center gap-2">
+                            <input 
+                                type="checkbox" 
+                                id="novo-assunto-check"
+                                checked={isNovoAssunto} 
+                                onChange={handleNovoAssuntoToggle}
+                                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                            />
+                            <label htmlFor="novo-assunto-check" className="text-xs font-bold text-slate-600">Criar Novo Assunto</label>
+                        </div>
+                    </div>
+                    {isNovoAssunto ? (
+                        <input 
+                            name="novo_assunto" 
+                            required 
+                            value={formData.novo_assunto} 
+                            onChange={handleInputChange} 
+                            className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-bold"
+                            placeholder="Digite o novo assunto..."
+                        />
+                    ) : (
+                        <select 
+                            name="assunto" 
+                            required 
+                            value={formData.assunto} 
+                            onChange={handleInputChange} 
+                            className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700"
+                        >
+                            <option value="">Selecione um assunto...</option>
+                            {assuntos.map(a => <option key={a.id} value={a.id}>{a.titulo}</option>)}
+                        </select>
+                    )}
+                </div>
+
                 <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnico Responsável</label>
                     <select name="tecnico" required value={formData.tecnico} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700">
@@ -379,13 +453,7 @@ export default function Chamados() {
                         {ativosDoCliente.map(a => <option key={a.id} value={a.id}>{a.nome + (a.tipo ? ` (${a.tipo})` : '')}</option>)}
                     </select>
                 </div>
-                {/* === FIM: CAMPOS RESTAURADOS === */}
 
-                {/* ... Demais campos (titulo, descricao, etc) ... */}
-                <div className="md:col-span-2 space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto</label>
-                    <input name="titulo" required value={formData.titulo} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-bold"/>
-                </div>
                 <div className="md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
                     <textarea name="descricao_detalhada" required value={formData.descricao_detalhada} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-medium"/>

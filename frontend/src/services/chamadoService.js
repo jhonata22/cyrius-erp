@@ -73,6 +73,11 @@ const chamadoService = {
     const response = await api.get('/chamados/estatisticas/', { params });
     return response.data;
   },
+
+  listarAssuntos: async () => {
+    const response = await api.get('/assuntos/');
+    return response.data.results || response.data;
+  },
 };
 
 export default chamadoService;

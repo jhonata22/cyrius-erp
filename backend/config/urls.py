@@ -31,7 +31,7 @@ from servicos.views import (
     AnexoServicoViewSet,
     NotificacaoViewSet
 )
-from chamados.views import ChamadoViewSet
+from chamados.views import ChamadoViewSet, AssuntoChamadoViewSet
 from financeiro.views import LancamentoFinanceiroViewSet
 
 # [NOVO] Importação do Core (Empresas)
@@ -62,6 +62,7 @@ router.register(r'documentacao', DocumentacaoTecnicaViewSet)
 
 # --- Operacional (Chamados e Infra) ---
 router.register(r'chamados', ChamadoViewSet, basename='chamado')
+router.register(r'assuntos', AssuntoChamadoViewSet, basename='assuntochamado')
 router.register(r'ativos', AtivoViewSet)
 
 # --- Serviços (OS) ---
