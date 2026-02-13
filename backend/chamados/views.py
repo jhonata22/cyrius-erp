@@ -15,6 +15,7 @@ from .models import Chamado, AssuntoChamado
 from .serializers import ChamadoSerializer, AssuntoChamadoSerializer
 from .services import atualizar_chamado
 from equipe.models import Equipe  # Importação corrigida
+from servicos.models import OrdemServico
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -103,67 +104,89 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             data_inicio = timezone.make_aware(dt_ini_naive)
             data_fim = timezone.make_aware(dt_fim_naive)
             
-            # Queryset base filtrada por data e empresa
-            qs_mes = Chamado.objects.filter(data_abertura__range=(data_inicio, data_fim))
+            # === UNIFIED STATS ===
+            
+            # Queryset base para CHAMADOS
+            qs_chamados_mes = Chamado.objects.filter(data_abertura__range=(data_inicio, data_fim))
             if empresa_id:
-                qs_mes = qs_mes.filter(empresa_id=empresa_id)
+                qs_chamados_mes = qs_chamados_mes.filter(empresa_id=empresa_id)
 
-            # 1. Agregados básicos para os Cards e Gráfico
-            stats = qs_mes.aggregate(
-                total=Count('id'),
-                abertos=Count('id', filter=Q(status='ABERTO')),
-                andamento=Count('id', filter=Q(status__in=['EM_ANDAMENTO', 'AGENDADO'])),
-                finalizados=Count('id', filter=Q(status='FINALIZADO'))
-            )
-            
-            # 2. Listas Operacionais para o Dashboard (Top 5)
-            # Chamados que ninguém pegou ainda
-            ultimos_pendentes = qs_mes.filter(status='ABERTO').order_by('-created_at')[:5]
-            
-            # O que está sendo feito agora (ou agendado)
-            em_andamento = qs_mes.filter(status__in=['EM_ANDAMENTO', 'AGENDADO']).order_by('data_agendamento')[:5]
-            
-            # O que foi resolvido recentemente
-            ultimos_resolvidos = qs_mes.filter(status='FINALIZADO').order_by('-data_fechamento')[:5]
-
-            # 3. RANKING DE TÉCNICOS (Lógica Corrigida)
-            # Filtro específico para o ranking (Status + Data + Empresa)
-            ranking_filter = Q(
-                chamado__status='FINALIZADO', 
-                chamado__data_fechamento__range=(data_inicio, data_fim)
-            )
+            # Queryset base para SERVIÇOS
+            qs_os_mes = OrdemServico.objects.filter(data_entrada__range=(data_inicio, data_fim))
             if empresa_id:
-                ranking_filter &= Q(chamado__empresa_id=empresa_id)
+                qs_os_mes = qs_os_mes.filter(empresa_id=empresa_id)
+            
+            # 1. Agregados para os Cards (CHAMADOS)
+            stats_chamados = qs_chamados_mes.aggregate(
+                total=Count('id', distinct=True),
+                abertos=Count('id', filter=Q(status='ABERTO'), distinct=True),
+                andamento=Count('id', filter=Q(status__in=['EM_ANDAMENTO', 'AGENDADO']), distinct=True),
+                finalizados=Count('id', filter=Q(status='FINALIZADO'), distinct=True)
+            )
 
-            ranking_raw = (
-                Equipe.objects.filter(ranking_filter)
-                .annotate(total_resolvido=Count('chamado', filter=ranking_filter, distinct=True))
-                .filter(total_resolvido__gt=0)
-                .order_by('-total_resolvido')[:5]
+            # Agregados para os Cards (SERVIÇOS)
+            stats_os = qs_os_mes.aggregate(
+                total=Count('id', distinct=True),
+                abertos=Count('id', filter=Q(status='ORCAMENTO'), distinct=True),
+                andamento=Count('id', filter=Q(status__in=['APROVADO', 'EM_EXECUCAO', 'AGUARDANDO_PECA']), distinct=True),
+                finalizados=Count('id', filter=Q(status='CONCLUIDO'), distinct=True)
             )
             
-            ranking_tecnicos = [
-                {"nome": t.nome, "total": t.total_resolvido} for t in ranking_raw
-            ]
+            # Unificar os stats
+            total_unificado = stats_chamados['total'] + stats_os['total']
+            abertos_unificado = stats_chamados['abertos'] + stats_os['abertos']
+            andamento_unificado = stats_chamados['andamento'] + stats_os['andamento']
+            finalizados_unificado = stats_chamados['finalizados'] + stats_os['finalizados']
+            
+            # 2. Listas Operacionais (mantendo apenas chamados por enquanto)
+            ultimos_pendentes = qs_chamados_mes.filter(status='ABERTO').order_by('-created_at')[:5]
+            em_andamento = qs_chamados_mes.filter(status__in=['EM_ANDAMENTO', 'AGENDADO']).order_by('data_agendamento')[:5]
+            ultimos_resolvidos = qs_chamados_mes.filter(status='FINALIZADO').order_by('-data_fechamento')[:5]
 
-            # 4. Lista de Clientes Atendidos (Contexto)
-            raw_empresas = qs_mes.values_list('cliente__nome', 'cliente__razao_social').order_by().distinct()
-            lista_empresas = sorted(list(set([n if n else r for n, r in raw_empresas if n or r])))
+            # 3. RANKING DE TÉCNICOS UNIFICADO
+            from django.db.models import F
+
+            chamado_finalizado_filter = Q(chamado__status='FINALIZADO', chamado__data_fechamento__range=(data_inicio, data_fim))
+            os_concluido_filter = Q(servicos_participante__status='FINALIZADO', servicos_participante__data_finalizacao__range=(data_inicio, data_fim))
+
+            if empresa_id:
+                chamado_finalizado_filter &= Q(chamado__empresa_id=empresa_id)
+                os_concluido_filter &= Q(servicos_participante__empresa_id=empresa_id)
+
+            ranking_raw = Equipe.objects.annotate(
+                chamados_count=Count('chamado', filter=chamado_finalizado_filter, distinct=True),
+                servicos_count=Count('servicos_participante', filter=os_concluido_filter, distinct=True)
+            ).annotate(
+                total_geral=F('chamados_count') + F('servicos_count')
+            ).filter(total_geral__gt=0).order_by('-total_geral')[:5]
+
+            ranking_tecnicos = [{
+                "nome": t.nome,
+                "chamados_count": t.chamados_count,
+                "servicos_count": t.servicos_count,
+                "total_geral": t.total_geral
+            } for t in ranking_raw]
+
+            # 4. Lista de Clientes (unificando fontes)
+            clientes_chamado = qs_chamados_mes.values_list('cliente__nome', 'cliente__razao_social')
+            clientes_os = qs_os_mes.values_list('cliente__nome', 'cliente__razao_social')
+            raw_empresas = set(clientes_chamado) | set(clientes_os)
+            lista_empresas = sorted([n if n else r for n, r in raw_empresas if n or r])
 
             return Response({
-                "total": stats['total'],
-                "abertos": stats['abertos'],
-                "emAndamento": stats['andamento'],
-                "finalizados": stats['finalizados'],
+                "total": total_unificado,
+                "abertos": abertos_unificado,
+                "emAndamento": andamento_unificado,
+                "finalizados": finalizados_unificado,
                 "empresas": lista_empresas,
                 "ultimos_pendentes": ChamadoSerializer(ultimos_pendentes, many=True).data,
                 "em_andamento": ChamadoSerializer(em_andamento, many=True).data,
                 "ultimos_resolvidos": ChamadoSerializer(ultimos_resolvidos, many=True).data,
                 "ranking_tecnicos": ranking_tecnicos,
                 "grafico": [
-                    { "name": "Abertos", "quantidade": stats['abertos'] },
-                    { "name": "Em Curso", "quantidade": stats['andamento'] },
-                    { "name": "Resolvidos", "quantidade": stats['finalizados'] }
+                    { "name": "Abertos", "quantidade": abertos_unificado },
+                    { "name": "Em Curso", "quantidade": andamento_unificado },
+                    { "name": "Resolvidos", "quantidade": finalizados_unificado }
                 ]
             })
         except Exception as e:

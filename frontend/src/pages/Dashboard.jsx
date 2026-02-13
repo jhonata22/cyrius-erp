@@ -153,22 +153,40 @@ export default function Dashboard() {
                 <h3 className="font-black text-[#302464] text-sm uppercase tracking-widest flex items-center gap-2 mb-6">
                     <Trophy size={16} className="text-yellow-500"/> Ranking da Equipe
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex justify-between text-slate-400 text-[10px] font-black uppercase tracking-widest px-4 pb-2 border-b">
+                        <span className="w-2/5">Técnico</span>
+                        <div className="w-3/5 flex justify-end gap-4">
+                            <span className="w-1/3 text-center">Chamados</span>
+                            <span className="w-1/3 text-center">Serviços</span>
+                            <span className="w-1/3 text-center">Total</span>
+                        </div>
+                    </div>
+
                     {rankingTecnicos.length > 0 ? rankingTecnicos.map((tec, index) => (
                         <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-colors shadow-sm
+                            <div className="flex items-center gap-3 w-2/5">
+                                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs transition-colors shadow-sm
                                     ${index === 0 ? 'bg-yellow-400 text-white' : 
                                       index === 1 ? 'bg-slate-300 text-white' : 
                                       index === 2 ? 'bg-amber-600 text-white' : 
                                       'bg-slate-200 text-slate-500'}`}>
                                     {index + 1}º
                                 </div>
-                                <span className="text-sm font-black text-slate-700">{tec.nome}</span>
+                                <User size={14} className="text-slate-400" />
+                                <span className="text-sm font-black text-slate-700 truncate">{tec.nome}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-[#7C69AF]">{tec.total}</span>
-                                <CheckCircle size={14} className="text-emerald-500" />
+                            <div className="w-3/5 flex justify-end items-center gap-4 text-sm font-bold">
+                                <span className="w-1/3 text-center text-slate-500 flex items-center justify-center gap-1.5">
+                                    <Ticket size={12} />
+                                    {tec.chamados_count}
+                                </span>
+                                <span className="w-1/3 text-center text-slate-500 flex items-center justify-center gap-1.5">
+                                    <Wrench size={12} />
+                                    {tec.servicos_count}
+                                </span>
+                                <span className="w-1/3 text-center text-[#302464] font-black text-base">{tec.total_geral}</span>
                             </div>
                         </div>
                     )) : (
