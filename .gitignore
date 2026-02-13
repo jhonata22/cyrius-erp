@@ -30,3 +30,4 @@ Thumbs.db
 *.log
 logs/
 media_volume/clientes_fotos/*.jpg
+backup_cyrius.sql
