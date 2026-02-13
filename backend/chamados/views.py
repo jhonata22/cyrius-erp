@@ -129,7 +129,7 @@ class ChamadoViewSet(viewsets.ModelViewSet):
                 total=Count('id', distinct=True),
                 abertos=Count('id', filter=Q(status='ORCAMENTO'), distinct=True),
                 andamento=Count('id', filter=Q(status__in=['APROVADO', 'EM_EXECUCAO', 'AGUARDANDO_PECA']), distinct=True),
-                finalizados=Count('id', filter=Q(status='CONCLUIDO'), distinct=True)
+                finalizados=Count('id', filter=Q(status='FINALIZADO'), distinct=True)
             )
             
             # Unificar os stats

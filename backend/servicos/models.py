@@ -61,6 +61,12 @@ class OrdemServico(TimeStampedModel):
     def __str__(self):
         return f"OS #{self.pk} - {self.titulo}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs) 
+        if self.tecnico_responsavel:
+            self.tecnicos.add(self.tecnico_responsavel)
+
+
     @property
     def total_pecas(self):
         return self.itens.aggregate(total=Sum(models.F('quantidade') * models.F('preco_venda')))['total'] or 0

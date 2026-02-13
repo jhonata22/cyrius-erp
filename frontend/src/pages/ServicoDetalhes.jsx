@@ -370,7 +370,7 @@ export default function ServicoDetalhes() {
   };
 
   const formatMoney = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
-  const isLocked = os?.status === 'CONCLUIDO' || os?.status === 'CANCELADO';
+  const isLocked = os?.status === 'CONCLUIDO' || os?.status === 'FINALIZADO' || os?.status === 'CANCELADO';
   const urlParaQR = window.location.href;
 
   if (loading || !os) return <div className="p-20 text-center text-[#7C69AF] animate-pulse font-black">Carregando O.S...</div>;
