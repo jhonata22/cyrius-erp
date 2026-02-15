@@ -87,6 +87,17 @@ const servicoService = {
       },
     });
     return response.data;
+  },
+
+  // Comentários
+  listarComentarios: async (osId) => {
+    const response = await api.get(`/servicos/${osId}/comentarios/`);
+    return response.data;
+  },
+
+  adicionarComentario: async (osId, texto) => {
+    const response = await api.post(`/servicos/${osId}/comentarios/`, { texto });
+    return response.data;
   }
 };
 

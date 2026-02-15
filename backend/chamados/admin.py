@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Chamado, ChamadoTecnico, ApontamentoHoras, EquipamentoEntrada, AssuntoChamado
+from .models import Chamado, ChamadoTecnico, ApontamentoHoras, EquipamentoEntrada, AssuntoChamado, ComentarioChamado
 
 # Permite visualizar/editar os técnicos dentro da tela do Chamado
 class ChamadoTecnicoInline(admin.TabularInline):
@@ -11,6 +11,12 @@ class ChamadoTecnicoInline(admin.TabularInline):
 class EquipamentoEntradaInline(admin.StackedInline):
     model = EquipamentoEntrada
     extra = 0
+
+class ComentarioChamadoInline(admin.TabularInline):
+    model = ComentarioChamado
+    extra = 0
+    readonly_fields = ('autor', 'created_at')
+    fields = ('texto', 'autor', 'created_at')
 
 @admin.register(Chamado)
 class ChamadoAdmin(admin.ModelAdmin):
@@ -37,7 +43,7 @@ class ChamadoAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at', 'protocolo')
     
     # Inlines (Tabelas filhas dentro do chamado)
-    inlines = [ChamadoTecnicoInline, EquipamentoEntradaInline]
+    inlines = [ChamadoTecnicoInline, EquipamentoEntradaInline, ComentarioChamadoInline]
 
     # Paginação
     list_per_page = 20
@@ -61,3 +67,9 @@ class AssuntoChamadoAdmin(admin.ModelAdmin):
     list_display = ('id', 'titulo', 'ativo', 'created_at')
     search_fields = ('titulo',)
     list_editable = ('ativo',)
+
+@admin.register(ComentarioChamado)
+class ComentarioChamadoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'chamado', 'autor', 'texto', 'created_at')
+    list_filter = ('autor', 'created_at')
+    search_fields = ('texto', 'chamado__protocolo')

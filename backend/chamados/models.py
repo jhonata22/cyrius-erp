@@ -177,3 +177,12 @@ class EquipamentoEntrada(models.Model):
     
     class Meta: 
         db_table = 'TB_EQUIPAMENTO_ENTRADA'
+
+class ComentarioChamado(models.Model):
+    chamado = models.ForeignKey(Chamado, related_name='comentarios', on_delete=models.CASCADE)
+    autor = models.ForeignKey('equipe.Equipe', on_delete=models.SET_NULL, null=True)
+    texto = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']

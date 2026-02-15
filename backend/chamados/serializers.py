@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import Chamado, ChamadoTecnico, AssuntoChamado
+from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado
 from clientes.models import Cliente
 from infra.models import Ativo
 from equipe.models import Equipe
@@ -19,6 +19,16 @@ class AssuntoChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssuntoChamado
         fields = '__all__'
+
+
+class ComentarioChamadoSerializer(serializers.ModelSerializer):
+    autor_nome = serializers.CharField(source='autor.nome', read_only=True)
+
+    class Meta:
+        model = ComentarioChamado
+        fields = ['id', 'texto', 'autor', 'autor_nome', 'created_at', 'chamado']
+        read_only_fields = ['autor', 'chamado', 'created_at', 'autor_nome']
+
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
     nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)

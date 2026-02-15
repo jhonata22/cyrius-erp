@@ -11,8 +11,8 @@ import calendar
 import traceback
 
 # MODELOS E SERIALIZERS
-from .models import Chamado, AssuntoChamado
-from .serializers import ChamadoSerializer, AssuntoChamadoSerializer, ChamadoRelacionadoSerializer
+from .models import Chamado, AssuntoChamado, ComentarioChamado
+from .serializers import ChamadoSerializer, AssuntoChamadoSerializer, ChamadoRelacionadoSerializer, ComentarioChamadoSerializer
 from .services import atualizar_chamado
 from equipe.models import Equipe  # Importação corrigida
 from servicos.models import OrdemServico
@@ -239,3 +239,22 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             print(f"ERRO UPDATE: {e}")
             traceback.print_exc()
             return Response({"erro": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    @action(detail=True, methods=['get', 'post'])
+    def comentarios(self, request, pk=None):
+        chamado = self.get_object()
+        if request.method == 'GET':
+            comentarios = chamado.comentarios.all()
+            serializer = ComentarioChamadoSerializer(comentarios, many=True, context={'request': request})
+            return Response(serializer.data)
+        
+        if request.method == 'POST':
+            autor = getattr(request.user, 'equipe', None)
+            if not autor:
+                return Response({"erro": "Usuário não tem um perfil de equipe associado."}, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = ComentarioChamadoSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(chamado=chamado, autor=autor)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

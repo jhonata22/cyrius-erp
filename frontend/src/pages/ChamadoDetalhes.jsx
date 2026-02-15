@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
   Info, Briefcase, Users, History, Building2, 
-  Trash2, Plus, AlertTriangle, Monitor
+  Trash2, Plus, AlertTriangle, Monitor, MessageSquare
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
@@ -37,6 +37,10 @@ export default function ChamadoDetalhes() {
   const [chamado, setChamado] = useState(null);
   const [cliente, setCliente] = useState(null);
   const [relacionados, setRelacionados] = useState([]);
+
+  // State para Comentários
+  const [comentarios, setComentarios] = useState([]);
+  const [novoComentario, setNovoComentario] = useState('');
   
   // Listas para seleção
   const [todosTecnicos, setTodosTecnicos] = useState([]); // Lista completa para o select
@@ -69,6 +73,10 @@ export default function ChamadoDetalhes() {
       // Busca relacionados
       const dadosRelacionados = await chamadoService.listarRelacionados(id);
       setRelacionados(dadosRelacionados);
+
+      // Busca comentários
+      const dadosComentarios = await chamadoService.listarComentarios(id);
+      setComentarios(dadosComentarios);
       
       // Busca lista completa de técnicos daquela empresa para permitir adição
       const listaEquipe = await equipeService.listar(dados.empresa || null);
@@ -153,6 +161,21 @@ export default function ChamadoDetalhes() {
     } catch (error) {
       console.error(error);
       alert("Erro ao finalizar chamado.");
+    }
+  };
+
+  const handleAdicionarComentario = async (e) => {
+    e.preventDefault();
+    if (!novoComentario.trim()) return;
+
+    try {
+      await chamadoService.adicionarComentario(id, novoComentario);
+      setNovoComentario('');
+      // Recarrega tudo para garantir que o estado está sincronizado
+      carregarDados(); 
+    } catch (error) {
+      console.error("Erro ao adicionar comentário:", error);
+      alert("Não foi possível adicionar o comentário.");
     }
   };
 
@@ -396,6 +419,46 @@ export default function ChamadoDetalhes() {
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* COMENTÁRIOS */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <MessageSquare size={14} /> Comentários e Histórico
+            </h3>
+            <div className="space-y-4 max-h-72 overflow-y-auto pr-2">
+              {comentarios.map(com => (
+                <div key={com.id} className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
+                      {com.autor_nome ? com.autor_nome.charAt(0) : '-'}
+                    </div>
+                    <div className="flex-1 bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                      <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-bold text-slate-700">{com.autor_nome || 'Sistema'}</p>
+                          <p className="text-[9px] text-slate-400 font-medium">{new Date(com.created_at).toLocaleString('pt-BR')}</p>
+                      </div>
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{com.texto}</p>
+                    </div>
+                </div>
+              ))}
+              {comentarios.length === 0 && (
+                <p className="text-xs text-center text-slate-400 py-8">Nenhum comentário ainda.</p>
+              )}
+            </div>
+            {!isLocked && (
+              <form onSubmit={handleAdicionarComentario} className="mt-4 pt-4 border-t border-slate-100">
+                  <textarea 
+                    value={novoComentario}
+                    onChange={e => setNovoComentario(e.target.value)}
+                    placeholder="Deixe uma nota para a equipe..."
+                    className="w-full bg-slate-50 border-slate-200 border rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-[#7C69AF]/50"
+                    rows={3}
+                  />
+                  <button type="submit" className="mt-2 w-full bg-[#302464] text-white py-2.5 rounded-lg text-xs font-bold hover:bg-[#4B3C8A] transition-colors">
+                    Publicar
+                  </button>
+              </form>
+            )}
           </div>
 
           {cliente && (

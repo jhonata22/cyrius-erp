@@ -1,19 +1,26 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
 import traceback
 
 from utils.permissions import IsFuncionario
-from .models import OrdemServico, ItemServico, AnexoServico, Notificacao
-from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, NotificacaoSerializer
+from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
+from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, NotificacaoSerializer, ComentarioOrdemServicoSerializer
 
 # Importa a lógica de negócio
 from .services import finalizar_ordem_servico, adicionar_peca_os, atualizar_ordem_servico
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
     serializer_class = OrdemServicoSerializer
-    permission_classes = [IsFuncionario]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [IsFuncionario]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         user = self.request.user
@@ -23,10 +30,11 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         ).prefetch_related('itens', 'anexos', 'tecnicos', 'ativos').order_by('-created_at')
 
         # 1. Filtro de Segurança (Quem vê o quê)
-        if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
-             from django.db.models import Q
-             # Técnico vê OS onde é responsável OU onde está na equipe de apoio
-             qs = qs.filter(Q(tecnico_responsavel=user.equipe) | Q(tecnicos=user.equipe)).distinct()
+        # Comentado para permitir que todos os técnicos vejam todas as OSs da empresa
+        # if hasattr(user, 'equipe') and user.equipe.cargo not in ['GESTOR', 'SOCIO']:
+        #      from django.db.models import Q
+        #      # Técnico vê OS onde é responsável OU onde está na equipe de apoio
+        #      qs = qs.filter(Q(tecnico_responsavel=user.equipe) | Q(tecnicos=user.equipe)).distinct()
 
         # 2. Filtro MULTI-EMPRESA (Navegação no Front)
         empresa_id = self.request.query_params.get('empresa')
@@ -112,6 +120,25 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             descricao=request.data.get('descricao', '')
         )
         return Response(AnexoServicoSerializer(anexo).data, status=201)
+
+    @action(detail=True, methods=['get', 'post'])
+    def comentarios(self, request, pk=None):
+        ordem_servico = self.get_object()
+        if request.method == 'GET':
+            comentarios = ordem_servico.comentarios.all()
+            serializer = ComentarioOrdemServicoSerializer(comentarios, many=True, context={'request': request})
+            return Response(serializer.data)
+        
+        if request.method == 'POST':
+            autor = getattr(request.user, 'equipe', None)
+            if not autor:
+                return Response({"erro": "Usuário não tem um perfil de equipe associado."}, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = ComentarioOrdemServicoSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(ordem_servico=ordem_servico, autor=autor)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def _format_validation_error(self, e):
         if hasattr(e, 'message_dict'):

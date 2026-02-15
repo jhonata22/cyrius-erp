@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OrdemServico, ItemServico, AnexoServico, Notificacao
+from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
 
 # --- INLINES (Tabelas dentro da OS) ---
 
@@ -23,6 +23,12 @@ class AnexoServicoInline(admin.TabularInline):
     extra = 0
     fields = ('arquivo', 'tipo', 'descricao', 'uploaded_at')
     readonly_fields = ('uploaded_at',)
+
+class ComentarioOrdemServicoInline(admin.TabularInline):
+    model = ComentarioOrdemServico
+    extra = 0
+    readonly_fields = ('autor', 'created_at')
+    fields = ('texto', 'autor', 'created_at')
 
 # --- ADMIN PRINCIPAL ---
 
@@ -54,7 +60,7 @@ class OrdemServicoAdmin(admin.ModelAdmin):
     
     readonly_fields = ('created_at', 'updated_at', 'get_valor_total')
     
-    inlines = [ItemServicoInline, AnexoServicoInline]
+    inlines = [ItemServicoInline, AnexoServicoInline, ComentarioOrdemServicoInline]
     
     fieldsets = (
         ('Identificação', {

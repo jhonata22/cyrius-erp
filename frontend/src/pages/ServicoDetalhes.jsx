@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
   Truck, Printer, QrCode, Download,
-  Edit, Monitor, Users, UserPlus, X 
+  Edit, Monitor, Users, UserPlus, X, MessageSquare 
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
@@ -44,6 +44,10 @@ export default function ServicoDetalhes() {
     desconto: ''
   });
 
+  // State para Comentários
+  const [comentarios, setComentarios] = useState([]);
+  const [novoComentario, setNovoComentario] = useState('');
+
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
@@ -70,6 +74,9 @@ export default function ServicoDetalhes() {
             estoqueService.listarProdutos(empresaId), // Passa ID para filtrar estoque
             equipeService.listar(empresaId)           // Passa ID para filtrar equipe
         ]);
+
+        const dadosComentarios = await servicoService.listarComentarios(id);
+        setComentarios(dadosComentarios);
 
         setProdutos(listaProdutos);
         setEquipe(listaEquipe);
@@ -124,6 +131,20 @@ export default function ServicoDetalhes() {
         carregarDados();
     } catch (error) {
         alert("Erro ao remover técnico.");
+    }
+  };
+
+  const handleAdicionarComentario = async (e) => {
+    e.preventDefault();
+    if (!novoComentario.trim()) return;
+
+    try {
+      await servicoService.adicionarComentario(id, novoComentario);
+      setNovoComentario('');
+      carregarDados();
+    } catch (error) {
+      console.error("Erro ao adicionar comentário:", error);
+      alert("Não foi possível adicionar o comentário.");
     }
   };
 
@@ -631,6 +652,46 @@ export default function ServicoDetalhes() {
                     </div>
                     <p className="text-[9px] text-red-400 mt-2 leading-tight">Valor a ser reembolsado ao técnico (Sai do caixa da empresa).</p>
                 </div>
+            </div>
+
+            {/* COMENTÁRIOS */}
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <MessageSquare size={14} /> Comentários e Histórico
+              </h3>
+              <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+                {comentarios.map(com => (
+                  <div key={com.id} className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
+                      {com.autor_nome ? com.autor_nome.charAt(0) : '-'}
+                    </div>
+                    <div className="flex-1 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-bold text-slate-700">{com.autor_nome || 'Sistema'}</p>
+                        <p className="text-[9px] text-slate-400 font-medium">{new Date(com.created_at).toLocaleString('pt-BR')}</p>
+                      </div>
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{com.texto}</p>
+                    </div>
+                  </div>
+                ))}
+                {comentarios.length === 0 && (
+                  <p className="text-xs text-center text-slate-400 py-6">Nenhum comentário ainda.</p>
+                )}
+              </div>
+              {!isLocked && (
+                <form onSubmit={handleAdicionarComentario} className="mt-4 pt-4 border-t border-slate-100">
+                  <textarea 
+                    value={novoComentario}
+                    onChange={e => setNovoComentario(e.target.value)}
+                    placeholder="Deixe uma nota para a equipe..."
+                    className="w-full bg-slate-50 border-slate-200 border rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-[#7C69AF]/50"
+                    rows={2}
+                  />
+                  <button type="submit" className="mt-2 w-full bg-[#302464] text-white py-2 rounded-lg text-xs font-bold hover:bg-[#4B3C8A] transition-colors">
+                    Publicar
+                  </button>
+                </form>
+              )}
             </div>
 
             {/* CARD DE TÉCNICOS RESPONSÁVEIS */}

@@ -133,3 +133,12 @@ class Notificacao(models.Model):
 
     def __str__(self):
         return f"{self.titulo} - {self.destinatario.username}"
+
+class ComentarioOrdemServico(models.Model):
+    ordem_servico = models.ForeignKey(OrdemServico, related_name='comentarios', on_delete=models.CASCADE)
+    autor = models.ForeignKey('equipe.Equipe', on_delete=models.SET_NULL, null=True)
+    texto = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']

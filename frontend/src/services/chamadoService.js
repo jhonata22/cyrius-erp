@@ -83,6 +83,17 @@ const chamadoService = {
     const response = await api.get('/chamados/' + id + '/relacionados/');
     return response.data;
   },
+
+  // Comentários
+  listarComentarios: async (chamadoId) => {
+    const response = await api.get(`/chamados/${chamadoId}/comentarios/`);
+    return response.data;
+  },
+
+  adicionarComentario: async (chamadoId, texto) => {
+    const response = await api.post(`/chamados/${chamadoId}/comentarios/`, { texto });
+    return response.data;
+  },
 };
 
 export default chamadoService;
