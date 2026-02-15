@@ -6,11 +6,11 @@ from utils.permissions import IsFuncionario, IsSocio, IsGestor, IsOwnerOrGestor
 # Models e Serializers
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, 
-    ContaEmail, DocumentacaoTecnica, ContratoCliente, 
+    ContaEmail, DocumentacaoTecnica, ContratoCliente, EmailGestao
 )
 from .serializers import (
     ClienteSerializer, ContatoClienteSerializer, ProvedorInternetSerializer,
-    ContaEmailSerializer, DocumentacaoTecnicaSerializer, ContratoClienteSerializer, 
+    ContaEmailSerializer, DocumentacaoTecnicaSerializer, ContratoClienteSerializer, EmailGestaoSerializer
 )
 
 class OptimizedQuerySetMixin:
@@ -65,3 +65,8 @@ class ContratoViewSet(viewsets.ModelViewSet):
     
     # OBRIGATÓRIO PARA O UPLOAD DE ARQUIVO FUNCIONAR
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
+
+class EmailGestaoViewSet(viewsets.ModelViewSet):
+    queryset = EmailGestao.objects.all()
+    serializer_class = EmailGestaoSerializer
+    permission_classes = [IsFuncionario]

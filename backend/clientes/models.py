@@ -115,3 +115,12 @@ class ContratoCliente(models.Model):
         verbose_name_plural = 'Contratos'
         ordering = ['-data_upload']
 
+class EmailGestao(models.Model):
+    cliente = models.OneToOneField('Cliente', on_delete=models.CASCADE, related_name='email_gestao')
+    email = models.EmailField(max_length=255)
+    receber_alertas = models.BooleanField(default=True, help_text="Habilita disparo de PDFs/Relatórios automáticos")
+    
+    class Meta:
+        db_table = 'TB_EMAIL_GESTAO'
+        verbose_name = 'E-mail de Gestão'
+

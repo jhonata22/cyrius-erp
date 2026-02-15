@@ -2,7 +2,7 @@ import re # <--- IMPORTANTE: Adicione este import no topo
 from rest_framework import serializers
 from .models import (
     Cliente, ContatoCliente, ProvedorInternet, 
-    ContaEmail, DocumentacaoTecnica, ContratoCliente
+    ContaEmail, DocumentacaoTecnica, ContratoCliente, EmailGestao
 )
 
 class ContratoClienteSerializer(serializers.ModelSerializer):
@@ -30,6 +30,11 @@ class DocumentacaoTecnicaSerializer(serializers.ModelSerializer):
         model = DocumentacaoTecnica
         fields = '__all__'
 
+class EmailGestaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailGestao
+        fields = '__all__'
+
 class ClienteSerializer(serializers.ModelSerializer):
     # Nested Relations (Leitura)
     contatos = ContatoClienteSerializer(many=True, read_only=True)
@@ -39,6 +44,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     nome_exibicao = serializers.SerializerMethodField()
     
     documentacao_tecnica = serializers.SerializerMethodField()
+    email_gestao = serializers.SerializerMethodField()
 
     class Meta:
         model = Cliente
@@ -56,6 +62,12 @@ class ClienteSerializer(serializers.ModelSerializer):
             doc = obj.documentacao_tecnica
             return DocumentacaoTecnicaSerializer(doc).data
         except DocumentacaoTecnica.DoesNotExist:
+            return None
+
+    def get_email_gestao(self, obj):
+        try:
+            return EmailGestaoSerializer(obj.email_gestao).data
+        except EmailGestao.DoesNotExist:
             return None
 
     # === VALIDAÇÕES DE SEGURANÇA E LIMPEZA ===

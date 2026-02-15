@@ -35,6 +35,17 @@ const clienteService = {
       return [];
     }
   },
+
+  // Email de Gestão
+  criarEmailGestao: async (payload) => {
+    const response = await api.post('/emails-gestao/', payload);
+    return response.data;
+  },
+
+  atualizarEmailGestao: async (id, payload) => {
+    const response = await api.patch(`/emails-gestao/${id}/`, payload);
+    return response.data;
+  },
 };
 
 export default clienteService;

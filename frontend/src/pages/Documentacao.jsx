@@ -6,7 +6,7 @@ import {
   Search, BookOpen, X, ChevronRight, CheckCircle2, 
   AlertTriangle, Info, MapPin, Plus, Trash2, Eye, EyeOff,
   FileText, Download, UploadCloud, Pencil, 
-  History, Calendar, ChevronLeft, Camera, Power // <--- Adicionado Power
+  History, Calendar, ChevronLeft, Camera, Power, MailCheck // <--- Adicionado Power
 } from 'lucide-react';
 
 // SERVIÇOS
@@ -40,6 +40,8 @@ export default function Documentacao() {
   const [docId, setDocId] = useState(null); 
   const [modalAberto, setModalAberto] = useState(null); 
   const [formTemp, setFormTemp] = useState({}); 
+
+  const [emailGestaoForm, setEmailGestaoForm] = useState({ id: null, email: '', receber_alertas: true });
 
   const [textos, setTextos] = useState({
     configuracao_mikrotik: '',
@@ -89,6 +91,12 @@ export default function Documentacao() {
         
         setCliente(dadosCliente);
         setAtivos(dadosAtivos || []);
+
+        if (dadosCliente?.email_gestao) {
+          setEmailGestaoForm(dadosCliente.email_gestao);
+        } else {
+          setEmailGestaoForm({ id: null, email: '', receber_alertas: true });
+        }
 
         if (dadosCliente.documentacao_tecnica) {
           const doc = dadosCliente.documentacao_tecnica;
@@ -188,6 +196,30 @@ export default function Documentacao() {
           console.error(error);
           alert("Erro ao atualizar dados do cliente.");
       }
+  };
+
+  const handleSalvarEmailGestao = async (e) => {
+    e.preventDefault();
+    if (!emailGestaoForm.email) return alert("O campo de e-mail não pode estar vazio.");
+
+    try {
+      const payload = { 
+        ...emailGestaoForm, 
+        cliente: id 
+      };
+
+      if (emailGestaoForm.id) {
+        await clienteService.atualizarEmailGestao(emailGestaoForm.id, payload);
+      } else {
+        await clienteService.criarEmailGestao(payload);
+      }
+      alert("E-mail de gestão salvo com sucesso!");
+      refreshCurrentClientData(); // Recarrega os dados para garantir consistência
+
+    } catch (error) {
+      console.error("Erro ao salvar e-mail de gestão", error);
+      alert("Ocorreu um erro ao salvar o e-mail.");
+    }
   };
 
   // Função para recarregar os dados do cliente ATUAL sem resetar a UI
@@ -502,6 +534,34 @@ export default function Documentacao() {
                             </div>
                         </div>
                     </div>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase">E-mail de Gestão</h3></div>
+                    <form onSubmit={handleSalvarEmailGestao} className="space-y-4">
+                        <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase">Email para Faturas e Relatórios</label>
+                            <input 
+                                type="email"
+                                placeholder="financeiro@cliente.com"
+                                value={emailGestaoForm.email}
+                                onChange={e => setEmailGestaoForm({...emailGestaoForm, email: e.target.value})}
+                                className="w-full mt-1 px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]"
+                            />
+                        </div>
+                        <div className="flex items-center gap-3 pt-2">
+                            <input 
+                                type="checkbox" 
+                                id="receber_alertas" 
+                                checked={emailGestaoForm.receber_alertas}
+                                onChange={e => setEmailGestaoForm({...emailGestaoForm, receber_alertas: e.target.checked})}
+                                className="h-5 w-5 rounded text-[#302464] focus:ring-[#7C69AF]"
+                            />
+                            <label htmlFor="receber_alertas" className="text-sm font-medium text-slate-600">Receber relatórios automáticos neste e-mail</label>
+                        </div>
+                        <button type="submit" className="w-full bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2">
+                            <MailCheck size={16} /> Salvar E-mail de Gestão
+                        </button>
+                    </form>
                 </div>
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                     <div className="flex justify-between items-center mb-8"><h3 className="font-black text-[#302464] text-xs uppercase">Contatos</h3><button onClick={() => setModalAberto('contato')} className="p-2 bg-slate-50 text-[#7C69AF] rounded-xl hover:bg-purple-100 transition-all"><Plus size={18}/></button></div>
