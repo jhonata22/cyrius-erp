@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useChamados } from '../contexts/ChamadosContext';
 import { 
   ArrowLeft, MapPin, Calendar, Clock, 
@@ -36,6 +36,7 @@ export default function ChamadoDetalhes() {
   
   const [chamado, setChamado] = useState(null);
   const [cliente, setCliente] = useState(null);
+  const [relacionados, setRelacionados] = useState([]);
   
   // Listas para seleção
   const [todosTecnicos, setTodosTecnicos] = useState([]); // Lista completa para o select
@@ -64,6 +65,10 @@ export default function ChamadoDetalhes() {
       setLoading(true);
       // Busca o chamado
       const dados = await chamadoService.buscarPorId(id);
+
+      // Busca relacionados
+      const dadosRelacionados = await chamadoService.listarRelacionados(id);
+      setRelacionados(dadosRelacionados);
       
       // Busca lista completa de técnicos daquela empresa para permitir adição
       const listaEquipe = await equipeService.listar(dados.empresa || null);
@@ -259,6 +264,33 @@ export default function ChamadoDetalhes() {
                 </div>
             </div>
           </div>
+
+          {/* HISTÓRICO DE RESOLUÇÕES */}
+          {(relacionados && relacionados.length > 0) ? (
+            <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4">Histórico de Resoluções para este Assunto</h3>
+              <div className="space-y-4">
+                {relacionados.map(rel => (
+                  <div key={rel.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <Link to={`/chamados/${rel.id}`} className="text-sm font-bold text-indigo-600 hover:underline">
+                        #{rel.protocolo}
+                      </Link>
+                      <span className="text-xs font-semibold text-slate-500">{rel.cliente_nome}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 truncate">
+                      {rel.resolucao || 'Resolução não detalhada.'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
+                 <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4">Histórico de Resoluções para este Assunto</h3>
+                <p className="text-sm text-slate-500">Nenhum histórico encontrado para este assunto.</p>
+            </div>
+          )}
 
           {/* CARD DE CUSTOS (Apenas Visita) */}
           {isVisita && (

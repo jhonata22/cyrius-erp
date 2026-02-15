@@ -6,6 +6,15 @@ from infra.models import Ativo
 from equipe.models import Equipe
 from core.models import Empresa
 
+
+class ChamadoRelacionadoSerializer(serializers.ModelSerializer):
+    cliente_nome = serializers.CharField(source='cliente.nome_fantasia', read_only=True)
+
+    class Meta:
+        model = Chamado
+        fields = ['id', 'protocolo', 'resolucao', 'created_at', 'cliente_nome']
+
+
 class AssuntoChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssuntoChamado

@@ -12,7 +12,7 @@ import traceback
 
 # MODELOS E SERIALIZERS
 from .models import Chamado, AssuntoChamado
-from .serializers import ChamadoSerializer, AssuntoChamadoSerializer
+from .serializers import ChamadoSerializer, AssuntoChamadoSerializer, ChamadoRelacionadoSerializer
 from .services import atualizar_chamado
 from equipe.models import Equipe  # Importação corrigida
 from servicos.models import OrdemServico
@@ -46,6 +46,33 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             return Response(
                 {"erro_debug": str(e), "detalhe": "Erro ao listar chamados."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        
+    @action(detail=True, methods=['get'])
+    def relacionados(self, request, pk=None):
+        try:
+            chamado_atual = self.get_object()
+            if not chamado_atual.assunto:
+                return Response([], status=status.HTTP_200_OK)
+
+            chamados_relacionados = Chamado.objects.filter(
+                assunto=chamado_atual.assunto,
+                status='FINALIZADO',
+            ).exclude(
+                id=chamado_atual.id
+            ).order_by('-data_fechamento')[:5]
+
+            serializer = ChamadoRelacionadoSerializer(chamados_relacionados, many=True)
+            return Response(serializer.data)
+
+        except Chamado.DoesNotExist:
+            return Response({"detalhe": "Chamado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"erro_debug": str(e), "detalhe": "Erro ao buscar chamados relacionados."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

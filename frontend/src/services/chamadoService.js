@@ -78,6 +78,11 @@ const chamadoService = {
     const response = await api.get('/assuntos/');
     return response.data?.results || response.data || [];
   },
+
+  listarRelacionados: async (id) => {
+    const response = await api.get('/chamados/' + id + '/relacionados/');
+    return response.data;
+  },
 };
 
 export default chamadoService;
