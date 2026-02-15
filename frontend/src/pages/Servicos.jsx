@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Wrench, Truck, Monitor, 
-  Search, Clock, CheckCircle, XCircle, AlertCircle, Building2, User, AlertTriangle 
+  Search, Clock, CheckCircle, XCircle, AlertCircle, Building2, User, AlertTriangle, UserPlus 
 } from 'lucide-react';
 
 import servicoService from '../services/servicoService';
@@ -30,6 +30,10 @@ export default function Servicos() {
   const [filtroStatus, setFiltroStatus] = useState('TODOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // State para Solicitante
+  const [contatosCliente, setContatosCliente] = useState([]);
+  const [isCreatingSolicitante, setIsCreatingSolicitante] = useState(false);
+
   // Form para Nova OS
   const [formData, setFormData] = useState({
     cliente: '',
@@ -38,7 +42,11 @@ export default function Servicos() {
     tipo: 'LABORATORIO',
     descricao_problema: '',
     tecnicos: [],
-    empresa: '' // Adicionado campo empresa ao formulário
+    empresa: '', // Adicionado campo empresa ao formulário
+    solicitante: '',
+    novo_solicitante_nome: '',
+    novo_solicitante_telefone: '',
+    novo_solicitante_cargo: ''
   });
 
   // 3. CARREGAR DADOS COM FILTRO DE EMPRESA
@@ -73,6 +81,24 @@ export default function Servicos() {
     carregarDados();
   }, [carregarDados]);
 
+  useEffect(() => {
+    if (formData.cliente) {
+      setIsCreatingSolicitante(false); // Reseta para modo de seleção
+      setFormData(prev => ({ ...prev, solicitante: '', novo_solicitante_nome: '' })); // Limpa seleção anterior
+      const fetchContatos = async () => {
+        const contatos = await clienteService.listarContatosLista(formData.cliente);
+        setContatosCliente(contatos);
+        if (contatos.length > 0) {
+          const principal = contatos.find(c => c.is_principal);
+          setFormData(prev => ({ ...prev, solicitante: principal ? principal.id : contatos[0].id }));
+        }
+      };
+      fetchContatos();
+    } else {
+      setContatosCliente([]);
+    }
+  }, [formData.cliente]);
+
   // --- FILTRO INTELIGENTE DE ATIVOS ---
   const ativosDoCliente = useMemo(() => {
     if (!formData.cliente) return [];
@@ -104,8 +130,10 @@ export default function Servicos() {
         tipo: 'LABORATORIO',
         descricao_problema: '', 
         tecnicos: [],
-        empresa: empresaPadrao // Preenche com o padrão inteligente
+        empresa: empresaPadrao, // Preenche com o padrão inteligente
+        solicitante: '', novo_solicitante_nome: '', novo_solicitante_telefone: '', novo_solicitante_cargo: ''
     });
+    setIsCreatingSolicitante(false);
     setIsModalOpen(true);
   };
 
@@ -123,7 +151,11 @@ export default function Servicos() {
         ativo: formData.ativo ? parseInt(formData.ativo) : null,
         
         // VINCULA À EMPRESA SELECIONADA NO FORMULÁRIO (Ignora o filtro visual)
-        empresa: formData.empresa 
+        empresa: formData.empresa, 
+        solicitante: formData.solicitante || null,
+        novo_solicitante_nome: formData.novo_solicitante_nome || '',
+        novo_solicitante_telefone: formData.novo_solicitante_telefone || '',
+        novo_solicitante_cargo: formData.novo_solicitante_cargo || ''
       };
 
       const novaOs = await servicoService.criar(payload);
@@ -371,6 +403,30 @@ export default function Servicos() {
                                 <option key={c.id} value={c.id}>{c.nome_fantasia || c.nome || c.razao_social}</option>
                             ))}
                         </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Solicitante</label>
+                            {formData.cliente && (
+                            <button type="button" onClick={() => setIsCreatingSolicitante(!isCreatingSolicitante)} className="text-xs font-bold text-[#7C69AF] flex items-center gap-1">
+                                <UserPlus size={14}/> {isCreatingSolicitante ? 'Selecionar Existente' : '+ Novo Contato'}
+                            </button>
+                            )}
+                        </div>
+
+                        {isCreatingSolicitante ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                            <input type="text" name="novo_solicitante_nome" placeholder="Nome Completo" required value={formData.novo_solicitante_nome} onChange={(e) => setFormData({...formData, novo_solicitante_nome: e.target.value})} className="sm:col-span-2 w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                            <input type="text" name="novo_solicitante_telefone" placeholder="Telefone" value={formData.novo_solicitante_telefone} onChange={(e) => setFormData({...formData, novo_solicitante_telefone: e.target.value})} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                            <input type="text" name="novo_solicitante_cargo" placeholder="Cargo" value={formData.novo_solicitante_cargo} onChange={(e) => setFormData({...formData, novo_solicitante_cargo: e.target.value})} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                            </div>
+                        ) : (
+                            <select name="solicitante" value={formData.solicitante} onChange={(e) => setFormData({...formData, solicitante: e.target.value})} className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-700 outline-none" disabled={!formData.cliente || contatosCliente.length === 0}>
+                            <option value="">{formData.cliente ? (contatosCliente.length > 0 ? 'Selecione o solicitante...' : 'Nenhum contato, crie um novo.') : 'Selecione um cliente primeiro'}</option>
+                            {contatosCliente.map(c => <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ''}</option>)} 
+                            </select>
+                        )}
                     </div>
 
                     <div className="space-y-1">

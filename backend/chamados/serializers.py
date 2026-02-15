@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado
-from clientes.models import Cliente
+from clientes.models import Cliente, ContatoCliente
 from infra.models import Ativo
 from equipe.models import Equipe
 from core.models import Empresa
@@ -40,6 +40,7 @@ class ChamadoTecnicoSerializer(serializers.ModelSerializer):
 class ChamadoSerializer(serializers.ModelSerializer):
     # IDs no POST
     cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
+    solicitante = serializers.PrimaryKeyRelatedField(queryset=ContatoCliente.objects.all(), required=False, allow_null=True)
     tecnico = serializers.PrimaryKeyRelatedField(queryset=Equipe.objects.all(), required=False, allow_null=True)
     ativo = serializers.PrimaryKeyRelatedField(queryset=Ativo.objects.all(), required=False, allow_null=True)
     assunto = serializers.PrimaryKeyRelatedField(queryset=AssuntoChamado.objects.all(), required=False, allow_null=True)
@@ -64,15 +65,24 @@ class ChamadoSerializer(serializers.ModelSerializer):
     tipo_ativo = serializers.CharField(source='ativo.tipo', read_only=True)
     tecnicos_nomes = serializers.SerializerMethodField()
     assunto_nome = serializers.CharField(source='assunto.titulo', read_only=True)
+    solicitante_nome = serializers.CharField(source='solicitante.nome', read_only=True)
+    solicitante_telefone = serializers.CharField(source='solicitante.telefone', read_only=True)
     
     # Write only field for new subject
     novo_assunto = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # Write-only fields for new solicitante
+    novo_solicitante_nome = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    novo_solicitante_telefone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    novo_solicitante_cargo = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Chamado
         fields = [
             'id', 'empresa', 'empresa_nome', 
             'cliente', 'nome_cliente', 
+            'solicitante', 'solicitante_nome', 'solicitante_telefone',
+            'novo_solicitante_nome', 'novo_solicitante_telefone', 'novo_solicitante_cargo',
             'ativo', 'nome_ativo', 'tipo_ativo',
             'tecnico', 'nome_tecnico',
             'assunto', 'assunto_nome', 'novo_assunto',
@@ -118,6 +128,13 @@ class ChamadoSerializer(serializers.ModelSerializer):
         if instance.tecnicos.exists():
             representation['tecnicos'] = [ {"id": t.id, "nome": t.nome} for t in instance.tecnicos.all() ]
 
+        if instance.solicitante:
+            representation['solicitante'] = {
+                "id": instance.solicitante.id,
+                "nome": instance.solicitante.nome,
+                "telefone": instance.solicitante.telefone
+            }
+
         return representation
 
     def _handle_assunto(self, validated_data):
@@ -129,6 +146,23 @@ class ChamadoSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        # Lógica para criar novo solicitante inline
+        novo_solicitante_nome = validated_data.pop('novo_solicitante_nome', None)
+        if novo_solicitante_nome:
+            cliente = validated_data.get('cliente')
+            if cliente:
+                solicitante = ContatoCliente.objects.create(
+                    cliente=cliente,
+                    nome=novo_solicitante_nome,
+                    telefone=validated_data.pop('novo_solicitante_telefone', ''),
+                    cargo=validated_data.pop('novo_solicitante_cargo', '')
+                )
+                validated_data['solicitante'] = solicitante
+        
+        # Limpa os campos que não pertencem ao modelo Chamado
+        validated_data.pop('novo_solicitante_telefone', None)
+        validated_data.pop('novo_solicitante_cargo', None)
+
         validated_data = self._handle_assunto(validated_data)
         tecnicos_data = validated_data.pop('tecnicos', [])
         chamado = Chamado.objects.create(**validated_data)

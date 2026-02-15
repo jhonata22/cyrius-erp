@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   ChevronDown, ChevronRight, Search, Info, Monitor, Filter,
-  ChevronLeft, ChevronRight as ChevronRightIcon, Lock, ListFilter
+  ChevronLeft, ChevronRight as ChevronRightIcon, Lock, ListFilter, UserPlus
 } from 'lucide-react';
 
 import { useChamados } from '../contexts/ChamadosContext';
 import chamadoService from '../services/chamadoService'; 
+import clienteService from '../services/clienteService'; 
 
 const PRIORIDADE_MAP = {
   BAIXA: 'bg-blue-50 text-blue-600 border-blue-100',
@@ -44,12 +45,20 @@ export default function Chamados() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const subjectInputRef = useRef(null);
   
+  // State para Solicitante
+  const [contatosCliente, setContatosCliente] = useState([]);
+  const [isCreatingSolicitante, setIsCreatingSolicitante] = useState(false);
+  
   const [formData, setFormData] = useState({
     cliente: '', ativo: '', assunto: '', novo_assunto: '', descricao_detalhada: '',
     prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
     custo_ida: '', custo_volta: '', tecnicos: [],
     tecnico: '', 
-    empresa: ''
+    empresa: '',
+    solicitante: '',
+    novo_solicitante_nome: '',
+    novo_solicitante_telefone: '',
+    novo_solicitante_cargo: ''
   });
   
   console.log("Rendering Chamados component, data:", { chamados, assuntos, loading });
@@ -69,6 +78,25 @@ export default function Chamados() {
       fetchAssuntos();
     }
   }, [isModalOpen]);
+
+  useEffect(() => {
+    if (formData.cliente) {
+      setIsCreatingSolicitante(false); // Reseta para modo de seleção
+      setFormData(prev => ({ ...prev, solicitante: '', novo_solicitante_nome: '' })); // Limpa seleção anterior
+      const fetchContatos = async () => {
+        const contatos = await clienteService.listarContatosLista(formData.cliente);
+        setContatosCliente(contatos);
+        if (contatos.length > 0) {
+          // Tenta pré-selecionar o principal, se não, o primeiro
+          const principal = contatos.find(c => c.is_principal);
+          setFormData(prev => ({ ...prev, solicitante: principal ? principal.id : contatos[0].id }));
+        }
+      };
+      fetchContatos();
+    } else {
+      setContatosCliente([]);
+    }
+  }, [formData.cliente]);
 
   useLayoutEffect(() => {
     if (!loading && scrollPos > 0) window.scrollTo(0, scrollPos);
@@ -112,8 +140,10 @@ export default function Chamados() {
       prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
       custo_ida: '', custo_volta: '', tecnicos: [],
       tecnico: '',
-      empresa: empresaPadrao
+      empresa: empresaPadrao,
+      solicitante: '', novo_solicitante_nome: '', novo_solicitante_telefone: '', novo_solicitante_cargo: ''
     });
+    setIsCreatingSolicitante(false);
     setIsModalOpen(true);
   };
 
@@ -165,6 +195,10 @@ export default function Chamados() {
         ativo: formData.ativo || null,
         tecnicos: formData.tecnicos,
         tipo_atendimento: modalMode,
+        solicitante: formData.solicitante || null,
+        novo_solicitante_nome: formData.novo_solicitante_nome || '',
+        novo_solicitante_telefone: formData.novo_solicitante_telefone || '',
+        novo_solicitante_cargo: formData.novo_solicitante_cargo || ''
     };
 
     if (formData.assunto) {
@@ -299,6 +333,31 @@ export default function Chamados() {
                 {modalMode === 'VISITA' && <div className="md:col-span-2 bg-purple-50 p-6 rounded-3xl border border-purple-100 animate-in slide-in-from-top-2 mb-2"><div className="flex gap-4 items-center mb-4"><Truck className="text-[#7C69AF]" size={24} /><h3 className="font-black text-[#302464] text-sm uppercase tracking-widest">Detalhes do Agendamento</h3></div><div className="space-y-1"><label className="text-[10px] font-black text-[#302464] uppercase tracking-widest block mb-1">Data e Hora da Visita</label><input type="datetime-local" name="data_agendamento" required value={formData.data_agendamento} onChange={handleInputChange} className="w-full bg-white px-5 py-4 rounded-2xl border-none outline-none focus:ring-4 focus:ring-purple-200 font-bold text-[#302464] shadow-sm"/></div></div>}
                 <div className="md:col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filial Responsável</label><select name="empresa" required value={formData.empresa} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700">{Array.isArray(empresas) && empresas.map(emp => <option key={emp?.id} value={emp?.id}>{emp?.nome_fantasia}</option>)}</select></div>
                 <div className="md:col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente</label><select name="cliente" required value={formData.cliente} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700"><option value="">Selecione...</option>{Array.isArray(clientes) && clientes.map(c => <option key={c?.id} value={c?.id}>{c?.nome || c?.razao_social}</option>)}</select></div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Solicitante</label>
+                    {formData.cliente && (
+                      <button type="button" onClick={() => setIsCreatingSolicitante(!isCreatingSolicitante)} className="text-xs font-bold text-[#7C69AF] flex items-center gap-1">
+                        <UserPlus size={14}/> {isCreatingSolicitante ? 'Selecionar Existente' : '+ Novo Contato'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isCreatingSolicitante ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                      <input type="text" name="novo_solicitante_nome" placeholder="Nome Completo" required value={formData.novo_solicitante_nome} onChange={handleInputChange} className="sm:col-span-2 w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                      <input type="text" name="novo_solicitante_telefone" placeholder="Telefone" value={formData.novo_solicitante_telefone} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                      <input type="text" name="novo_solicitante_cargo" placeholder="Cargo" value={formData.novo_solicitante_cargo} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                    </div>
+                  ) : (
+                    <select name="solicitante" value={formData.solicitante} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700" disabled={!formData.cliente || contatosCliente.length === 0}>
+                      <option value="">{formData.cliente ? (contatosCliente.length > 0 ? 'Selecione o solicitante...' : 'Nenhum contato, crie um novo.') : 'Selecione um cliente primeiro'}</option>
+                      {contatosCliente.map(c => <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` (${c.cargo})` : ''}</option>)} 
+                    </select>
+                  )}
+                </div>
+
                 <div className="md:col-span-2 space-y-1 relative" ref={subjectInputRef}>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto</label>
                   <div className="relative">

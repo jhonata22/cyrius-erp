@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
+from clientes.models import ContatoCliente
 from equipe.models import Equipe
 from infra.models import Ativo
 
@@ -37,6 +38,10 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     nome_cliente = serializers.CharField(source='cliente.razao_social', read_only=True)
     nome_tecnico = serializers.CharField(source='tecnico_responsavel.nome', read_only=True)
     empresa_nome = serializers.CharField(source='empresa.nome_fantasia', read_only=True)
+    empresa_cnpj = serializers.CharField(source='empresa.cnpj', read_only=True)
+    empresa_endereco = serializers.CharField(source='empresa.endereco', read_only=True)
+    solicitante_nome = serializers.CharField(source='solicitante.nome', read_only=True)
+    solicitante_telefone = serializers.CharField(source='solicitante.telefone', read_only=True)
 
     # ManyToMany Ativos
     ativos = AtivoSerializer(many=True, read_only=True)
@@ -53,19 +58,27 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
         queryset=Equipe.objects.all(),
         required=False
     )
+    solicitante = serializers.PrimaryKeyRelatedField(queryset=ContatoCliente.objects.all(), required=False, allow_null=True)
 
     total_pecas = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     valor_total_geral = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    # Write-only fields para criação inline de solicitante
+    novo_solicitante_nome = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    novo_solicitante_telefone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    novo_solicitante_cargo = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = OrdemServico
         fields = [
             'id', 'empresa', 'titulo', 'cliente', 'tecnico_responsavel', 'tecnicos',
+            'solicitante', 'solicitante_nome', 'solicitante_telefone',
+            'novo_solicitante_nome', 'novo_solicitante_telefone', 'novo_solicitante_cargo',
             'tipo', 'status', 'descricao_problema', 'relatorio_tecnico', 'data_entrada',
             'data_previsao', 'data_conclusao', 'data_finalizacao', 'custo_deslocamento',
             'custo_terceiros', 'valor_mao_de_obra', 'desconto', 'created_at', 'updated_at',
             # Campos ReadOnly/Custom
-            'nome_cliente', 'nome_tecnico', 'empresa_nome', 'itens', 'anexos', 'total_pecas', 'valor_total_geral',
+            'nome_cliente', 'nome_tecnico', 'empresa_nome', 'empresa_cnpj', 'empresa_endereco', 'itens', 'anexos', 'total_pecas', 'valor_total_geral',
             # Campos de Ativo
             'ativos', 'ativos_ids'
         ]
@@ -73,6 +86,26 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'tecnico_responsavel': {'required': False, 'allow_null': True},
         }
+
+    def create(self, validated_data):
+        # Lógica para criar novo solicitante inline
+        novo_solicitante_nome = validated_data.pop('novo_solicitante_nome', None)
+        if novo_solicitante_nome:
+            cliente = validated_data.get('cliente')
+            if cliente:
+                solicitante = ContatoCliente.objects.create(
+                    cliente=cliente,
+                    nome=novo_solicitante_nome,
+                    telefone=validated_data.pop('novo_solicitante_telefone', ''),
+                    cargo=validated_data.pop('novo_solicitante_cargo', '')
+                )
+                validated_data['solicitante'] = solicitante
+        
+        # Limpa os campos que não pertencem ao modelo
+        validated_data.pop('novo_solicitante_telefone', None)
+        validated_data.pop('novo_solicitante_cargo', None)
+
+        return super().create(validated_data)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -83,6 +116,13 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             ]
         else:
              representation['tecnicos'] = []
+
+        if instance.solicitante:
+            representation['solicitante'] = {
+                "id": instance.solicitante.id,
+                "nome": instance.solicitante.nome,
+                "telefone": instance.solicitante.telefone
+            }
 
         return representation
 

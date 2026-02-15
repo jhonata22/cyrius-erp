@@ -1,4 +1,6 @@
-from rest_framework import viewsets, parsers
+from rest_framework import viewsets, parsers, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from utils.permissions import IsFuncionario, IsSocio, IsGestor, IsOwnerOrGestor
 
 # Models e Serializers
@@ -24,6 +26,17 @@ class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all().order_by('-id')
     serializer_class = ClienteSerializer
     permission_classes = [IsFuncionario] # Ajuste conforme suas regras (IsFuncionario)
+
+    @action(detail=True, methods=['get'])
+    def contatos_lista(self, request, pk=None):
+        try:
+            cliente = self.get_object()
+            contatos = cliente.contatos.all().order_by('-is_principal', 'nome').values('id', 'nome', 'cargo', 'telefone')
+            return Response(contatos)
+        except Cliente.DoesNotExist:
+            return Response({"erro": "Cliente não encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"erro": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ContatoClienteViewSet(OptimizedQuerySetMixin, viewsets.ModelViewSet):
     queryset = ContatoCliente.objects.all()

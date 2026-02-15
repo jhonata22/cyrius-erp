@@ -82,6 +82,14 @@ class Chamado(TimeStampedModel):
         verbose_name="Técnico Responsável"
     )
 
+    solicitante = models.ForeignKey(
+        'clientes.ContatoCliente',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='chamados_solicitados',
+        verbose_name="Solicitante"
+    )
+
     titulo = models.CharField(max_length=100)
     descricao_detalhada = models.TextField(max_length=500)
     origem = models.CharField(max_length=50, choices=CanalComunicacao.choices, default=CanalComunicacao.WHATSAPP)

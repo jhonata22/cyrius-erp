@@ -30,6 +30,13 @@ class OrdemServico(TimeStampedModel):
     titulo = models.CharField(max_length=150, help_text="Ex: Formatação PC, Instalação Câmeras")
     
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT, related_name='servicos')
+    solicitante = models.ForeignKey(
+        'clientes.ContatoCliente', 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True, 
+        related_name='servicos_solicitados',
+        verbose_name="Solicitante"
+    )
     tecnico_responsavel = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT, related_name='servicos_liderados', null=True, blank=True)
     ativos = models.ManyToManyField('infra.Ativo', related_name='historico_os', blank=True)
 

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, CheckCircle, Plus, Trash2, 
   FileText, Image, Paperclip, Box, DollarSign, 
   Truck, Printer, QrCode, Download,
-  Edit, Monitor, Users, UserPlus, X, MessageSquare 
+  Edit, Monitor, Users, UserPlus, X, MessageSquare, User 
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import servicoService from '../services/servicoService';
@@ -263,7 +263,6 @@ export default function ServicoDetalhes() {
   const imprimirOS = () => {
     const totalGeral = (parseFloat(os.total_pecas) || 0) + (parseFloat(editData.valor_mao_de_obra) || 0) - (parseFloat(editData.desconto) || 0);
     const logoHtml = `<img src="/logo.png" alt="CYRIUS" style="max-height: 200px;" />`; 
-    const empresaNome = os.empresa_nome || "CYRIUS TECNOLOGIA"; 
 
     // Pega nomes dos técnicos para impressão
     const nomesTecnicos = os.tecnicos && os.tecnicos.length > 0 
@@ -295,7 +294,10 @@ export default function ServicoDetalhes() {
           <div class="header">
             <div class="logo-container">
                ${logoHtml}
-               <div style="font-size: 12px; margin-top: 5px; color: #666;">${empresaNome}</div>
+               <div style="font-size: 11px; margin-top: 8px; color: #666;">
+                ${os.empresa_endereco ? `<span>${os.empresa_endereco}</span><br/>` : ''}
+                ${os.empresa_cnpj ? `<span>CNPJ: ${os.empresa_cnpj}</span>` : ''}
+               </div>
             </div>
             <div class="info-os">
               <h1>OS #${String(os.id).padStart(4, '0')}</h1>
@@ -306,6 +308,7 @@ export default function ServicoDetalhes() {
             <div class="grid">
               <div>
                 <p><strong>Cliente:</strong> ${os.nome_cliente}</p>
+                <p><strong>Solicitante:</strong> ${os.solicitante?.nome || 'Não informado'}</p>
                 <p><strong>Técnicos:</strong> ${nomesTecnicos}</p>
                 ${os.nome_ativo ? `<p><strong>Ativo:</strong> ${os.nome_ativo}</p>` : ''} 
               </div>
@@ -424,6 +427,13 @@ export default function ServicoDetalhes() {
                     )}
                 </div>
                 <p className="text-slate-400 font-bold text-sm mt-1">{os.nome_cliente} • {os.titulo}</p>
+                {os.solicitante && (
+                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-semibold">
+                    <User size={12} className="text-slate-400"/>
+                    <span>{os.solicitante.nome}</span>
+                    {os.solicitante.telefone && <span>• {os.solicitante.telefone}</span>}
+                  </div>
+                )}
                 
                 {os.ativo && (
                     <div 

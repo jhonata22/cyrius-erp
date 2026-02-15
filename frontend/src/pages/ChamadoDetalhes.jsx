@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
   Info, Briefcase, Users, History, Building2, 
-  Trash2, Plus, AlertTriangle, Monitor, MessageSquare
+  Trash2, Plus, AlertTriangle, Monitor, MessageSquare, User
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
@@ -486,6 +486,24 @@ export default function ChamadoDetalhes() {
                 <MapPin size={16} className="shrink-0 mt-0.5 text-[#7C69AF]"/> 
                 {cliente.endereco}
               </p>
+
+              {/* Detalhes do Solicitante */}
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Solicitante</h4>
+                {chamado.solicitante ? (
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">{chamado.solicitante.nome}</p>
+                      {chamado.solicitante.telefone && (
+                        <p className="text-xs text-slate-500">{chamado.solicitante.telefone}</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Não informado</p>
+                )}
+              </div>
             </div>
           )}
 

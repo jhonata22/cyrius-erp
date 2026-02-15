@@ -23,7 +23,18 @@ const clienteService = {
 
   excluir: async (id) => {
     await api.delete(`/clientes/${id}/`);
-  }
+  },
+
+  listarContatosLista: async (clienteId) => {
+    if (!clienteId) return [];
+    try {
+      const response = await api.get(`/clientes/${clienteId}/contatos_lista/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Erro ao buscar contatos para o cliente ${clienteId}:`, error);
+      return [];
+    }
+  },
 };
 
 export default clienteService;
