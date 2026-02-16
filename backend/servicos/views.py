@@ -3,7 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.utils import timezone
 import traceback
+import os
+from django.conf import settings
+
+from utils.pdf_service import gerar_pdf_from_html
 
 from utils.permissions import IsFuncionario
 from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
@@ -139,6 +145,39 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
                 serializer.save(ordem_servico=ordem_servico, autor=autor)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='gerar_orcamento')
+    def gerar_orcamento(self, request, pk=None):
+        os_obj = self.get_object()
+        
+        itens_list = list(os_obj.itens.all()) if hasattr(os_obj, 'itens') else []
+        num_itens = len(itens_list)
+        # Calculate how many empty rows are needed to reach a minimum of 5
+        empty_rows = range(5 - num_itens) if num_itens < 5 else []
+
+        context = {
+            'os': os_obj,
+            'cliente': os_obj.cliente,
+            'itens': itens_list,
+            'empty_rows': empty_rows,
+            'mao_de_obra': os_obj.valor_mao_de_obra,
+            'desconto': os_obj.desconto,
+            'valor_final': os_obj.valor_total_geral,
+            'data_hoje': timezone.now(),
+            'observacoes': os_obj.descricao_problema or "Observações do serviço...",
+            'logo_path': f"file://{os.path.join(settings.BASE_DIR, 'static', 'images', 'logo.png')}"
+        }
+        
+        try:
+            pdf_file = gerar_pdf_from_html('utils/pdfs/orcamento.html', context)
+            
+            file_name = f"Orcamento_OS_{os_obj.id}_{timezone.now().strftime('%Y%m%d')}.pdf"
+            os_obj.arquivo_orcamento.save(file_name, pdf_file, save=True)
+            
+            return Response({"mensagem": "Orçamento gerado com sucesso", "url": request.build_absolute_uri(os_obj.arquivo_orcamento.url)})
+        except Exception as e:
+            traceback.print_exc()
+            return Response({"erro": f"Erro ao gerar PDF: {str(e)}"}, status=500)
 
     def _format_validation_error(self, e):
         if hasattr(e, 'message_dict'):

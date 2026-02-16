@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Orçamento</title>
+    <style>
+        @page {
+            size: a4 portrait;
+            margin: 0;
+            margin-bottom: 110pt;
+            @bottom-center {
+                content: element(footer_content);
+            }
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            font-size: 11pt;
+            margin: 0;
+        }
+
+        /* --- Brand Colors --- */
+        .brand-dark { color: #3a2a6d; }
+        .brand-light { color: #8c64a8; }
+
+        /* --- Header --- */
+        .header-bg {
+            background: linear-gradient(to right, #3a2a6d, #8c64a8);
+            color: white;
+            padding: 20pt 60pt;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-bg h1 {
+            color: white;
+            font-size: 24pt;
+            margin: 0;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .header-bg .date {
+            font-size: 11pt;
+            border-bottom: 1px solid white;
+            padding-bottom: 4px;
+        }
+
+        /* --- Main Content --- */
+        .page-content {
+            padding: 20pt 60pt 20pt 60pt;
+        }
+
+        /* --- Client Info --- */
+        .client-info {
+            margin-bottom: 20pt;
+        }
+        .info-row {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #eaeaea;
+            padding: 6pt 0;
+            margin-bottom: 0;
+        }
+        .info-row:last-child { border-bottom: none; }
+
+        .info-label {
+            font-weight: bold;
+            color: #3a2a6d;
+            width: 100px;
+            font-size: 11pt;
+        }
+        .info-value { font-size: 11pt; color: #444; }
+
+        /* --- Items Table --- */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 0; /* Removida margem para colar com a de baixo se precisar */
+            border: 2px solid #3a2a6d;
+        }
+        .items-table thead {
+            background-color: #3a2a6d;
+            color: white;
+            font-size: 9pt;
+            text-transform: uppercase;
+        }
+        .items-table th { 
+            font-weight: bold; 
+            text-align: center; 
+            padding: 8pt; 
+            border: 1px solid #5b428f;
+        }
+        .items-table td {
+            border: 1px solid #ccc;
+            padding: 6pt 8pt;
+            text-align: center;
+            font-size: 10pt;
+            color: #444;
+        }
+        .items-table .td-desc { text-align: left; font-weight: 500; }
+
+        .empty-row td {
+            height: 20pt;
+        }
+
+        /* --- NEW Totals Table (Blindada) --- */
+        .totals-wrapper {
+            margin-top: 15pt;
+            page-break-inside: avoid; /* Trava para não ir pra página 2 sozinho */
+        }
+        .totals-table {
+            border-collapse: collapse;
+            width: 320px; /* Tamanho fixo perfeito para os valores */
+            margin-left: auto; /* Empurra a tabela para a direita */
+            border: 2px solid #3a2a6d; /* Contorno forte igual a tabela de cima */
+        }
+        .totals-table td {
+            border: 1px solid #ccc; /* Contorno interno nas células de total */
+            padding: 8pt 12pt;
+            font-size: 11pt;
+            color: #444;
+        }
+        .totals-table .totals-label {
+            font-weight: bold;
+            color: #3a2a6d;
+            text-align: right;
+            background-color: #fcf9ff;
+            white-space: nowrap; /* IMPEDE A PALAVRA "MÃO DE OBRA" DE QUEBRAR */
+            width: 45%;
+        }
+        .totals-table .totals-value {
+            text-align: right;
+            font-weight: bold;
+            width: 55%;
+        }
+        .totals-table .discount-value {
+            color: #e74c3c;
+        }
+        .totals-table .final-label {
+            background-color: #3a2a6d;
+            color: white;
+            font-size: 12pt;
+        }
+        .totals-table .final-value {
+            color: #3a2a6d;
+            font-size: 13pt;
+        }
+        
+        /* --- Footer --- */
+        .footer {
+            position: running(footer_content);
+            text-align: center;
+            font-size: 9pt;
+            color: #777;
+        }
+        
+        .img-container {
+            height: 55px;
+            margin-bottom: 8px;
+        }
+        
+        .img-container img {
+            max-height: 55px;
+            max-width: 250px;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-bg">
+        <h1>ORÇAMENTO</h1>
+        <div class="date">DATA: &nbsp;&nbsp;{{ data_hoje|date:"d/m/Y" }}</div>
+    </div>
+
+    <div class="page-content">
+        <div class="client-info">
+            <div class="info-row">
+                <div class="info-label">Cliente:</div>
+                <div class="info-value">{{ cliente.razao_social|default:cliente.nome }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">CNPJ:</div>
+                <div class="info-value">{{ cliente.cnpj|default:"--" }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Endereço:</div>
+                <div class="info-value">{{ cliente.endereco|default:"--" }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Telefone:</div>
+                <div class="info-value">{{ os.solicitante.telefone|default:"--" }}</div>
+            </div>
+        </div>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th width="45%">DESCRIÇÃO</th>
+                    <th width="20%">VALOR UNIT.</th>
+                    <th width="15%">QUANTIDADE</th>
+                    <th width="20%">VALOR TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in itens %}
+                <tr>
+                    <td class="td-desc">{{ item.descricao|default:item.produto.nome }}</td>
+                    <td>R$ {{ item.preco_venda|floatformat:2 }}</td>
+                    <td>{{ item.quantidade }}</td>
+                    <td class="brand-dark" style="font-weight: bold;">R$ {{ item.valor_total|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+
+                {% for _ in empty_rows %}
+                <tr class="empty-row">
+                    <td class="td-desc"></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals-wrapper">
+            <table class="totals-table">
+                {% if mao_de_obra and mao_de_obra > 0 %}
+                <tr>
+                    <td class="totals-label">Mão de Obra:</td>
+                    <td class="totals-value">R$ {{ mao_de_obra|floatformat:2 }}</td>
+                </tr>
+                {% endif %}
+
+                {% if desconto and desconto > 0 %}
+                <tr>
+                    <td class="totals-label">Desconto:</td>
+                    <td class="totals-value discount-value">- R$ {{ desconto|floatformat:2 }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td class="totals-label final-label">Valor Final:</td>
+                    <td class="totals-value final-value">R$ {{ valor_final|floatformat:2 }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div class="footer" id="footer_content">
+        <div class="img-container">
+            <img src="{{ logo_path }}" alt="CYRIUS Logo" />
+        </div>
+        <div style="line-height: 1.4;">
+            (77) 99136-4560<br/>
+            cyrius.com.br | @cyrius.inf<br/>
+            Rua Sifredo Pedral Sampaio, 448 - Sala 102 - Recreio - Vitória da Conquista - BA
+        </div>
+    </div>
+</body>
+</html>

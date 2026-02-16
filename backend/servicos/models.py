@@ -58,6 +58,7 @@ class OrdemServico(TimeStampedModel):
     custo_terceiros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    arquivo_orcamento = models.FileField(upload_to='servicos/orcamentos/', null=True, blank=True)
     
     class Meta:
         db_table = 'TB_ORDEM_SERVICO'

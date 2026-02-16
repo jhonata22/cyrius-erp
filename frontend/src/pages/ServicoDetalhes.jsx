@@ -48,6 +48,8 @@ export default function ServicoDetalhes() {
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState('');
 
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
@@ -145,6 +147,22 @@ export default function ServicoDetalhes() {
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
       alert("Não foi possível adicionar o comentário.");
+    }
+  };
+
+  const handleGerarOrcamento = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const res = await servicoService.gerarOrcamentoPdf(id);
+      window.open(res.url, '_blank');
+      // Atualiza o estado local para que o botão "Ver PDF" apareça sem recarregar a página
+      setOs(prevOs => ({ ...prevOs, arquivo_orcamento: res.url }));
+      alert("Orçamento gerado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao gerar orçamento", error);
+      alert("Falha ao gerar orçamento em PDF.");
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -455,6 +473,16 @@ export default function ServicoDetalhes() {
             </button>
             <button onClick={imprimirEtiqueta} className="px-4 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2" title="Etiqueta QR">
                 <QrCode size={18} /> <span className="hidden sm:inline">Etiqueta</span>
+            </button>
+
+            {/* Lógica do Orçamento em PDF */}
+            {os?.arquivo_orcamento && (
+                <a href={os.arquivo_orcamento} target="_blank" rel="noopener noreferrer" className="px-4 py-3 bg-blue-500 text-white border border-blue-500 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center gap-2" title="Ver Orçamento Salvo">
+                    📄 <span className="hidden sm:inline">Ver Orçamento</span>
+                </a>
+            )}
+            <button onClick={handleGerarOrcamento} disabled={isGeneratingPdf} className="px-4 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-wait" title="Gerar novo orcamento em PDF">
+                {isGeneratingPdf ? 'Gerando...' : '🔄'} <span className="hidden sm:inline">{os?.arquivo_orcamento ? 'Atualizar PDF' : 'Gerar Orçamento'}</span>
             </button>
 
             {!isLocked && (

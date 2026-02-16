@@ -80,7 +80,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             # Campos ReadOnly/Custom
             'nome_cliente', 'nome_tecnico', 'empresa_nome', 'empresa_cnpj', 'empresa_endereco', 'itens', 'anexos', 'total_pecas', 'valor_total_geral',
             # Campos de Ativo
-            'ativos', 'ativos_ids'
+            'ativos', 'ativos_ids', 'arquivo_orcamento'
         ]
         read_only_fields = ['created_at', 'updated_at', 'data_conclusao', 'data_finalizacao', 'status', 'total_pecas', 'valor_total_geral']
         extra_kwargs = {

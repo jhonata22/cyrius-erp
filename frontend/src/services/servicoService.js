@@ -98,6 +98,11 @@ const servicoService = {
   adicionarComentario: async (osId, texto) => {
     const response = await api.post(`/servicos/${osId}/comentarios/`, { texto });
     return response.data;
+  },
+
+  gerarOrcamentoPdf: async (id) => {
+      const response = await api.post(`/servicos/${id}/gerar_orcamento/`);
+      return response.data;
   }
 };
 
