@@ -18,6 +18,7 @@ import Configuracoes from './pages/Configuracoes';
 import Perfil from './pages/Perfil';
 import Servicos from './pages/Servicos';
 import ServicoDetalhes from './pages/ServicoDetalhes';
+import Vendas from './pages/Vendas';
 
 // --- COMPONENTE GUARDA-COSTAS (Rota Protegida) ---
 const RotaProtegida = ({ children, allowedRoles }) => {
@@ -53,6 +54,7 @@ function App() {
       {/* --- ACESSO GERAL (TODOS OS FUNCIONÁRIOS) --- */}
       <Route path="/" element={<RotaProtegida><Dashboard /></RotaProtegida>} />
       <Route path="/inventario" element={<RotaProtegida><Inventario /></RotaProtegida>} />
+      <Route path="/vendas" element={<RotaProtegida><Vendas /></RotaProtegida>} />
       <Route path="/fornecedores/:id" element={<RotaProtegida><FornecedorDetalhes /></RotaProtegida>} />
       <Route path="/ativos/:id" element={<RotaProtegida><AtivoDetalhes /></RotaProtegida>} />
       <Route

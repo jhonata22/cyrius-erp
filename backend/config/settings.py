@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'financeiro',
     'chamados',
     'servicos',
+    'vendas',
 ]
 
 MIDDLEWARE = [

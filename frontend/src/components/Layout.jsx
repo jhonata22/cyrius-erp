@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X, Building2, ScanLine
+  Wrench, Menu, X, Building2, ScanLine, ShoppingCart
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
@@ -145,6 +145,7 @@ export default function Layout({ children }) {
 
             <SidebarItem icon={BookOpen} text="Documentação" to="/documentacao" isExpanded={isExpanded || isMobileOpen} />
             <SidebarItem icon={Package} text="Estoque" to="/inventario" isExpanded={isExpanded || isMobileOpen} />
+            <SidebarItem icon={ShoppingCart} text="Vendas" to="/vendas" isExpanded={isExpanded || isMobileOpen} />
             
             <div className="my-6 border-t border-white/5"></div>
             

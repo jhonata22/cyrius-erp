@@ -75,11 +75,9 @@ export default function Inventario() {
           quantidade: 1, 
           preco_unitario: '', 
           fornecedor: '', 
-          cliente: '', 
           numero_serial: '', 
           arquivo_1: null, 
-          arquivo_2: null,
-          total_parcelas: 1 
+          arquivo_2: null
       });
     } else if (type === 'FORNECEDOR') {
       setFormData({ razao_social: '', telefone: '' });
@@ -120,9 +118,6 @@ export default function Inventario() {
     }
 
     // VALIDAÇÃO DE VÍNCULO
-    if (formData.tipo_movimento === 'SAIDA' && !formData.cliente) {
-        return alert("Erro: Selecione o CLIENTE para gerar o financeiro da venda.");
-    }
     if (formData.tipo_movimento === 'ENTRADA' && !formData.fornecedor) {
         if(!window.confirm("Sem fornecedor selecionado. O financeiro de compra não será gerado detalhadamente. Continuar?")) return;
     }
@@ -132,7 +127,6 @@ export default function Inventario() {
     data.append('tipo_movimento', formData.tipo_movimento);
     data.append('quantidade', formData.quantidade);
     data.append('preco_unitario', formData.preco_unitario);
-    if (formData.cliente) data.append('cliente', formData.cliente);
     if (formData.fornecedor) data.append('fornecedor', formData.fornecedor);
     if (formData.numero_serial) data.append('numero_serial', formData.numero_serial);
     
@@ -149,11 +143,6 @@ export default function Inventario() {
     if (formData.arquivo_1) data.append('arquivo_1', formData.arquivo_1);
     if (formData.arquivo_2) data.append('arquivo_2', formData.arquivo_2);
     
-    // PARCELAS
-    if (formData.tipo_movimento === 'SAIDA' && formData.total_parcelas) {
-        data.append('total_parcelas', formData.total_parcelas);
-    }
-
     try {
       await estoqueService.registrarMovimento(data);
       setModalType(null);
@@ -326,7 +315,6 @@ export default function Inventario() {
 
                 <div className="flex p-1 bg-slate-100 rounded-2xl mb-8 font-black text-[10px] uppercase tracking-widest">
                   <button onClick={() => setFormData({...formData, tipo_movimento: 'ENTRADA', cliente: '', fornecedor: ''})} className={`flex-1 py-3 rounded-xl transition-all ${formData.tipo_movimento === 'ENTRADA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
-                  <button onClick={() => setFormData({...formData, tipo_movimento: 'SAIDA', cliente: '', fornecedor: ''})} className={`flex-1 py-3 rounded-xl transition-all ${formData.tipo_movimento === 'SAIDA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-400'}`}>Saída (Venda)</button>
                 </div>
 
                 <form onSubmit={handleSalvarMovimento} className="space-y-5">
@@ -346,37 +334,19 @@ export default function Inventario() {
                         value={formData.quantidade} onChange={e => setFormData({...formData, quantidade: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{formData.tipo_movimento === 'ENTRADA' ? 'Custo Un.' : 'Venda Un.'}</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Custo Un.</label>
                       <input type="number" step="0.01" required className="w-full bg-slate-50 p-4 rounded-2xl border-none outline-none font-bold text-[#302464]"
                         value={formData.preco_unitario} onChange={e => setFormData({...formData, preco_unitario: e.target.value})}/>
                     </div>
                   </div>
 
-                  {formData.tipo_movimento === 'ENTRADA' ? (
-                    <div className="animate-in slide-in-from-left-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fornecedor Origem</label>
-                        <select className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none" value={formData.fornecedor} onChange={e => setFormData({...formData, fornecedor: e.target.value})}>
-                          <option value="">Selecione o fornecedor...</option>
-                          {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
-                        </select>
-                    </div>
-                  ) : (
-                    <div className="animate-in slide-in-from-right-2 grid grid-cols-3 gap-4">
-                        <div className="col-span-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente Destino</label>
-                            <select required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value})}>
-                              <option value="">Selecione o cliente...</option>
-                              {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
-                            </select>
-                        </div>
-                        <div className="col-span-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nº Parcelas</label>
-                            <input type="number" min="1" max="60" required className="w-full bg-orange-50 p-4 rounded-2xl border-none font-bold text-orange-700 outline-none focus:ring-4 focus:ring-orange-200" 
-                                value={formData.total_parcelas} onChange={e => setFormData({...formData, total_parcelas: e.target.value})}
-                            />
-                        </div>
-                    </div>
-                  )}
+                  <div className="animate-in slide-in-from-left-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fornecedor Origem</label>
+                      <select className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none" value={formData.fornecedor} onChange={e => setFormData({...formData, fornecedor: e.target.value})}>
+                        <option value="">Selecione o fornecedor...</option>
+                        {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
+                      </select>
+                  </div>
 
                   {/* BLOCO DE ANEXOS */}
                   <div className="grid grid-cols-2 gap-4">
@@ -401,14 +371,9 @@ export default function Inventario() {
                   <div className="pt-4 border-t border-slate-50 flex justify-between items-center text-xs font-bold text-slate-500">
                       <span>Total Financeiro:</span>
                       <div className="text-right">
-                          <div className={formData.tipo_movimento === 'ENTRADA' ? 'text-red-500' : 'text-emerald-600'}>
+                          <div className='text-red-500'>
                              R$ {((formData.quantidade || 0) * (formData.preco_unitario || 0)).toFixed(2)}
                           </div>
-                          {formData.tipo_movimento === 'SAIDA' && formData.total_parcelas > 1 && (
-                              <div className="text-[9px] text-slate-400 mt-1">
-                                  {formData.total_parcelas}x de R$ {(((formData.quantidade || 0) * (formData.preco_unitario || 0)) / formData.total_parcelas).toFixed(2)}
-                              </div>
-                          )}
                       </div>
                   </div>
 
