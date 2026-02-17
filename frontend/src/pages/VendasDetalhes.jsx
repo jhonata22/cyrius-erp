@@ -156,6 +156,8 @@ export default function VendaDetalhes() {
 
             <DetailCard icon={User} title="Cliente">
                  <InfoRow label="Nome / Razão Social" value={venda.cliente.razao_social} />
+                 <InfoRow label="A/C (Solicitante)" value={venda.solicitante?.nome || '--'} />
+                 <InfoRow label="Tel. Solicitante" value={venda.solicitante?.telefone || '--'} />
                  <InfoRow label="Contato" value={venda.cliente.telefone || 'Não informado'} />
             </DetailCard>
              <DetailCard icon={Upload} title="Documentos">

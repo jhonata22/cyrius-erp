@@ -27,16 +27,25 @@ class ClienteViewSet(viewsets.ModelViewSet):
     serializer_class = ClienteSerializer
     permission_classes = [IsFuncionario] # Ajuste conforme suas regras (IsFuncionario)
 
-    @action(detail=True, methods=['get'])
-    def contatos_lista(self, request, pk=None):
-        try:
-            cliente = self.get_object()
-            contatos = cliente.contatos.all().order_by('-is_principal', 'nome').values('id', 'nome', 'cargo', 'telefone')
-            return Response(contatos)
-        except Cliente.DoesNotExist:
-            return Response({"erro": "Cliente não encontrado"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"erro": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @action(detail=True, methods=['get', 'post'])
+    def contatos(self, request, pk=None):
+        cliente = self.get_object()
+        
+        if request.method == 'GET':
+            contatos = cliente.contatos.all().order_by('-is_principal', 'nome') # Assuming related_name='contatos' in Cliente model
+            serializer = ContatoClienteSerializer(contatos, many=True)
+            return Response(serializer.data)
+            
+        elif request.method == 'POST':
+            # Copy the request data (since it's immutable by default) and inject the cliente ID
+            data = request.data.copy()
+            data['cliente'] = cliente.id
+            
+            serializer = ContatoClienteSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save() # No need to pass cliente=cliente here anymore, it's in the data
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ContatoClienteViewSet(OptimizedQuerySetMixin, viewsets.ModelViewSet):
     queryset = ContatoCliente.objects.all()

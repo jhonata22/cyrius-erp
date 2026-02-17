@@ -25,15 +25,21 @@ const clienteService = {
     await api.delete(`/clientes/${id}/`);
   },
 
-  listarContatosLista: async (clienteId) => {
+  getContatos: async (clienteId) => {
     if (!clienteId) return [];
     try {
-      const response = await api.get(`/clientes/${clienteId}/contatos_lista/`);
+      const response = await api.get(`/clientes/${clienteId}/contatos/`);
       return response.data;
     } catch (error) {
       console.error(`Erro ao buscar contatos para o cliente ${clienteId}:`, error);
       return [];
     }
+  },
+
+  criarContato: async (clienteId, contatoData) => {
+    if (!clienteId) throw new Error('clienteId is required to create a contact.');
+    const response = await api.post(`/clientes/${clienteId}/contatos/`, contatoData);
+    return response.data;
   },
 
   // Email de Gestão

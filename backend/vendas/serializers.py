@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Venda, ItemVenda
-from clientes.serializers import ClienteSerializer
+from clientes.serializers import ClienteSerializer, ContatoClienteSerializer
 from estoque.serializers import ProdutoSerializer
 
 class ItemVendaSerializer(serializers.ModelSerializer):
@@ -24,6 +24,7 @@ class VendaSerializer(serializers.ModelSerializer):
 class VendaDetailSerializer(serializers.ModelSerializer):
     itens = ItemVendaSerializer(many=True, read_only=True)
     cliente = ClienteSerializer(read_only=True)
+    solicitante = ContatoClienteSerializer(read_only=True)
     
     class Meta:
         model = Venda

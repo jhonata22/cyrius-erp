@@ -41,7 +41,10 @@ export default function Vendas() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [newVendaCliente, setNewVendaCliente] = useState('');
+  const [formData, setFormData] = useState({ cliente: '', solicitante: '' });
+  const [contatos, setContatos] = useState([]);
+  const [isCreatingContato, setIsCreatingContato] = useState(false);
+  const [novoContato, setNovoContato] = useState({ nome: '', telefone: '' });
   
   // Filters State
   const [filtroEmpresa, setFiltroEmpresa] = useState(empresas[0]?.id || '');
@@ -79,6 +82,17 @@ export default function Vendas() {
     }
     carregarDados();
   }, [empresas, carregarDados]);
+
+  // Fetch contacts when formData.cliente changes
+  useEffect(() => {
+      if (formData.cliente) {
+          clienteService.getContatos(formData.cliente)
+              .then(data => setContatos(data))
+              .catch(err => console.error("Erro ao buscar contatos", err));
+      } else {
+          setContatos([]);
+      }
+  }, [formData.cliente]);
 
   // Filtering and Sorting
   const filteredData = useMemo(() => {
@@ -118,8 +132,14 @@ export default function Vendas() {
 
   const handleCriarOrcamento = async (e) => {
     e.preventDefault();
-    if (!newVendaCliente) return alert("Selecione um cliente.");
-    const data = { cliente: newVendaCliente, empresa: filtroEmpresa, vendedor: currentUser?.id, itens: [] };
+    if (!formData.cliente) return alert("Selecione um cliente.");
+    const data = { 
+      cliente: formData.cliente, 
+      empresa: filtroEmpresa, 
+      vendedor: currentUser?.id,
+      solicitante: formData.solicitante || null, // Add solicitante here
+      itens: [] 
+    };
     try {
       const novaVenda = await vendaService.criarVenda(data);
       setModalOpen(false);
@@ -130,11 +150,52 @@ export default function Vendas() {
     }
   };
 
+  const handleCriarContato = async () => {
+      if (!novoContato.nome) return alert("O nome do contato é obrigatório.");
+      try {
+          const contatoCriado = await clienteService.criarContato(formData.cliente, novoContato);
+          setContatos([...contatos, contatoCriado]);
+          setFormData({ ...formData, solicitante: contatoCriado.id });
+          setIsCreatingContato(false);
+          setNovoContato({ nome: '', telefone: '' });
+      } catch (error) {
+          alert("Erro ao criar contato.");
+      }
+  };
+
+  const openModal = () => {
+    setModalOpen(true);
+    setFormData({ cliente: '', solicitante: '' }); // Reset form data
+    setIsCreatingContato(false); // Hide new contact form
+    setContatos([]); // Clear contacts
+  };
+
   return (
     <div className="animate-in fade-in duration-500 pb-20">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        {/* ... (header code remains the same) */}
+          <div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tight">Vendas</h1>
+              <div className="h-1 w-12 bg-[#7C69AF] mt-2 rounded-full"></div>
+
+              {/* SELETOR DE EMPRESA AQUI */}
+              <div className="mt-4 flex items-center gap-2 bg-white p-1 pr-4 rounded-xl border border-slate-200 w-fit shadow-sm">
+                  <select
+                      value={filtroEmpresa}
+                      onChange={e => setFiltroEmpresa(e.target.value)}
+                      className="bg-white text-xs font-bold p-1 rounded-lg"
+                  >
+                      {empresas.map(emp => (
+                          <option key={emp.id} value={emp.id}>{emp.nome_empresa}</option>
+                      ))}
+                  </select>
+                  <Building2 size={16} className="text-slate-400" />
+              </div>
+          </div>
+
+          <button onClick={openModal} className="bg-[#302464] hover:bg-[#7C69AF] text-white px-6 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95">
+              <ShoppingCart size={18} /> Nova Venda
+          </button>
       </div>
 
       {/* KPI Dashboard */}
@@ -194,10 +255,42 @@ export default function Vendas() {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
                 <h3 className="text-lg font-black text-slate-800 mb-4">Novo Orçamento</h3>
                 <form onSubmit={handleCriarOrcamento}>
-                  <select required value={newVendaCliente} onChange={e => setNewVendaCliente(e.target.value)} className="w-full bg-slate-100 p-3 rounded-lg text-sm">
+                  {/* Cliente Selection */}
+                  <select required value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value, solicitante: ''})} className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/5 mb-4">
                     <option value="">Selecione o cliente...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
                   </select>
+
+                  {formData.cliente && (
+                      <div className="mt-4 border-t border-slate-100 pt-4 animate-in fade-in">
+                          <div className="flex justify-between items-center mb-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">A/C (Solicitante)</label>
+                              {!isCreatingContato && (
+                                  <button type="button" onClick={() => setIsCreatingContato(true)} className="text-[10px] font-bold text-[#7C69AF] hover:text-[#302464]">
+                                      + Novo Contato
+                                  </button>
+                              )}
+                          </div>
+
+                          {!isCreatingContato ? (
+                              <select className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/5"
+                                  value={formData.solicitante || ''} onChange={e => setFormData({...formData, solicitante: e.target.value})}>
+                                  <option value="">Nenhum específico...</option>
+                                  {contatos.map(c => <option key={c.id} value={c.id}>{c.nome} {c.telefone ? `- ${c.telefone}` : ''}</option>)}
+                              </select>
+                          ) : (
+                              <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 space-y-3">
+                                  <input type="text" placeholder="Nome do Contato" required value={novoContato.nome} onChange={e => setNovoContato({...novoContato, nome: e.target.value})} className="w-full bg-white p-3 rounded-xl border-none font-bold text-sm outline-none" />
+                                  <input type="text" placeholder="Telefone (Opcional)" value={novoContato.telefone} onChange={e => setNovoContato({...novoContato, telefone: e.target.value})} className="w-full bg-white p-3 rounded-xl border-none font-bold text-sm outline-none" />
+                                  <div className="flex gap-2">
+                                      <button type="button" onClick={handleCriarContato} className="flex-1 bg-[#302464] text-white py-2 rounded-xl text-xs font-bold">Salvar Contato</button>
+                                      <button type="button" onClick={() => setIsCreatingContato(false)} className="flex-1 bg-white text-slate-500 py-2 rounded-xl text-xs font-bold border border-slate-200">Cancelar</button>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )}
+
                   <div className="flex gap-2 mt-4">
                     <button type="button" onClick={() => setModalOpen(false)} className="flex-1 bg-slate-200 text-slate-800 py-3 rounded-lg font-bold">Cancelar</button>
                     <button type="submit" className="flex-1 bg-[#302464] text-white py-3 rounded-lg font-bold">Criar e Abrir</button>
