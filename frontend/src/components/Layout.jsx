@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X, Building2, ScanLine
+  Wrench, Menu, X, Building2, ScanLine, ShoppingCart
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
@@ -141,7 +141,7 @@ export default function Layout({ children }) {
             {temPermissao(['SOCIO', 'GESTOR']) && (
               <>
                 <SidebarItem icon={Briefcase} text="Clientes" to="/clientes" isExpanded={isExpanded || isMobileOpen} />
-                <SidebarItem icon={DollarSign} text="Vendas" to="/vendas" isExpanded={isExpanded || isMobileOpen} />
+                <SidebarItem icon={ShoppingCart} text="Vendas" to="/vendas" isExpanded={isExpanded || isMobileOpen} />
                 <SidebarItem icon={DollarSign} text="Financeiro" to="/financeiro" isExpanded={isExpanded || isMobileOpen} />
               </>
             )}
