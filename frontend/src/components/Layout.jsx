@@ -1,10 +1,9 @@
-// frontend\src\components\Layout.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X, Building2, ScanLine, ShoppingCart
+  Wrench, Menu, X, Building2, ScanLine
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
@@ -63,11 +62,13 @@ export default function Layout({ children }) {
   const [userName, setUserName] = useState(authService.getLoggedUser() || 'Usuário');
   const [userPhoto, setUserPhoto] = useState(localStorage.getItem('user_photo'));
   const [userCargo, setUserCargo] = useState(localStorage.getItem('cargo'));
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
     async function fetchUserData() {
         try {
             const data = await equipeService.me();
+            setUserId(data.id);
             if (data.nome) setUserName(data.nome);
             if (data.cargo) setUserCargo(data.cargo);
             if (data.foto) {
@@ -117,7 +118,7 @@ export default function Layout({ children }) {
           <div className="text-2xl font-black text-white tracking-tighter flex items-center">
             <span className="text-[#A696D1]">C</span>
             <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0'}`}>
-              YRIUS v2.1 beta
+              YRIUS v3.0
             </span>
           </div>
           <button className="md:hidden text-white/50 hover:text-white" onClick={() => setIsMobileOpen(false)}>
@@ -137,11 +138,11 @@ export default function Layout({ children }) {
                 <SidebarItem icon={Wrench} text="Serviços & Lab" to="/servicos" isExpanded={isExpanded || isMobileOpen} />
             )}
 
-            {temPermissao(['SOCIO']) && (
+            {temPermissao(['SOCIO', 'GESTOR']) && (
               <>
                 <SidebarItem icon={Briefcase} text="Clientes" to="/clientes" isExpanded={isExpanded || isMobileOpen} />
+                <SidebarItem icon={DollarSign} text="Vendas" to="/vendas" isExpanded={isExpanded || isMobileOpen} />
                 <SidebarItem icon={DollarSign} text="Financeiro" to="/financeiro" isExpanded={isExpanded || isMobileOpen} />
-                <SidebarItem icon={ShoppingCart} text="Vendas" to="/vendas" isExpanded={isExpanded || isMobileOpen} />
               </>
             )}
 
@@ -186,7 +187,7 @@ export default function Layout({ children }) {
             </div>
             
             <div className="flex items-center gap-2 md:gap-5 ml-auto">
-                <NotificationBell />
+                <NotificationBell userId={userId} />
                 <div className="h-8 w-px bg-slate-200/50 hidden md:block"></div>
 
                 <Link to="/perfil" className="flex items-center gap-2 md:gap-4 hover:opacity-80 transition-opacity">

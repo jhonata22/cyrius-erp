@@ -36,6 +36,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '*'
 # =========================================================
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -47,6 +48,8 @@ INSTALLED_APPS = [
     'corsheaders',                
     'rest_framework',             
     'rest_framework_simplejwt',   
+    'channels',
+    'django_celery_beat',
     # 'whitenoise', # Descomente se instalar o whitenoise: pip install whitenoise
     
     # Meus Apps
@@ -91,6 +94,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 # =========================================================
@@ -205,3 +209,19 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True, # Segurança: Invalida o anterior
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("redis", 6379)],
+        },
+    },
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://redis:6379/0'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

@@ -25,7 +25,7 @@ const clienteService = {
     await api.delete(`/clientes/${id}/`);
   },
 
-  getContatos: async (clienteId) => {
+  listarContatosLista: async (clienteId) => {
     if (!clienteId) return [];
     try {
       const response = await api.get(`/clientes/${clienteId}/contatos/`);

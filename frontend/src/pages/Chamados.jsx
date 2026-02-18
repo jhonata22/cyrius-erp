@@ -175,6 +175,28 @@ export default function Chamados() {
     setIsDropdownOpen(false);
   };
 
+const handleCriarContato = async () => {
+    if (!formData.cliente || !formData.novo_solicitante_nome) {
+      alert("Preencha o nome do novo contato.");
+      return;
+    }
+    try {
+      const novoContato = await clienteService.criarContato(formData.cliente, {
+        nome: formData.novo_solicitante_nome,
+        telefone: formData.novo_solicitante_telefone,
+        cargo: formData.novo_solicitante_cargo,
+      });
+      // Atualiza a lista e seleciona o novo
+      setContatosCliente(prev => [...prev, novoContato]);
+      setFormData(prev => ({ ...prev, solicitante: novoContato.id }));
+      // Volta para o modo de seleção
+      setIsCreatingSolicitante(false);
+    } catch (error) {
+      console.error("Erro ao criar novo contato", error);
+      alert("Não foi possível criar o novo contato.");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Validations
@@ -349,6 +371,9 @@ export default function Chamados() {
                       <input type="text" name="novo_solicitante_nome" placeholder="Nome Completo" required value={formData.novo_solicitante_nome} onChange={handleInputChange} className="sm:col-span-2 w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
                       <input type="text" name="novo_solicitante_telefone" placeholder="Telefone" value={formData.novo_solicitante_telefone} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
                       <input type="text" name="novo_solicitante_cargo" placeholder="Cargo" value={formData.novo_solicitante_cargo} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-white border-none rounded-lg outline-none font-bold text-slate-700" />
+                      <div class="sm:col-span-2">
+                        <button type="button" onClick={handleCriarContato} className="w-full text-center p-2 bg-green-500 text-white font-bold rounded-lg">Salvar Contato</button>
+                      </div>
                     </div>
                   ) : (
                     <select name="solicitante" value={formData.solicitante} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700" disabled={!formData.cliente || contatosCliente.length === 0}>

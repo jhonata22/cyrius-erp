@@ -24,6 +24,7 @@ const equipeService = {
   // Padronizei como 'me' para bater com o código do Layout.jsx
   me: async () => {
     const response = await api.get('/equipe/me/');
+    console.log("DEBUG API ME:", response.data); // ISSO VAI MOSTRAR TUDO NO F12
     return response.data;
   },
 

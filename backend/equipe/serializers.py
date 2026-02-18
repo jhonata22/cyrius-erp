@@ -4,11 +4,12 @@ from .services import criar_membro_equipe
 
 class EquipeSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='usuario.username', read_only=True)
+    usuario_id = serializers.IntegerField(source='usuario.id', read_only=True)
 
     class Meta:
         model = Equipe
-        fields = ['id', 'nome', 'cargo', 'custo_hora', 'username', 'foto']
-        read_only_fields = ['usuario', 'username']
+        fields = ['id', 'nome', 'cargo', 'custo_hora', 'username', 'foto', 'usuario_id']
+        read_only_fields = ['usuario', 'username', 'usuario_id']
         
     def create(self, validated_data):
         # Chama o serviço para criar o User + Equipe

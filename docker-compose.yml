@@ -1,4 +1,4 @@
-# Nome do arquivo: docker-compose.dev.yml
+# Nome do arquivo: docker-compose.yml
 services:
   db:
     image: postgres:16-alpine
@@ -35,6 +35,33 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: cyrius-celery-worker-dev
+    env_file: .env
+    command: celery -A config worker -l info
+    volumes:
+      - ./backend:/app
+      - media_volume_dev:/app/media
+    depends_on:
+      - redis
+      - db
+      - backend
+
+  celery_beat:
+    build:
+      context: ./backend
+    container_name: cyrius-celery-beat-dev
+    env_file: .env
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - db
+      - backend
 
   nginx:
     build:

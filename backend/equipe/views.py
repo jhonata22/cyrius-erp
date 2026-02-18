@@ -63,7 +63,12 @@ class EquipeViewSet(viewsets.ModelViewSet):
                 finalizados=Count('id', filter=Q(status='FINALIZADO'))
             )
             serializer = self.get_serializer(membro)
-            return Response({**serializer.data, "stats": stats})
+            data = serializer.data
+            # FIX: Explicitly ensure usuario_id is in the payload
+            if hasattr(membro, 'usuario') and membro.usuario:
+                data['usuario_id'] = membro.usuario.id
+            data['stats'] = stats
+            return Response(data)
 
         elif request.method == 'PATCH':
             # Logica manual de senha para garantir

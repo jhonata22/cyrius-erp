@@ -11,3 +11,9 @@ django-cors-headers
 djangorestframework-simplejwt
 Pillow
 weasyprint
+daphne
+channels
+channels-redis
+celery
+redis
+django-celery-beat

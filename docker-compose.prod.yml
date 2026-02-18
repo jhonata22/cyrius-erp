@@ -32,6 +32,30 @@ services:
       - media_volume_prod:/app/media
       - static_volume_prod:/app/static
 
+  celery_worker:
+    image: cyriusdev25/cyrius-backend:latest
+    container_name: cyrius-celery-worker
+    restart: always
+    env_file: .env
+    command: celery -A config worker -l info
+    volumes:
+      - media_volume_prod:/app/media
+    depends_on:
+      - redis
+      - db
+      - backend
+
+  celery_beat:
+    image: cyriusdev25/cyrius-backend:latest
+    container_name: cyrius-celery-beat
+    restart: always
+    env_file: .env
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      - redis
+      - db
+      - backend
+
   nginx:
     # Baixa a imagem pronta do frontend
     image: cyriusdev25/cyrius-frontend:latest
