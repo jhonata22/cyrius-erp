@@ -87,13 +87,29 @@ export default function Vendas() {
 
   // Fetch contacts when formData.cliente changes
   useEffect(() => {
-      if (formData.cliente) {
-          clienteService.getContatos(formData.cliente)
-              .then(data => setContatos(data))
-              .catch(err => console.error("Erro ao buscar contatos", err));
-      } else {
-          setContatos([]);
-      }
+    if (formData.cliente) {
+      clienteService.listarContatosLista(formData.cliente) // Use the same function as the working 'Chamados' module
+        .then(data => {
+          const contatosData = Array.isArray(data) ? data : [];
+          setContatos(contatosData);
+          if (contatosData.length > 0) {
+            // Auto-select the main contact, or the first one, like in 'Chamados'
+            const principal = contatosData.find(c => c.is_principal);
+            setFormData(prev => ({
+              ...prev,
+              solicitante: principal ? principal.id : contatosData[0].id,
+            }));
+          } else {
+            setFormData(prev => ({ ...prev, solicitante: '' }));
+          }
+        })
+        .catch(err => {
+            console.error("Erro ao buscar contatos", err);
+            setContatos([]);
+        });
+    } else {
+      setContatos([]);
+    }
   }, [formData.cliente]);
 
   // Filtering and Sorting
