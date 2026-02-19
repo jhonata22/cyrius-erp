@@ -7,6 +7,8 @@ import {
 
 import clienteService from '../services/clienteService';
 
+import { formatImgUrl } from '../utils/urlUtils';
+
 // === FUNÇÕES AUXILIARES DE MÁSCARA ===
 const mascaraCPF = (value) => {
   return value
@@ -242,7 +244,7 @@ export default function Clientes() {
                      : cliente.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#A696D1]'
                   }`}>
                    {cliente.foto ? (
-                       <img src={cliente.foto} alt={cliente.nome_exibicao} className="w-full h-full object-cover" />
+                       <img src={formatImgUrl(cliente.foto)} alt={cliente.nome_exibicao} className="w-full h-full object-cover" />
                    ) : (
                        (cliente.nome_exibicao || cliente.razao_social).charAt(0).toUpperCase()
                    )}

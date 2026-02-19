@@ -2,17 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { User, Lock, Save, Camera, Shield, ArrowLeft, Briefcase, DollarSign, Calendar } from 'lucide-react';
 import equipeService from '../services/equipeService';
-
-// ✅ FUNÇÃO PARA NORMALIZAR URLS (TRANSFORMA EM CAMINHO RELATIVO)
-const formatImgUrl = (url) => {
-  if (!url) return null;
-  if (typeof url !== 'string') return url;
-  // Remove o protocolo e o domínio (ex: http://192.168.../media/ -> /media/)
-  if (url.startsWith('http')) {
-    return url.replace(/^https?:\/\/[^/]+/, '');
-  }
-  return url;
-};
+import { formatImgUrl } from '../utils/urlUtils';
 
 export default function Perfil() {
   const { id } = useParams();
@@ -44,10 +34,7 @@ export default function Perfil() {
         data = await equipeService.getMe();
       }
       
-      // ✅ APLICA FORMATAÇÃO NA FOTO AO CARREGAR
-      if (data && data.foto) {
-        data.foto = formatImgUrl(data.foto);
-      }
+
       
       setPerfil(data);
     } catch (error) {

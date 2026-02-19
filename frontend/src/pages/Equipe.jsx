@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, User, Briefcase, DollarSign, Trash2, Shield, X, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom'; // <--- 1. IMPORTAÇÃO
 import equipeService from '../services/equipeService';
+import { formatImgUrl } from '../utils/urlUtils';
 
 export default function Equipe() {
   const [funcionarios, setFuncionarios] = useState([]);
@@ -111,7 +112,7 @@ export default function Equipe() {
                 <div className="shrink-0">
                     {func.foto ? (
                         <img 
-                            src={func.foto} 
+                            src={formatImgUrl(func.foto)} 
                             alt={func.nome} 
                             className="w-16 h-16 rounded-2xl object-cover shadow-lg border-2 border-white"
                         />

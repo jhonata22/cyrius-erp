@@ -49,10 +49,19 @@ const chamadoService = {
   },
 
   finalizar: async (id, dadosFinalizacao) => {
-    const response = await api.patch(`/chamados/${id}/`, {
-      status: 'FINALIZADO',
-      ...dadosFinalizacao
+    const formData = new FormData();
+    formData.append('status', 'FINALIZADO');
+
+    // O Django REST Framework espera que campos nulos não sejam enviados.
+    Object.keys(dadosFinalizacao).forEach(key => {
+      const value = dadosFinalizacao[key];
+      if (value !== null && value !== undefined && value !== '') {
+        const fieldName = key === 'arquivo' ? 'arquivo_conclusao' : key;
+        formData.append(fieldName, value);
+      }
     });
+
+    const response = await api.patch(`/chamados/${id}/`, formData);
     return response.data;
   },
 

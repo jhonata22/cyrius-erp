@@ -9,6 +9,8 @@ import {
   History, Calendar, ChevronLeft, Camera, Power, MailCheck // <--- Adicionado Power
 } from 'lucide-react';
 
+import { formatImgUrl } from '../utils/urlUtils';
+
 // SERVIÇOS
 import clienteService from '../services/clienteService';
 import documentacaoService from '../services/documentacaoService';
@@ -369,7 +371,7 @@ export default function Documentacao() {
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden transition-all shadow-sm
                         ${cli.foto ? 'bg-white' : 'bg-slate-50 text-[#302464] group-hover:bg-[#302464] group-hover:text-white'}`}>
                       {cli.foto ? (
-                          <img src={cli.foto} alt={cli.nome_exibicao} className="w-full h-full object-cover" />
+                          <img src={formatImgUrl(cli.foto)} alt={cli.nome_exibicao} className="w-full h-full object-cover" />
                       ) : (
                           (cli.nome_exibicao || cli.razao_social).charAt(0).toUpperCase()
                       )}
@@ -412,7 +414,7 @@ export default function Documentacao() {
                         ${!cliente.ativo ? 'bg-slate-400 grayscale' : cliente?.tipo_cliente === 'CONTRATO' ? 'bg-emerald-500' : 'bg-[#302464]'}`}>
                         
                         {cliente?.foto ? (
-                            <img src={cliente.foto} alt="Logo" className="w-full h-full object-cover" />
+                            <img src={formatImgUrl(cliente.foto)} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
                             <span className="text-3xl font-black">{(cliente.nome || cliente.razao_social).charAt(0)}</span>
                         )}

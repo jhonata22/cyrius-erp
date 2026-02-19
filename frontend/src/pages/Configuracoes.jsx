@@ -4,6 +4,7 @@ import {
   UserCircle, Mail, Briefcase, Fingerprint, 
   Sparkles, Camera, AtSign, Building, Plus, X
 } from 'lucide-react';
+import { formatImgUrl } from '../utils/urlUtils';
 import equipeService from '../services/equipeService';
 import empresaService from '../services/empresaService';
 
@@ -129,7 +130,7 @@ export default function Configuracoes() {
                 <div className="relative w-32 h-32 mx-auto mb-6 group cursor-pointer">
                     <div className="w-full h-full rounded-full overflow-hidden border-4 border-slate-50 shadow-xl">
                         {preview ? (
-                            <img src={preview} alt="Perfil" className="w-full h-full object-cover" />
+                            <img src={formatImgUrl(preview)} alt="Perfil" className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full bg-[#302464] flex items-center justify-center text-white text-4xl font-black">
                                 {formData.nome?.charAt(0)}
