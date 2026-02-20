@@ -10,6 +10,8 @@ from .models import LancamentoFinanceiro, DespesaRecorrente
 from .serializers import LancamentoFinanceiroSerializer, DespesaRecorrenteSerializer
 # Importamos a função de cálculo corrigida
 from .services import gerar_faturas_mensalidade, calcular_estatisticas_financeiras
+from equipe.permissions import IsGestor
+
 
 def add_months(sourcedate, months):
     month = sourcedate.month - 1 + months
@@ -21,6 +23,7 @@ def add_months(sourcedate, months):
 class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     queryset = LancamentoFinanceiro.objects.all().select_related('cliente', 'empresa') # Otimizado
     serializer_class = LancamentoFinanceiroSerializer
+    permission_classes = [IsGestor]
 
     def get_queryset(self):
         """ Filtra os lançamentos pela empresa selecionada no Frontend """
