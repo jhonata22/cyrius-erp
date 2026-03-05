@@ -20,7 +20,17 @@ const authService = {
    * Limpa todos os dados de sessão e redireciona para o login.
    */
   logout: () => {
-    localStorage.clear(); // Limpa token, username e qualquer outra sujeira
+    // 1. Salva a versão atual no bolso antes de limpar tudo
+    const versaoVista = localStorage.getItem('last_seen_version');
+    
+    // 2. Passa o trator (desloga o usuário)
+    localStorage.clear(); 
+    
+    // 3. Coloca a versão de volta no navegador
+    if (versaoVista) {
+      localStorage.setItem('last_seen_version', versaoVista);
+    }
+
     window.location.href = '/login';
   },
 

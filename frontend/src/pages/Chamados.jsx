@@ -135,15 +135,23 @@ export default function Chamados() {
   };
 
   const filteredAssuntos = useMemo(() => {
-    if (!Array.isArray(assuntos)) return [];
-    // Filtra assuntos que ainda não foram selecionados
+    if (!Array.isArray(assuntos)) return { results: [], exactMatch: false };
+
     const selectedIds = new Set(formData.assuntos);
     const notSelected = assuntos.filter(a => !selectedIds.has(a.id));
 
-    if (!subjectSearch) return notSelected;
-    return notSelected.filter(a => 
-      a?.titulo?.toLowerCase().includes(subjectSearch?.toLowerCase() || '')
+    if (!subjectSearch.trim()) {
+      return { results: notSelected, exactMatch: false };
+    }
+
+    const searchLower = subjectSearch.toLowerCase();
+    const results = notSelected.filter(a => 
+      a?.titulo?.toLowerCase().includes(searchLower)
     );
+
+    const exactMatch = results.some(a => a.titulo.toLowerCase() === searchLower);
+
+    return { results, exactMatch };
   }, [subjectSearch, assuntos, formData.assuntos]);
   
   const ativosDoCliente = useMemo(() => {
@@ -197,6 +205,18 @@ export default function Chamados() {
 
   const removeAssunto = (assuntoId) => {
     setFormData(prev => ({ ...prev, assuntos: prev.assuntos.filter(id => id !== assuntoId) }));
+  };
+
+  const handleCriarAssunto = async () => {
+    if (!subjectSearch.trim()) return;
+    try {
+      const novoAssunto = await chamadoService.criarAssunto({ titulo: subjectSearch.trim() });
+      setAssuntos(prev => [...prev, novoAssunto]);
+      addAssunto(novoAssunto);
+    } catch (error) {
+      console.error("Erro ao criar novo assunto", error);
+      alert("Não foi possível criar a nova tag.");
+    }
   };
 
 const handleCriarContato = async () => {
@@ -429,8 +449,21 @@ const handleCriarContato = async () => {
                   </div>
                   {isDropdownOpen && (
                     <div className="absolute top-full mt-2 w-full bg-white shadow-2xl border border-slate-100 rounded-2xl overflow-y-auto z-50 max-h-60 p-2 animate-in fade-in slide-in-from-top-2">
-                      {Array.isArray(filteredAssuntos) && filteredAssuntos.map(item => (<div key={item?.id} onMouseDown={() => addAssunto(item)} className="px-4 py-3 text-sm font-bold text-slate-700 rounded-lg hover:bg-purple-50 hover:text-[#302464] cursor-pointer">{item?.titulo}</div>))}
-                      {Array.isArray(filteredAssuntos) && filteredAssuntos.length === 0 && (<div className="px-4 py-3 text-sm font-medium text-slate-400">Nenhum assunto disponível.</div>)}
+                      {filteredAssuntos.results.map(item => (
+                        <div key={item?.id} onMouseDown={() => addAssunto(item)} className="px-4 py-3 text-sm font-bold text-slate-700 rounded-lg hover:bg-purple-50 hover:text-[#302464] cursor-pointer">
+                          {item?.titulo}
+                        </div>
+                      ))}
+                      
+                      {!filteredAssuntos.exactMatch && subjectSearch.trim() && (
+                        <div onMouseDown={handleCriarAssunto} className="px-4 py-3 text-sm font-bold text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 cursor-pointer flex items-center gap-2">
+                          <Plus size={16} /> Criar nova tag: "{subjectSearch.toUpperCase()}"
+                        </div>
+                      )}
+
+                      {filteredAssuntos.results.length === 0 && filteredAssuntos.exactMatch && (
+                        <div className="px-4 py-3 text-sm font-medium text-slate-400">Nenhum assunto disponível.</div>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2 mt-3">

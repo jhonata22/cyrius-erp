@@ -22,7 +22,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-class AssuntoChamadoViewSet(viewsets.ReadOnlyModelViewSet):
+class AssuntoChamadoViewSet(viewsets.ModelViewSet):
     queryset = AssuntoChamado.objects.filter(ativo=True)
     serializer_class = AssuntoChamadoSerializer
 
