@@ -43,16 +43,16 @@ class ChamadoSerializer(serializers.ModelSerializer):
     solicitante = serializers.PrimaryKeyRelatedField(queryset=ContatoCliente.objects.all(), required=False, allow_null=True)
     tecnico = serializers.PrimaryKeyRelatedField(queryset=Equipe.objects.all(), required=False, allow_null=True)
     ativo = serializers.PrimaryKeyRelatedField(queryset=Ativo.objects.all(), required=False, allow_null=True)
-    assunto = serializers.PrimaryKeyRelatedField(queryset=AssuntoChamado.objects.all(), required=False, allow_null=True)
-    
+    assuntos = serializers.PrimaryKeyRelatedField(queryset=AssuntoChamado.objects.all(), many=True, required=False)
+
     # TÃ©cnicos (Lista de IDs para escrita)
     tecnicos = serializers.PrimaryKeyRelatedField(
-        queryset=Equipe.objects.all(), 
-        many=True, 
+        queryset=Equipe.objects.all(),
+        many=True,
         required=False,
         write_only=True
     )
-    
+
     # === MULTI-EMPRESA ===
     empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all(), required=False, allow_null=True)
     empresa_nome = serializers.CharField(source='empresa.nome_fantasia', read_only=True)
@@ -64,12 +64,10 @@ class ChamadoSerializer(serializers.ModelSerializer):
     nome_ativo = serializers.CharField(source='ativo.nome', read_only=True)
     tipo_ativo = serializers.CharField(source='ativo.tipo', read_only=True)
     tecnicos_nomes = serializers.SerializerMethodField()
-    assunto_nome = serializers.CharField(source='assunto.titulo', read_only=True)
+    assuntos_detalhes = serializers.SerializerMethodField()
     solicitante_nome = serializers.CharField(source='solicitante.nome', read_only=True)
     solicitante_telefone = serializers.CharField(source='solicitante.telefone', read_only=True)
-    
-    # Write only field for new subject
-    novo_assunto = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    titulo = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
 
     # Write-only fields for new solicitante
     novo_solicitante_nome = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -79,22 +77,25 @@ class ChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chamado
         fields = [
-            'id', 'empresa', 'empresa_nome', 
-            'cliente', 'nome_cliente', 
+            'id', 'empresa', 'empresa_nome',
+            'cliente', 'nome_cliente',
             'solicitante', 'solicitante_nome', 'solicitante_telefone',
             'novo_solicitante_nome', 'novo_solicitante_telefone', 'novo_solicitante_cargo',
             'ativo', 'nome_ativo', 'tipo_ativo',
             'tecnico', 'nome_tecnico',
-            'assunto', 'assunto_nome', 'novo_assunto',
-            'titulo', 'descricao_detalhada', 'origem', 
-            'status', 'prioridade', 'tipo_atendimento', 
-            'data_agendamento', 'custo_ida', 'custo_volta', 
-            'custo_transporte', 'protocolo', 'data_abertura', 
+            'assuntos', 'assuntos_detalhes',
+            'titulo', 'descricao_detalhada', 'origem',
+            'status', 'prioridade', 'tipo_atendimento',
+            'data_agendamento', 'custo_ida', 'custo_volta',
+            'custo_transporte', 'protocolo', 'data_abertura',
             'data_fechamento', 'tecnicos', 'tecnicos_nomes',
             'resolucao', 'valor_servico',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes', 'nome_tecnico', 'assunto_nome', 'titulo']
+        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes', 'nome_tecnico', 'assuntos_detalhes']
+
+    def get_assuntos_detalhes(self, obj):
+        return [{'id': assunto.id, 'titulo': assunto.titulo} for assunto in obj.assuntos.all()]
 
     def get_tecnicos_nomes(self, obj):
         return [t.nome for t in obj.tecnicos.all()]
@@ -105,7 +106,9 @@ class ChamadoSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        
+
+        representation['assuntos_detalhes'] = self.get_assuntos_detalhes(instance)
+
         if instance.cliente:
             nome_exibicao = instance.cliente.nome if instance.cliente.nome else instance.cliente.razao_social
             representation['cliente'] = {
@@ -115,7 +118,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
                 "cpf": instance.cliente.cpf, "ativo": instance.cliente.ativo,
                 "tipo_cliente": instance.cliente.tipo_cliente
             }
-        
+
         if instance.ativo:
             representation['ativo'] = {
                 "id": instance.ativo.id, "nome": instance.ativo.nome,
@@ -124,7 +127,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
 
         if instance.tecnico:
             representation['tecnico'] = { "id": instance.tecnico.id, "nome": instance.tecnico.nome }
-            
+
         if instance.tecnicos.exists():
             representation['tecnicos'] = [ {"id": t.id, "nome": t.nome} for t in instance.tecnicos.all() ]
 
@@ -136,13 +139,6 @@ class ChamadoSerializer(serializers.ModelSerializer):
             }
 
         return representation
-
-    def _handle_assunto(self, validated_data):
-        novo_assunto_titulo = validated_data.pop('novo_assunto', None)
-        if novo_assunto_titulo:
-            assunto, _ = AssuntoChamado.objects.get_or_create(titulo=novo_assunto_titulo)
-            validated_data['assunto'] = assunto
-        return validated_data
 
     @transaction.atomic
     def create(self, validated_data):
@@ -158,20 +154,34 @@ class ChamadoSerializer(serializers.ModelSerializer):
                     cargo=validated_data.pop('novo_solicitante_cargo', '')
                 )
                 validated_data['solicitante'] = solicitante
-        
+
         # Limpa os campos que não pertencem ao modelo Chamado
         validated_data.pop('novo_solicitante_telefone', None)
         validated_data.pop('novo_solicitante_cargo', None)
 
-        validated_data = self._handle_assunto(validated_data)
         tecnicos_data = validated_data.pop('tecnicos', [])
+        assuntos_data = validated_data.pop('assuntos', [])
+
         chamado = Chamado.objects.create(**validated_data)
+
         for tecnico in tecnicos_data:
             ChamadoTecnico.objects.get_or_create(chamado=chamado, tecnico=tecnico)
+
+        if assuntos_data:
+            chamado.assuntos.set(assuntos_data)
+
+        if not chamado.titulo and chamado.assuntos.exists():
+            chamado.titulo = " - ".join([a.titulo for a in chamado.assuntos.all()])
+            chamado.save()
+
         return chamado
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        validated_data = self._handle_assunto(validated_data)
         validated_data.pop('tecnicos', None) # Handled by service
+        assuntos_data = validated_data.pop('assuntos', None)
+
+        if assuntos_data is not None:
+            instance.assuntos.set(assuntos_data)
+
         return super().update(instance, validated_data)

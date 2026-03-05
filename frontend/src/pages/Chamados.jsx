@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Clock, Briefcase, Building2, Calendar, MapPin, Truck, X, 
   ChevronDown, ChevronRight, Search, Info, Monitor, Filter,
-  ChevronLeft, ChevronRight as ChevronRightIcon, Lock, ListFilter, UserPlus
+  ChevronLeft, ChevronRight as ChevronRightIcon, Lock, ListFilter, UserPlus, User
 } from 'lucide-react';
 
 import { useChamados } from '../contexts/ChamadosContext';
@@ -33,7 +33,34 @@ export default function Chamados() {
     abaAtiva, setAbaAtiva, contadores, filtroEmpresa, setFiltroEmpresa,
     filtrosData, setFiltrosData, busca, setBusca, empresas, carregarDados,
     scrollPos, setScrollPos, ABAS_FILTRO
-  } = useChamados();
+    } = useChamados();
+
+  const [textoBusca, setTextoBusca] = useState(busca);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (textoBusca !== busca) {
+        setBusca(textoBusca);
+        setPagina(1);
+      }
+    }, 600);
+    return () => clearTimeout(timeoutId);
+  }, [textoBusca, busca, setBusca, setPagina]);
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Stop form submission behavior if any
+      if (textoBusca !== busca) {
+        setBusca(textoBusca);
+        setPagina(1);
+        if (carregarDados) carregarDados(); // Force immediate fetch
+      }
+    }
+  };
+
+
+
+  
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +77,7 @@ export default function Chamados() {
   const [isCreatingSolicitante, setIsCreatingSolicitante] = useState(false);
   
   const [formData, setFormData] = useState({
-    cliente: '', ativo: '', assunto: '', novo_assunto: '', descricao_detalhada: '',
+    cliente: '', ativo: '', titulo: '', assuntos: [], descricao_detalhada: '',
     prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
     custo_ida: '', custo_volta: '', tecnicos: [],
     tecnico: '', 
@@ -109,16 +136,15 @@ export default function Chamados() {
 
   const filteredAssuntos = useMemo(() => {
     if (!Array.isArray(assuntos)) return [];
-    if (!subjectSearch) return assuntos;
-    return assuntos.filter(a => 
+    // Filtra assuntos que ainda não foram selecionados
+    const selectedIds = new Set(formData.assuntos);
+    const notSelected = assuntos.filter(a => !selectedIds.has(a.id));
+
+    if (!subjectSearch) return notSelected;
+    return notSelected.filter(a => 
       a?.titulo?.toLowerCase().includes(subjectSearch?.toLowerCase() || '')
     );
-  }, [subjectSearch, assuntos]);
-
-  const canCreateNew = useMemo(() => {
-    if (!subjectSearch || !Array.isArray(assuntos)) return false;
-    return !assuntos.some(a => a?.titulo?.toLowerCase() === subjectSearch?.toLowerCase());
-  }, [subjectSearch, assuntos]);
+  }, [subjectSearch, assuntos, formData.assuntos]);
   
   const ativosDoCliente = useMemo(() => {
     if (!formData.cliente || !Array.isArray(ativos)) return [];
@@ -136,7 +162,7 @@ export default function Chamados() {
     setModalMode(mode);
     setSubjectSearch('');
     setFormData({
-      cliente: '', ativo: '', assunto: '', novo_assunto: '', descricao_detalhada: '',
+      cliente: '', ativo: '', titulo: '', assuntos: [], descricao_detalhada: '',
       prioridade: 'MEDIA', origem: 'WHATSAPP', data_agendamento: '', 
       custo_ida: '', custo_volta: '', tecnicos: [],
       tecnico: '',
@@ -157,22 +183,20 @@ export default function Chamados() {
   };
 
   const handleSubjectSearchChange = (e) => {
-    const value = e.target.value;
-    setSubjectSearch(value);
-    setFormData(prev => ({ ...prev, assunto: '', novo_assunto: value }));
+    setSubjectSearch(e.target.value);
     setIsDropdownOpen(true);
   };
 
-  const selectSubject = (subject) => {
-    setSubjectSearch(subject?.titulo || '');
-    setFormData(prev => ({ ...prev, assunto: subject?.id || '', novo_assunto: '' }));
+  const addAssunto = (assunto) => {
+    if (!formData.assuntos.includes(assunto.id)) {
+      setFormData(prev => ({ ...prev, assuntos: [...prev.assuntos, assunto.id]}));
+    }
+    setSubjectSearch('');
     setIsDropdownOpen(false);
   };
 
-  const createNewSubject = () => {
-    if (!subjectSearch) return;
-    setFormData(prev => ({ ...prev, assunto: '', novo_assunto: subjectSearch }));
-    setIsDropdownOpen(false);
+  const removeAssunto = (assuntoId) => {
+    setFormData(prev => ({ ...prev, assuntos: prev.assuntos.filter(id => id !== assuntoId) }));
   };
 
 const handleCriarContato = async () => {
@@ -203,7 +227,7 @@ const handleCriarContato = async () => {
     if (!formData.empresa) return alert("Selecione a empresa responsável pelo chamado.");
     if (!formData.cliente) return alert("Selecione um cliente.");
     if (!formData.tecnico) return alert("O técnico responsável é obrigatório.");
-    if (!formData.assunto && !formData.novo_assunto) return alert("O assunto é obrigatório.");
+    if (formData.assuntos.length === 0) return alert("Selecione ao menos um assunto.");
     if (clienteSelecionado && !clienteSelecionado.ativo) return alert("Ação bloqueada: Cliente desativado.");
 
     // Build payload conditionally
@@ -211,6 +235,8 @@ const handleCriarContato = async () => {
         empresa: formData.empresa,
         cliente: formData.cliente,
         tecnico: formData.tecnico,
+        titulo: formData.titulo,
+        assuntos: formData.assuntos,
         descricao_detalhada: formData.descricao_detalhada,
         prioridade: formData.prioridade,
         origem: formData.origem,
@@ -222,12 +248,6 @@ const handleCriarContato = async () => {
         novo_solicitante_telefone: formData.novo_solicitante_telefone || '',
         novo_solicitante_cargo: formData.novo_solicitante_cargo || ''
     };
-
-    if (formData.assunto) {
-        payload.assunto = formData.assunto;
-    } else {
-        payload.novo_assunto = formData.novo_assunto;
-    }
 
     if (modalMode === 'VISITA') {
         if (!formData.data_agendamento) return alert("Defina data/hora da visita.");
@@ -292,7 +312,14 @@ const handleCriarContato = async () => {
         <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[250px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input type="text" placeholder="Pesquisar protocolo, cliente ou título..." value={busca} onChange={e => { setBusca(e.target.value); setPagina(1); }} className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 text-sm font-medium transition-all"/>
+            <input 
+              type="text" 
+              placeholder="Pesquisar protocolo, cliente ou título..." 
+              value={textoBusca} 
+              onChange={e => setTextoBusca(e.target.value)} 
+              onKeyDown={handleSearchKeyDown}
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-4 focus:ring-purple-500/5 text-sm font-medium transition-all"
+            />
           </div>
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
             <Filter size={16} className="text-slate-400" /><input type="date" className="bg-transparent border-none text-xs font-black text-slate-600 outline-none" value={filtrosData.inicio} onChange={e => { setFiltrosData({...filtrosData, inicio: e.target.value}); setPagina(1); }}/>
@@ -326,8 +353,14 @@ const handleCriarContato = async () => {
                       {item?.empresa_nome && !filtroEmpresa && (<span className="text-[9px] font-black px-2 py-0.5 rounded border bg-gray-50 text-gray-500 uppercase">{item?.empresa_nome}</span>)}
                     </div>
                     <h3 className="text-lg font-black text-slate-800 group-hover:text-[#7C69AF] transition-colors truncate">{item?.titulo}</h3>
-                    <div className="flex flex-wrap items-center gap-4 mt-2">
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {item.assuntos_detalhes && item.assuntos_detalhes.map(assunto => (
+                        <span key={assunto.id} className="text-[9px] font-black px-2 py-0.5 rounded-md border bg-indigo-50 text-indigo-600 border-indigo-100 uppercase tracking-widest">{assunto.titulo}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 mt-3">
                       <span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide truncate"><Building2 size={13} className="text-slate-300" /> {item?.nome_cliente}</span>
+                      {item?.solicitante_nome && (<span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide truncate hidden sm:flex"><User size={13} className="text-slate-300" /> {item?.solicitante_nome}</span>)} 
                       {item?.nome_ativo && (<span className="text-[11px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wide truncate hidden sm:flex"><Monitor size={13} className="text-slate-300" /> {item?.nome_ativo}</span>)}
                       <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium whitespace-nowrap">
                         {item?.tipo_atendimento === 'VISITA' ? (<><Calendar size={13} className="text-[#A696D1]" /> {item?.data_agendamento ? new Date(item.data_agendamento).toLocaleString('pt-BR') : 'Data Pendente'}</>) : (<><Clock size={13} className="text-[#A696D1]" /> {new Date(item?.data_abertura || item?.created_at).toLocaleDateString('pt-BR')}</>)}
@@ -383,20 +416,38 @@ const handleCriarContato = async () => {
                   )}
                 </div>
 
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Título do Chamado</label>
+                  <input name="titulo" value={formData.titulo} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-bold outline-none focus:ring-4 focus:ring-purple-200" placeholder="Opcional. Deixe em branco para gerar a partir dos assuntos." autoComplete="off"/>
+                </div>
+
                 <div className="md:col-span-2 space-y-1 relative" ref={subjectInputRef}>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assunto</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assuntos (Tags)</label>
                   <div className="relative">
-                    <input name="subject_search" required value={subjectSearch} onChange={handleSubjectSearchChange} onFocus={() => setIsDropdownOpen(true)} onBlur={() => setTimeout(() => setIsDropdownOpen(false), 150)} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-bold outline-none focus:ring-4 focus:ring-purple-200" placeholder="Pesquisar ou criar assunto..." autoComplete="off"/>
+                    <input name="subject_search" value={subjectSearch} onChange={handleSubjectSearchChange} onFocus={() => setIsDropdownOpen(true)} onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl font-bold outline-none focus:ring-4 focus:ring-purple-200" placeholder="Pesquisar e adicionar assuntos..." autoComplete="off"/>
                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
                   </div>
                   {isDropdownOpen && (
                     <div className="absolute top-full mt-2 w-full bg-white shadow-2xl border border-slate-100 rounded-2xl overflow-y-auto z-50 max-h-60 p-2 animate-in fade-in slide-in-from-top-2">
-                      {canCreateNew && subjectSearch && (<div onMouseDown={createNewSubject} className="px-4 py-3 text-sm font-bold text-white bg-[#302464] rounded-lg cursor-pointer flex items-center gap-2 mb-1"><Plus size={16} /> Criar novo: "{subjectSearch}"</div>)}
-                      {Array.isArray(filteredAssuntos) && filteredAssuntos.map(item => (<div key={item?.id} onMouseDown={() => selectSubject(item)} className="px-4 py-3 text-sm font-bold text-slate-700 rounded-lg hover:bg-purple-50 hover:text-[#302464] cursor-pointer">{item?.titulo}</div>))}
-                      {!canCreateNew && Array.isArray(filteredAssuntos) && filteredAssuntos.length === 0 && subjectSearch && (<div className="px-4 py-3 text-sm font-medium text-slate-400">Nenhum assunto encontrado.</div>)}
+                      {Array.isArray(filteredAssuntos) && filteredAssuntos.map(item => (<div key={item?.id} onMouseDown={() => addAssunto(item)} className="px-4 py-3 text-sm font-bold text-slate-700 rounded-lg hover:bg-purple-50 hover:text-[#302464] cursor-pointer">{item?.titulo}</div>))}
+                      {Array.isArray(filteredAssuntos) && filteredAssuntos.length === 0 && (<div className="px-4 py-3 text-sm font-medium text-slate-400">Nenhum assunto disponível.</div>)}
                     </div>
                   )}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {formData.assuntos.map(id => {
+                      const assunto = assuntos.find(a => a.id === id);
+                      return (
+                        <div key={id} className="flex items-center gap-2 bg-purple-100 text-purple-800 text-xs font-bold pl-3 pr-2 py-1 rounded-full">
+                          {assunto?.titulo || 'Carregando...'}
+                          <button type="button" onClick={() => removeAssunto(id)} className="text-purple-500 hover:text-purple-900">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
+
                 <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Técnico Responsável</label><select name="tecnico" required value={formData.tecnico} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700"><option value="">Selecione...</option>{Array.isArray(equipe) && equipe.map(t => <option key={t?.id} value={t?.id}>{t?.nome}</option>)}</select></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Canal de Comunicação</label><select name="origem" value={formData.origem} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-700"><option value="TELEFONE">Telefone</option><option value="WHATSAPP">WhatsApp</option><option value="EMAIL">E-mail</option><option value="SISTEMA">Sistema</option><option value="OUTRO">Outro</option></select></div>
                 <div className="md:col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ativo Vinculado (Opcional)</label><select name="ativo" value={formData.ativo} onChange={handleInputChange} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-xl outline-none font-medium text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!formData.cliente || !Array.isArray(ativosDoCliente) || ativosDoCliente.length === 0}><option value="">{formData.cliente ? 'Nenhum ativo vinculado' : 'Selecione um cliente primeiro'}</option>{Array.isArray(ativosDoCliente) && ativosDoCliente.map(a => <option key={a?.id} value={a?.id}>{a?.nome + (a?.tipo ? ` (${a.tipo})` : '')}</option>)}</select></div>

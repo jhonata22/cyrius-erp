@@ -9,6 +9,8 @@ import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
 import NotificationBell from './NotificationBell';
 import AtivoScanner from './AtivoScanner';
+import ReleaseNotesModal from './ReleaseNotesModal';
+import { SYSTEM_UPDATE } from '../constants/changelog';
 
 const scrollbarStyle = `
   .sidebar-scroll::-webkit-scrollbar { width: 5px; }
@@ -95,6 +97,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden">
+      <ReleaseNotesModal />
       <style>{scrollbarStyle}</style>
 
       {isMobileOpen && (
@@ -117,8 +120,8 @@ export default function Layout({ children }) {
         <div className="h-20 flex items-center justify-between px-6 shrink-0">
           <div className="text-2xl font-black text-white tracking-tighter flex items-center">
             <span className="text-[#A696D1]">C</span>
-            <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0'}`}>
-              YRIUS v3.0
+            <span className={`transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100 ml-0.5' : 'opacity-0 w-0 whitespace-nowrap overflow-hidden'}`}>
+              YRIUS v{SYSTEM_UPDATE.version}
             </span>
           </div>
           <button className="md:hidden text-white/50 hover:text-white" onClick={() => setIsMobileOpen(false)}>

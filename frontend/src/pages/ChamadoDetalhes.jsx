@@ -43,19 +43,23 @@ export default function ChamadoDetalhes() {
   const [novoComentario, setNovoComentario] = useState('');
   
   // Listas para seleção
-  const [todosTecnicos, setTodosTecnicos] = useState([]); // Lista completa para o select
-  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]); // Objetos dos técnicos do chamado
+  const [todosTecnicos, setTodosTecnicos] = useState([]);
+  const [tecnicosSelecionados, setTecnicosSelecionados] = useState([]);
+  const [todosAssuntos, setTodosAssuntos] = useState([]);
+  const [assuntosSelecionados, setAssuntosSelecionados] = useState([]);
 
   const [isFinalizarOpen, setIsFinalizarOpen] = useState(false);
 
   const [editData, setEditData] = useState({
+    titulo: '',
     status: '', 
     prioridade: '', 
     data_agendamento: '',
     custo_ida: 0, 
     custo_volta: 0,
     tecnico: '', // ID do técnico responsável
-    tecnicos: [] // Array de IDs da equipe
+    tecnicos: [], // Array de IDs da equipe
+    assuntos: [] // Array de IDs de assuntos
   });
 
   const custoTotal = useMemo(() => {
@@ -67,35 +71,32 @@ export default function ChamadoDetalhes() {
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
-      // Busca o chamado
       const dados = await chamadoService.buscarPorId(id);
-
-      // Busca relacionados
       const dadosRelacionados = await chamadoService.listarRelacionados(id);
-      setRelacionados(dadosRelacionados);
-
-      // Busca comentários
       const dadosComentarios = await chamadoService.listarComentarios(id);
-      setComentarios(dadosComentarios);
-      
-      // Busca lista completa de técnicos daquela empresa para permitir adição
       const listaEquipe = await equipeService.listar(dados.empresa || null);
+      const listaAssuntos = await chamadoService.listarAssuntos();
 
       setChamado(dados);
-      setCliente(dados.cliente); 
+      setCliente(dados.cliente);
+      setRelacionados(dadosRelacionados);
+      setComentarios(dadosComentarios);
       setTodosTecnicos(listaEquipe);
+      setTodosAssuntos(listaAssuntos);
 
-      // Mapeia os técnicos atuais (que vêm como objeto) para estado local
       setTecnicosSelecionados(dados.tecnicos || []);
+      setAssuntosSelecionados(dados.assuntos_detalhes || []);
 
       setEditData({
+        titulo: dados.titulo || '',
         status: dados.status,
         prioridade: dados.prioridade,
         custo_ida: dados.custo_ida || 0,
         custo_volta: dados.custo_volta || 0,
         data_agendamento: dados.data_agendamento ? dados.data_agendamento.slice(0, 16) : '',
-        tecnico: dados.tecnico ? dados.tecnico.id : '', // Popula o ID do técnico principal
-        tecnicos: dados.tecnicos ? dados.tecnicos.map(t => t.id) : [] // Inicializa IDs da equipe M2M
+        tecnico: dados.tecnico ? dados.tecnico.id : '',
+        tecnicos: dados.tecnicos ? dados.tecnicos.map(t => t.id) : [],
+        assuntos: dados.assuntos_detalhes ? dados.assuntos_detalhes.map(a => a.id) : []
       });
 
     } catch (error) { 
@@ -109,19 +110,16 @@ export default function ChamadoDetalhes() {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
+
+
+
   // --- GERENCIAMENTO DE TÉCNICOS ---
   const handleAddTecnico = (tecnicoId) => {
       if (!tecnicoId) return;
       const id = parseInt(tecnicoId);
-      
-      // Verifica se já está na lista
       if (editData.tecnicos.includes(id)) return;
-
-      // Adiciona ao array de IDs
       const novosIds = [...editData.tecnicos, id];
       setEditData(prev => ({ ...prev, tecnicos: novosIds }));
-
-      // Adiciona ao array de Objetos (para visualização imediata)
       const tecnicoObj = todosTecnicos.find(t => t.id === id);
       if (tecnicoObj) {
           setTecnicosSelecionados(prev => [...prev, tecnicoObj]);
@@ -132,6 +130,47 @@ export default function ChamadoDetalhes() {
       const novosIds = editData.tecnicos.filter(id => id !== tecnicoId);
       setEditData(prev => ({ ...prev, tecnicos: novosIds }));
       setTecnicosSelecionados(prev => prev.filter(t => t.id !== tecnicoId));
+  };
+
+  // --- GERENCIAMENTO DE ASSUNTOS ---
+  const handleAddAssunto = async (assuntoId) => {
+      if (!assuntoId) return;
+      const id = parseInt(assuntoId);
+      if (editData.assuntos.includes(id)) return;
+
+      const novosIds = [...editData.assuntos, id];
+      const autoTitle = [...assuntosSelecionados, todosAssuntos.find(a => a.id === id)].map(a => a.titulo).join(' - ');
+
+      setEditData(prev => ({ ...prev, assuntos: novosIds, titulo: autoTitle }));
+      const assuntoObj = todosAssuntos.find(a => a.id === id);
+      if (assuntoObj) {
+          setAssuntosSelecionados(prev => [...prev, assuntoObj]);
+      }
+
+      try {
+          await chamadoService.atualizar(id, { assuntos: novosIds, titulo: autoTitle });
+          const novosRelacionados = await chamadoService.listarRelacionados(id);
+          setRelacionados(novosRelacionados);
+      } catch (error) {
+          console.error("Erro ao adicionar assunto:", error);
+          // Optionally revert state on error
+      }
+  };
+
+  const handleRemoveAssunto = async (assuntoId) => {
+      const novosIds = editData.assuntos.filter(id => id !== assuntoId);
+      const autoTitle = assuntosSelecionados.filter(a => a.id !== assuntoId).map(a => a.titulo).join(' - ');
+      
+      setEditData(prev => ({ ...prev, assuntos: novosIds, titulo: autoTitle }));
+      setAssuntosSelecionados(prev => prev.filter(a => a.id !== assuntoId));
+
+      try {
+          await chamadoService.atualizar(id, { assuntos: novosIds, titulo: autoTitle });
+          const novosRelacionados = await chamadoService.listarRelacionados(id);
+          setRelacionados(novosRelacionados);
+      } catch (error) {
+          console.error("Erro ao remover assunto:", error);
+      }
   };
 
   // --- SALVAR ---
@@ -242,9 +281,15 @@ export default function ChamadoDetalhes() {
               </span>
             </div>
             
-            <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-6 leading-tight">
+            <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-2 leading-tight">
               {chamado.titulo}
             </h1>
+
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              {chamado.assuntos_detalhes && chamado.assuntos_detalhes.map(assunto => (
+                <span key={assunto.id} className="text-[9px] font-bold px-2 py-0.5 rounded border bg-purple-50 text-purple-600 uppercase">{assunto.titulo}</span>
+              ))}
+            </div>
             
             <div className="bg-slate-50 p-5 sm:p-6 rounded-2xl sm:rounded-3xl text-slate-600 text-sm font-medium whitespace-pre-wrap border border-slate-100 leading-relaxed">
               {chamado.descricao_detalhada || "Sem descrição detalhada."}
@@ -288,32 +333,44 @@ export default function ChamadoDetalhes() {
             </div>
           </div>
 
-          {/* HISTÓRICO DE RESOLUÇÕES */}
-          {(relacionados && relacionados.length > 0) ? (
-            <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
-              <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4">Histórico de Resoluções para este Assunto</h3>
-              <div className="space-y-4">
-                {relacionados.map(rel => (
-                  <div key={rel.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <Link to={`/chamados/${rel.id}`} className="text-sm font-bold text-indigo-600 hover:underline">
-                        #{rel.protocolo}
-                      </Link>
-                      <span className="text-xs font-semibold text-slate-500">{rel.cliente_nome}</span>
+          {/* HISTÓRICO DE RESOLUÇÕES AGRUPADO POR ASSUNTO */}
+          <div className="space-y-6">
+            {(relacionados && relacionados.length > 0) ? (
+              relacionados.map(grupo => (
+                <div key={grupo.assunto_id} className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
+                  <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <History size={18} className="text-[#7C69AF]"/>
+                    Histórico: {grupo.assunto_titulo}
+                  </h3>
+                  
+                  {grupo.historico.length > 0 ? (
+                    <div className="space-y-4">
+                      {grupo.historico.map(rel => (
+                        <div key={rel.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <Link to={`/chamados/${rel.id}`} className="text-sm font-bold text-indigo-600 hover:underline">
+                              #{rel.protocolo}
+                            </Link>
+                            <span className="text-xs font-semibold text-slate-500">{rel.cliente_nome}</span>
+                          </div>
+                          <p className="text-sm text-slate-700 truncate">
+                            {rel.resolucao || 'Resolução não detalhada.'}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-sm text-slate-700 truncate">
-                      {rel.resolucao || 'Resolução não detalhada.'}
-                    </p>
-                  </div>
-                ))}
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">Nenhum histórico anterior de resolução para este assunto.</p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
+                  <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4 flex items-center gap-2"><History size={18}/> Histórico de Resoluções</h3>
+                  <p className="text-sm text-slate-500">Adicione um assunto para ver o histórico de resoluções correspondente.</p>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100">
-                 <h3 className="text-base sm:text-lg font-black text-slate-800 mb-4">Histórico de Resoluções para este Assunto</h3>
-                <p className="text-sm text-slate-500">Nenhum histórico encontrado para este assunto.</p>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* CARD DE CUSTOS (Apenas Visita) */}
           {isVisita && (
@@ -375,7 +432,18 @@ export default function ChamadoDetalhes() {
               <Settings size={14} /> Painel de Controle
             </h3>
             
-            <div className="grid grid-cols-1 gap-4">
+            <div class="grid grid-cols-1 gap-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">Título do Chamado</label>
+                <input 
+                  type="text"
+                  value={editData.titulo} 
+                  onChange={e => setEditData({...editData, titulo: e.target.value})} 
+                  disabled={isLocked}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]/20 disabled:opacity-50 text-sm"
+                />
+              </div>
+
               <div>
                 <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">Status</label>
                 <select 
@@ -419,6 +487,48 @@ export default function ChamadoDetalhes() {
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* ASSUNTOS (M2M) */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Briefcase size={14} /> Assuntos
+              </h3>
+              
+              <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {assuntosSelecionados.map(assunto => (
+                      <div key={assunto.id} className="flex items-center gap-2 bg-purple-100 text-purple-800 text-xs font-bold pl-3 pr-2 py-1 rounded-full">
+                        {assunto.titulo}
+                        <button type="button" onClick={() => handleRemoveAssunto(assunto.id)} className="text-purple-500 hover:text-purple-900">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {assuntosSelecionados.length === 0 && (
+                     <div className="text-center py-4 text-xs text-slate-400 font-bold bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                         Nenhum assunto atribuído
+                     </div>
+                  )}
+
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                      <label className="text-[9px] font-bold text-slate-400 mb-2 block uppercase">Adicionar Assunto</label>
+                      <div className="flex gap-2">
+                          <select 
+                              className="flex-1 bg-slate-50 text-xs font-bold text-slate-600 rounded-xl p-2 border border-slate-200 outline-none"
+                              onChange={(e) => handleAddAssunto(e.target.value)}
+                              value=""
+                          >
+                              <option value="">Selecione...</option>
+                              {todosAssuntos.filter(a => !editData.assuntos.includes(a.id)).map(a => (
+                                  <option key={a.id} value={a.id}>{a.titulo}</option>
+                              ))}
+                          </select>
+                      </div>
+                  </div>
+              </div>
           </div>
 
           {/* COMENTÁRIOS */}

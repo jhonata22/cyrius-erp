@@ -9,8 +9,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('Iniciando a migração de títulos para assuntos...'))
 
-        chamados_sem_assunto = Chamado.objects.filter(assunto__isnull=True)
-        updated_count = 0
+        chamados_sem_assunto = Chamado.objects.filter(assuntos__isnull=True)
+        recuperados = 0
+        criados = 0
 
         for chamado in chamados_sem_assunto:
             if not chamado.titulo or not chamado.titulo.strip():
@@ -26,15 +27,18 @@ class Command(BaseCommand):
                 
                 if created:
                     self.stdout.write(f"  -> Novo assunto criado: '{titulo_formatado}'")
+                    criados += 1
 
-                chamado.assunto = assunto_obj
-                chamado.save()
+                chamado.assuntos.add(assunto_obj)
                 
-                updated_count += 1
+                recuperados += 1
                 self.stdout.write(self.style.SUCCESS(f'Chamado ID {chamado.id} atualizado. Assunto: "{assunto_obj.titulo}" (ID: {assunto_obj.id})'))
 
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f'Erro ao processar Chamado ID {chamado.id}: {e}'))
 
-        self.stdout.write('') # Add a newline for spacing
-        self.stdout.write(self.style.SUCCESS(f'Migração concluída! {updated_count} chamados foram atualizados.'))
+        self.stdout.write(self.style.SUCCESS(
+            f"---------------------------------\n"
+            f"Chamados atualizados: {recuperados}\n"
+            f"Novos Assuntos criados automaticamente: {criados}"
+        ))

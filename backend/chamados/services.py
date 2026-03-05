@@ -18,7 +18,25 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
         raise ValidationError("Chamado não encontrado.")
 
     if chamado.status == 'FINALIZADO':
-        raise ValidationError("Chamados finalizados não podem ser alterados.")
+        if 'assuntos' in dados_atualizacao:
+            # 1. Update the M2M relationship first
+            assuntos_ids = [int(aid) for aid in dados_atualizacao.get('assuntos', []) if str(aid).isdigit()]
+            chamado.assuntos.set(assuntos_ids)
+
+            # 2. Check the provided title
+            novo_titulo = dados_atualizacao.get('titulo', '').strip()
+
+            # 3. If no explicit title was provided, auto-generate it based on the NEWLY SET subjects
+            if not novo_titulo and chamado.assuntos.exists():
+                chamado.titulo = " - ".join([a.titulo for a in chamado.assuntos.all()])
+            elif novo_titulo:
+                chamado.titulo = novo_titulo
+
+            # 4. Save the title change to the database
+            chamado.save(update_fields=['titulo'])
+            return chamado
+        else:
+            raise ValidationError("Chamados finalizados só permitem alteração de assuntos (tags).")
 
     def safe_decimal(valor):
         if valor in [None, '', 'null', 'undefined']: return Decimal('0.00')
@@ -59,6 +77,21 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
         ids_para_remover = atuais_ids - novos_ids
         if ids_para_remover:
             ChamadoTecnico.objects.filter(chamado=chamado, tecnico_id__in=ids_para_remover).delete()
+
+    # ATUALIZAR ASSUNTOS (M2M)
+    if 'assuntos' in dados_atualizacao:
+        # 1. Update the M2M relationship first
+        assuntos_ids = [int(aid) for aid in dados_atualizacao.get('assuntos', []) if str(aid).isdigit()]
+        chamado.assuntos.set(assuntos_ids)
+
+        # 2. Check the provided title
+        novo_titulo = dados_atualizacao.get('titulo', '').strip()
+
+        # 3. If no explicit title was provided, auto-generate it based on the NEWLY SET subjects
+        if not novo_titulo and chamado.assuntos.exists():
+            chamado.titulo = " - ".join([a.titulo for a in chamado.assuntos.all()])
+        elif novo_titulo:
+            chamado.titulo = novo_titulo
 
     # 3.1 ATUALIZAR TÉCNICO RESPONSÁVEL (FK)
     if 'tecnico' in dados_atualizacao:

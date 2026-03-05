@@ -1,75 +1,103 @@
 from django.contrib import admin
-from .models import Chamado, ChamadoTecnico, ApontamentoHoras, EquipamentoEntrada, AssuntoChamado, ComentarioChamado
+from .models import (
+    AssuntoChamado, 
+    Chamado, 
+    ChamadoTecnico, 
+    ApontamentoHoras, 
+    EquipamentoEntrada, 
+    ComentarioChamado
+)
 
-# Permite visualizar/editar os técnicos dentro da tela do Chamado
-class ChamadoTecnicoInline(admin.TabularInline):
-    model = ChamadoTecnico
-    extra = 0 # Não mostra linhas vazias extras
-    autocomplete_fields = ['tecnico'] # Facilita buscar se tiver muitos técnicos
-
-# Permite ver detalhes do equipamento de laboratório dentro do Chamado
-class EquipamentoEntradaInline(admin.StackedInline):
-    model = EquipamentoEntrada
-    extra = 0
-
-class ComentarioChamadoInline(admin.TabularInline):
-    model = ComentarioChamado
-    extra = 0
-    readonly_fields = ('autor', 'created_at')
-    fields = ('texto', 'autor', 'created_at')
+@admin.register(AssuntoChamado)
+class AssuntoChamadoAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'ativo', 'created_at')
+    list_filter = ('ativo',)
+    search_fields = ('titulo',)
+    ordering = ('titulo',)
 
 @admin.register(Chamado)
 class ChamadoAdmin(admin.ModelAdmin):
-    # O que aparece na lista (colunas)
+    # O que aparece na listagem principal
     list_display = (
-        'id', 
         'protocolo', 
-        'get_cliente_nome', 
-        'titulo', 
+        'get_titulo_ou_assuntos', 
+        'cliente', 
+        'empresa', 
         'status', 
         'prioridade', 
-        'tipo_atendimento',
-        'tecnico', # Técnico responsável principal
-        'data_abertura'
+        'created_at'
     )
     
-    # Filtros laterais (barra direita)
-    list_filter = ('status', 'prioridade', 'tipo_atendimento', 'data_abertura', 'financeiro_gerado')
+    # Filtros laterais
+    list_filter = ('status', 'prioridade', 'tipo_atendimento', 'empresa', 'origem')
     
-    # Barra de pesquisa (busca por protocolo, cliente, título, etc)
-    search_fields = ('protocolo', 'titulo', 'descricao_detalhada', 'cliente__razao_social', 'cliente__nome')
+    # Barra de pesquisa
+    search_fields = ('protocolo', 'titulo', 'cliente__razao_social', 'cliente__nome')
     
-    # Campos somente leitura (para ninguém editar data de criação manual sem querer)
-    readonly_fields = ('created_at', 'updated_at', 'protocolo')
+    # Transforma o campo M2M (Assuntos) em um widget duplo super bonito (Disponíveis vs Escolhidos)
+    filter_horizontal = ('assuntos',)
     
-    # Inlines (Tabelas filhas dentro do chamado)
-    inlines = [ChamadoTecnicoInline, EquipamentoEntradaInline, ComentarioChamadoInline]
+    # Campos que o usuário não pode editar manualmente para não quebrar regras de negócio
+    readonly_fields = ('protocolo', 'custo_transporte', 'created_at', 'updated_at')
 
-    # Paginação
-    list_per_page = 20
+    # Organiza a tela de edição em blocos expansíveis
+    fieldsets = (
+        ('Informações Principais', {
+            'fields': (
+                'protocolo', 'empresa', 'cliente', 'solicitante', 
+                'titulo', 'assuntos', 'descricao_detalhada'
+            )
+        }),
+        ('Classificação e Status', {
+            'fields': ('status', 'prioridade', 'tipo_atendimento', 'origem')
+        }),
+        ('Atribuição', {
+            'fields': ('tecnico', 'ativo')
+        }),
+        ('Datas', {
+            'fields': ('data_abertura', 'data_agendamento', 'data_fechamento', 'created_at', 'updated_at')
+        }),
+        ('Custos e Financeiro', {
+            'fields': ('custo_ida', 'custo_volta', 'custo_transporte', 'valor_servico', 'financeiro_gerado')
+        }),
+        ('Resolução', {
+            'fields': ('resolucao', 'arquivo_conclusao')
+        }),
+        ('Anexos Extras', {
+            'fields': ('arquivo_1', 'arquivo_2', 'foto_antes', 'foto_depois'),
+            'classes': ('collapse',) # Deixa essa sessão recolhida por padrão
+        }),
+    )
 
-    # Helper para mostrar nome do cliente bonito
-    def get_cliente_nome(self, obj):
-        return obj.cliente.nome if obj.cliente.nome else obj.cliente.razao_social
-    get_cliente_nome.short_description = 'Cliente'
+    # Função customizada para mostrar o título ou os assuntos separados por vírgula na listagem
+    def get_titulo_ou_assuntos(self, obj):
+        if obj.titulo:
+            return obj.titulo
+        assuntos = ", ".join([a.titulo for a in obj.assuntos.all()])
+        return assuntos if assuntos else "Sem título"
+    get_titulo_ou_assuntos.short_description = 'Título / Assuntos'
 
-# Registrando os outros models caso queira acessá-los individualmente
+
 @admin.register(ChamadoTecnico)
 class ChamadoTecnicoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'chamado', 'tecnico', 'horas_trabalhadas')
+    list_display = ('chamado', 'tecnico', 'horas_trabalhadas')
+    search_fields = ('chamado__protocolo', 'tecnico__nome')
     list_filter = ('tecnico',)
 
 @admin.register(ApontamentoHoras)
 class ApontamentoHorasAdmin(admin.ModelAdmin):
-    list_display = ('id', 'chamado_tecnico', 'data_apontamento', 'horas_gastas')
-@admin.register(AssuntoChamado)
-class AssuntoChamadoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'titulo', 'ativo', 'created_at')
-    search_fields = ('titulo',)
-    list_editable = ('ativo',)
+    list_display = ('chamado_tecnico', 'horas_gastas', 'data_apontamento')
+    list_filter = ('data_apontamento',)
+    search_fields = ('descricao_tecnica',)
+
+@admin.register(EquipamentoEntrada)
+class EquipamentoEntradaAdmin(admin.ModelAdmin):
+    list_display = ('chamado', 'marca_modelo', 'numero_serie', 'data_entrada', 'data_prevista_entrega')
+    search_fields = ('marca_modelo', 'numero_serie', 'chamado__protocolo')
+    list_filter = ('data_entrada', 'data_prevista_entrega')
 
 @admin.register(ComentarioChamado)
 class ComentarioChamadoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'chamado', 'autor', 'texto', 'created_at')
-    list_filter = ('autor', 'created_at')
+    list_display = ('chamado', 'autor', 'created_at')
     search_fields = ('texto', 'chamado__protocolo')
+    list_filter = ('created_at',)

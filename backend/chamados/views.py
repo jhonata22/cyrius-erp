@@ -54,18 +54,29 @@ class ChamadoViewSet(viewsets.ModelViewSet):
     def relacionados(self, request, pk=None):
         try:
             chamado_atual = self.get_object()
-            if not chamado_atual.assunto:
+            assuntos = chamado_atual.assuntos.all()
+            
+            if not assuntos.exists():
                 return Response([], status=status.HTTP_200_OK)
 
-            chamados_relacionados = Chamado.objects.filter(
-                assunto=chamado_atual.assunto,
-                status='FINALIZADO',
-            ).exclude(
-                id=chamado_atual.id
-            ).order_by('-data_fechamento')[:5]
+            resultado = []
+            for assunto in assuntos:
+                # Top 5 finalized tickets for THIS specific subject
+                chamados = Chamado.objects.filter(
+                    assuntos=assunto,
+                    status='FINALIZADO'
+                ).exclude(
+                    id=chamado_atual.id
+                ).order_by('-data_fechamento')[:5]
+                
+                serializer = ChamadoRelacionadoSerializer(chamados, many=True)
+                resultado.append({
+                    "assunto_id": assunto.id,
+                    "assunto_titulo": assunto.titulo,
+                    "historico": serializer.data
+                })
 
-            serializer = ChamadoRelacionadoSerializer(chamados_relacionados, many=True)
-            return Response(serializer.data)
+            return Response(resultado, status=status.HTTP_200_OK)
 
         except Chamado.DoesNotExist:
             return Response({"detalhe": "Chamado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
@@ -87,6 +98,20 @@ class ChamadoViewSet(viewsets.ModelViewSet):
         data_fim = self.request.query_params.get('data_fim')
         status_filtro = self.request.query_params.get('status')
         cliente_id = self.request.query_params.get('cliente')
+        ativo_id = self.request.query_params.get('ativo')
+        
+        # ---> ADICIONE ESTE BLOCO DE BUSCA AQUI <---
+        # Verifica se o frontend está mandando 'busca' (ou 'search', dependendo de como está no seu Contexto)
+        termo_busca = self.request.query_params.get('busca') or self.request.query_params.get('search')
+        
+        if termo_busca:
+            queryset = queryset.filter(
+                Q(protocolo__icontains=termo_busca) |
+                Q(titulo__icontains=termo_busca) |
+                Q(cliente__nome__icontains=termo_busca) |
+                Q(cliente__razao_social__icontains=termo_busca)
+            )
+        # ------------------------------------------
 
         if data_inicio and data_fim:
             queryset = queryset.filter(data_abertura__date__range=[data_inicio, data_fim])
@@ -99,8 +124,6 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filtro)
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
-
-        ativo_id = self.request.query_params.get('ativo')
         if ativo_id:
             queryset = queryset.filter(ativo_id=ativo_id)
             

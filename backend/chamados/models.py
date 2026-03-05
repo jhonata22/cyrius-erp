@@ -61,8 +61,8 @@ class Chamado(TimeStampedModel):
 
     # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
-
-    assunto = models.ForeignKey(AssuntoChamado, on_delete=models.PROTECT, null=True, blank=True)
+    
+    assuntos = models.ManyToManyField(AssuntoChamado, blank=True, related_name='chamados')
 
     ativo = models.ForeignKey(
         'infra.Ativo', 
@@ -90,7 +90,7 @@ class Chamado(TimeStampedModel):
         verbose_name="Solicitante"
     )
 
-    titulo = models.CharField(max_length=100)
+    titulo = models.CharField(max_length=100, blank=True, null=True)
     descricao_detalhada = models.TextField(max_length=500)
     origem = models.CharField(max_length=50, choices=CanalComunicacao.choices, default=CanalComunicacao.WHATSAPP)
     
@@ -132,9 +132,6 @@ class Chamado(TimeStampedModel):
         return self.protocolo or f"ID {self.pk}"
 
     def save(self, *args, **kwargs):
-        if self.assunto:
-            self.titulo = self.assunto.titulo
-            
         ida = float(self.custo_ida or 0)
         volta = float(self.custo_volta or 0)
         self.custo_transporte = ida + volta
