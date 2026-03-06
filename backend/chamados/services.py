@@ -23,17 +23,12 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
             assuntos_ids = [int(aid) for aid in dados_atualizacao.get('assuntos', []) if str(aid).isdigit()]
             chamado.assuntos.set(assuntos_ids)
 
-            # 2. Check the provided title
             novo_titulo = dados_atualizacao.get('titulo', '').strip()
 
-            # 3. If no explicit title was provided, auto-generate it based on the NEWLY SET subjects
-            if not novo_titulo and chamado.assuntos.exists():
-                chamado.titulo = " - ".join([a.titulo for a in chamado.assuntos.all()])
-            elif novo_titulo:
+            # 3. If a new title is provided, update it. Do not auto-generate.
+            if novo_titulo:
                 chamado.titulo = novo_titulo
-
-            # 4. Save the title change to the database
-            chamado.save(update_fields=['titulo'])
+                chamado.save(update_fields=['titulo'])
             return chamado
         else:
             raise ValidationError("Chamados finalizados só permitem alteração de assuntos (tags).")
@@ -84,13 +79,10 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
         assuntos_ids = [int(aid) for aid in dados_atualizacao.get('assuntos', []) if str(aid).isdigit()]
         chamado.assuntos.set(assuntos_ids)
 
-        # 2. Check the provided title
         novo_titulo = dados_atualizacao.get('titulo', '').strip()
 
-        # 3. If no explicit title was provided, auto-generate it based on the NEWLY SET subjects
-        if not novo_titulo and chamado.assuntos.exists():
-            chamado.titulo = " - ".join([a.titulo for a in chamado.assuntos.all()])
-        elif novo_titulo:
+        # 3. If a new title is provided, update it. Do not auto-generate.
+        if novo_titulo:
             chamado.titulo = novo_titulo
 
     # 3.1 ATUALIZAR TÉCNICO RESPONSÁVEL (FK)
