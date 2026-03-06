@@ -1,3 +1,4 @@
+import json
 from django.db import transaction
 from django.utils import timezone
 from django.apps import apps
@@ -11,11 +12,22 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
     ChamadoTecnico = apps.get_model('chamados', 'ChamadoTecnico') # <--- Necessário para tabela intermediária
     LancamentoFinanceiro = apps.get_model('financeiro', 'LancamentoFinanceiro')
     Equipe = apps.get_model('equipe', 'Equipe')
+
     
     try:
         chamado = Chamado.objects.select_related('cliente').get(pk=chamado_id)
     except Chamado.DoesNotExist:
         raise ValidationError("Chamado não encontrado.")
+
+    resolucoes_data = dados_atualizacao.pop('resolucoes_assuntos', None)
+    if isinstance(resolucoes_data, list) and len(resolucoes_data) > 0 and isinstance(resolucoes_data[0], str):
+        resolucoes_data = resolucoes_data[0] # Handle list wrapper from QueryDict
+    if isinstance(resolucoes_data, str):
+        try:
+            import json
+            resolucoes_data = json.loads(resolucoes_data)
+        except:
+            resolucoes_data = None
 
     if chamado.status == 'FINALIZADO':
         if 'assuntos' in dados_atualizacao:
@@ -102,16 +114,27 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
     chamado.custo_volta = safe_decimal(dados_atualizacao.get('custo_volta', chamado.custo_volta))
     chamado.valor_servico = safe_decimal(dados_atualizacao.get('valor_servico', chamado.valor_servico))
 
+
     novo_status = dados_atualizacao.get('status')
 
     # --- PROCESSO DE FINALIZAÇÃO ---
     if novo_status == 'FINALIZADO':
-        if not chamado.resolucao and not dados_atualizacao.get('resolucao'):
-             raise ValidationError("A resolução técnica é obrigatória para finalizar.")
+        if not chamado.resolucao and not dados_atualizacao.get('resolucao') and not resolucoes_data:
+             raise ValidationError("A resolução técnica (geral ou por assunto) é obrigatória para finalizar.")
 
         chamado.status = 'FINALIZADO'
         chamado.data_fechamento = timezone.now()
         chamado.custo_transporte = chamado.custo_ida + chamado.custo_volta
+
+        if resolucoes_data:
+            ResolucaoAssunto = apps.get_model('chamados', 'ResolucaoAssunto')
+            for res in resolucoes_data:
+                if 'assunto_id' in res and 'texto_resolucao' in res:
+                    ResolucaoAssunto.objects.update_or_create(
+                        chamado=chamado,
+                        assunto_id=res['assunto_id'],
+                        defaults={'texto_resolucao': res['texto_resolucao']}
+                    )
 
         # A. REGRA FINANCEIRO (RECEITA - AVULSO)
         eh_avulso = getattr(chamado.cliente, 'tipo_cliente', 'AVULSO') == 'AVULSO'

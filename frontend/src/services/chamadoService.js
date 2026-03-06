@@ -52,12 +52,16 @@ const chamadoService = {
     const formData = new FormData();
     formData.append('status', 'FINALIZADO');
 
-    // O Django REST Framework espera que campos nulos não sejam enviados.
     Object.keys(dadosFinalizacao).forEach(key => {
       const value = dadosFinalizacao[key];
       if (value !== null && value !== undefined && value !== '') {
-        const fieldName = key === 'arquivo' ? 'arquivo_conclusao' : key;
-        formData.append(fieldName, value);
+        if (key === 'resolucoes_assuntos') {
+          // Stringify the array so it can be sent via FormData
+          formData.append(key, JSON.stringify(value));
+        } else {
+          const fieldName = key === 'arquivo' ? 'arquivo_conclusao' : key;
+          formData.append(fieldName, value);
+        }
       }
     });
 

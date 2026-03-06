@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Ticket, Users, Settings, LogOut, 
   Package, DollarSign, Briefcase, BookOpen, Search,
-  Wrench, Menu, X, Building2, ScanLine, ShoppingCart
+  Wrench, Menu, X, Building2, ScanLine, ShoppingCart,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import authService from '../services/authService';
 import equipeService from '../services/equipeService'; 
@@ -108,8 +109,7 @@ export default function Layout({ children }) {
       )}
 
       <aside 
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
+        
         className={`
           fixed inset-y-0 left-0 z-50 bg-[#302464] flex flex-col shadow-2xl transition-all duration-500 ease-in-out
           md:relative md:translate-x-0
@@ -163,6 +163,14 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="p-4 border-t border-white/5 shrink-0">
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)} 
+            className="mt-2 text-[#7C69AF] text-xs font-bold flex items-center gap-1 hover:underline"
+          >
+            {isExpanded ? 'Ver menos' : 'Ver mais'} 
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
           <button onClick={() => authService.logout()} className="flex items-center w-full px-4 py-3 text-sm font-bold text-white/40 hover:text-white hover:bg-red-500/20 rounded-xl transition-all group">
             <LogOut size={18} className="min-w-[18px]" />
             <span className={`ml-3 transition-all duration-500 ${(isExpanded || isMobileOpen) ? 'opacity-100' : 'opacity-0 w-0'}`}>Sair</span>

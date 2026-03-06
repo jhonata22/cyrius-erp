@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado
+from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado, ResolucaoAssunto
 from clientes.models import Cliente, ContatoCliente
 from infra.models import Ativo
 from equipe.models import Equipe
@@ -9,16 +9,35 @@ from core.models import Empresa
 
 class ChamadoRelacionadoSerializer(serializers.ModelSerializer):
     cliente_nome = serializers.CharField(source='cliente.nome_fantasia', read_only=True)
+    resolucao_assunto = serializers.SerializerMethodField()
 
     class Meta:
         model = Chamado
-        fields = ['id', 'protocolo', 'resolucao', 'created_at', 'cliente_nome']
+        fields = ['id', 'protocolo', 'resolucao', 'resolucao_assunto', 'created_at', 'cliente_nome']
+
+    def get_resolucao_assunto(self, obj):
+        # We will pass 'assunto_id' in the serializer context from the view
+        assunto_id = self.context.get('assunto_id')
+        if assunto_id:
+            resolucao_obj = obj.resolucoes_assuntos.filter(assunto_id=assunto_id).first()
+            if resolucao_obj and resolucao_obj.texto_resolucao:
+                return resolucao_obj.texto_resolucao
+        return None # Frontend will fallback to the general 'resolucao' if this is None
 
 
 class AssuntoChamadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssuntoChamado
         fields = '__all__'
+
+
+class ResolucaoAssuntoSerializer(serializers.ModelSerializer):
+    assunto_titulo = serializers.CharField(source='assunto.titulo', read_only=True)
+
+    class Meta:
+        model = ResolucaoAssunto
+        fields = ['assunto', 'assunto_titulo', 'texto_resolucao']
+        read_only_fields = ['assunto_titulo']
 
 
 class ComentarioChamadoSerializer(serializers.ModelSerializer):
@@ -68,6 +87,9 @@ class ChamadoSerializer(serializers.ModelSerializer):
     solicitante_nome = serializers.CharField(source='solicitante.nome', read_only=True)
     solicitante_telefone = serializers.CharField(source='solicitante.telefone', read_only=True)
     titulo = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    resolucoes_assuntos = ResolucaoAssuntoSerializer(many=True, read_only=True)
+
+
 
     # Write-only fields for new solicitante
     novo_solicitante_nome = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -89,13 +111,14 @@ class ChamadoSerializer(serializers.ModelSerializer):
             'data_agendamento', 'custo_ida', 'custo_volta',
             'custo_transporte', 'protocolo', 'data_abertura',
             'data_fechamento', 'tecnicos', 'tecnicos_nomes',
-            'resolucao', 'valor_servico',
+            'resolucao', 'resolucoes_assuntos', 'valor_servico',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes', 'nome_tecnico', 'assuntos_detalhes']
 
     def get_assuntos_detalhes(self, obj):
         return [{'id': assunto.id, 'titulo': assunto.titulo} for assunto in obj.assuntos.all()]
+
 
     def get_tecnicos_nomes(self, obj):
         return [t.nome for t in obj.tecnicos.all()]

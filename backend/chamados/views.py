@@ -62,14 +62,14 @@ class ChamadoViewSet(viewsets.ModelViewSet):
             resultado = []
             for assunto in assuntos:
                 # Top 5 finalized tickets for THIS specific subject
-                chamados = Chamado.objects.filter(
+                chamados = Chamado.objects.prefetch_related('resolucoes_assuntos').filter(
                     assuntos=assunto,
                     status='FINALIZADO'
                 ).exclude(
                     id=chamado_atual.id
                 ).order_by('-data_fechamento')[:5]
                 
-                serializer = ChamadoRelacionadoSerializer(chamados, many=True)
+                serializer = ChamadoRelacionadoSerializer(chamados, many=True, context={'assunto_id': assunto.id})
                 resultado.append({
                     "assunto_id": assunto.id,
                     "assunto_titulo": assunto.titulo,

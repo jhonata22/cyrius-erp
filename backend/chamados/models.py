@@ -183,6 +183,17 @@ class EquipamentoEntrada(models.Model):
     class Meta: 
         db_table = 'TB_EQUIPAMENTO_ENTRADA'
 
+class ResolucaoAssunto(models.Model):
+    chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE, related_name='resolucoes_assuntos')
+    assunto = models.ForeignKey(AssuntoChamado, on_delete=models.PROTECT)
+    texto_resolucao = models.TextField(verbose_name="Resolução do Assunto")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'TB_RESOLUCAO_ASSUNTO'
+        unique_together = ('chamado', 'assunto')
+
 class ComentarioChamado(models.Model):
     chamado = models.ForeignKey(Chamado, related_name='comentarios', on_delete=models.CASCADE)
     autor = models.ForeignKey('equipe.Equipe', on_delete=models.SET_NULL, null=True)

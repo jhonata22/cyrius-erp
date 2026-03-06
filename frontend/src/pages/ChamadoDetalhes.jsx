@@ -1,17 +1,19 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useChamados } from '../contexts/ChamadosContext';
 import { 
   ArrowLeft, MapPin, Calendar, Clock, 
   Save, Truck, Check, Settings, 
   Info, Briefcase, Users, History, Building2, 
-  Trash2, Plus, AlertTriangle, Monitor, MessageSquare, User
+  Trash2, Plus, AlertTriangle, Monitor, MessageSquare, User,
+  ExternalLink
 } from 'lucide-react';
 
 import chamadoService from '../services/chamadoService';
 import equipeService from '../services/equipeService';
 // import clienteService from '../services/clienteService'; // Não usado diretamente se o chamado já traz o cliente
 import ModalFinalizar from '../components/ModalFinalizar';
+import ExpandableText from '../components/ExpandableText';
 
 const STATUS_MAP = {
   ABERTO: { label: '🔓 Aberto', color: 'bg-emerald-50 text-emerald-600' },
@@ -296,12 +298,23 @@ export default function ChamadoDetalhes() {
             </div>
 
             {/* RESOLUÇÃO (Se finalizado) */}
-            {chamado.status === 'FINALIZADO' && chamado.resolucao && (
+            {chamado.status === 'FINALIZADO' && (chamado.resolucoes_assuntos || chamado.resolucao) && (
                <div className="mt-6 bg-emerald-50 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-emerald-100">
                   <h3 className="text-emerald-700 font-black text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2">
                     <Check size={14}/> Resolução Técnica
                   </h3>
-                  <p className="text-emerald-800 text-sm font-medium whitespace-pre-wrap">{chamado.resolucao}</p>
+                  {chamado.resolucoes_assuntos && chamado.resolucoes_assuntos.length > 0 ? (
+                    <div className="space-y-4">
+                      {chamado.resolucoes_assuntos.map(res => (
+                        <div key={res.assunto_id} className="pt-2">
+                          <p className="text-xs font-black text-emerald-900/60 uppercase tracking-wider">- {res.assunto_titulo} -</p>
+                          <p className="text-emerald-800 text-sm font-medium whitespace-pre-wrap pt-1">{res.texto_resolucao}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (chamado.resolucao &&
+                    <p className="text-emerald-800 text-sm font-medium whitespace-pre-wrap">{chamado.resolucao}</p>
+                  )}
                </div>
             )}
 
@@ -347,15 +360,13 @@ export default function ChamadoDetalhes() {
                     <div className="space-y-4">
                       {grupo.historico.map(rel => (
                         <div key={rel.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                          <div className="flex justify-between items-center mb-2">
-                            <Link to={`/chamados/${rel.id}`} className="text-sm font-bold text-indigo-600 hover:underline">
-                              #{rel.protocolo}
+                          <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-200/60">
+                            <Link to={`/chamados/${rel.id}`} target="_blank" className="flex items-center gap-1.5 text-sm font-black text-[#302464] hover:text-[#7C69AF] transition-colors">
+                              #{rel.protocolo} <ExternalLink size={14} className="text-slate-400" />
                             </Link>
-                            <span className="text-xs font-semibold text-slate-500">{rel.cliente_nome}</span>
+                            <span className="text-xs font-bold text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-100">{rel.cliente_nome}</span>
                           </div>
-                          <p className="text-sm text-slate-700 truncate">
-                            {rel.resolucao || 'Resolução não detalhada.'}
-                          </p>
+                          <ExpandableText text={rel.resolucao_assunto || rel.resolucao} />
                         </div>
                       ))}
                     </div>

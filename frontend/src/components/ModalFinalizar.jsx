@@ -1,18 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, DollarSign, AlertTriangle, X, UploadCloud, FileText, Trash2, Loader2 } from 'lucide-react';
 
 export default function ModalFinalizar({ isOpen, onClose, onConfirm, chamado }) {
-  const [resolucao, setResolucao] = useState('');
+  const [resolucoesModulares, setResolucoesModulares] = useState([]);
   const [valor, setValor] = useState('');
   const [arquivo, setArquivo] = useState(null);
-  const [enviando, setEnviando] = useState(false); // Melhoria 2: Estado de loading
+  const [enviando, setEnviando] = useState(false);
 
   const isAvulso = chamado?.cliente_detalhes?.tipo_cliente === 'AVULSO';
+
+  useEffect(() => {
+    if (isOpen && chamado?.assuntos_detalhes) {
+      setResolucoesModulares(
+        chamado.assuntos_detalhes.map(assunto => ({
+          assunto_id: assunto.id,
+          texto_resolucao: ''
+        }))
+      );
+    }
+  }, [isOpen, chamado]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Melhoria 1: Validação de Segurança
     if (isAvulso) {
       if (!valor || parseFloat(valor) <= 0) return alert("Para clientes avulsos, informe o valor do serviço.");
       if (!arquivo) return alert("Obrigatório anexar o comprovante/OS para clientes avulsos.");
@@ -21,9 +31,9 @@ export default function ModalFinalizar({ isOpen, onClose, onConfirm, chamado }) 
     try {
       setEnviando(true);
       await onConfirm({
-        resolucao,
+        resolucoes_assuntos: resolucoesModulares,
         valor_servico: isAvulso ? parseFloat(valor) : 0,
-        arquivo: arquivo 
+        arquivo_conclusao: arquivo 
       });
     } catch (err) {
       alert("Erro ao finalizar chamado. Tente novamente.");
@@ -38,7 +48,6 @@ export default function ModalFinalizar({ isOpen, onClose, onConfirm, chamado }) 
     <div className="fixed inset-0 bg-[#302464]/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-8 relative max-h-[90vh] overflow-y-auto border border-white/20">
         
-        {/* Botão Fechar */}
         <button 
           onClick={onClose} 
           disabled={enviando}
@@ -58,23 +67,32 @@ export default function ModalFinalizar({ isOpen, onClose, onConfirm, chamado }) 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* RESOLUÇÃO */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-              Relatório de Solução Técnica
-            </label>
-            <textarea
-              required
-              disabled={enviando}
-              rows="3"
-              value={resolucao}
-              onChange={(e) => setResolucao(e.target.value)}
-              className="w-full bg-slate-50 border-2 border-transparent rounded-3xl p-5 font-medium text-slate-700 focus:border-emerald-500/20 focus:bg-white outline-none resize-none transition-all"
-              placeholder="O que foi realizado para resolver o problema?"
-            />
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+              Relatórios de Solução por Assunto
+            </h3>
+            {resolucoesModulares.map((res, index) => (
+              <div key={res.assunto_id}>
+                <label className="text-sm font-bold text-slate-600 mb-1 ml-1">
+                  {chamado.assuntos_detalhes.find(a => a.id === res.assunto_id)?.titulo}
+                </label>
+                <textarea
+                  required
+                  disabled={enviando}
+                  rows="2"
+                  value={res.texto_resolucao}
+                  onChange={(e) => {
+                      const novasResolucoes = [...resolucoesModulares];
+                      novasResolucoes[index].texto_resolucao = e.target.value;
+                      setResolucoesModulares(novasResolucoes);
+                  }}
+                  className="w-full bg-slate-50 border-2 border-transparent rounded-2xl p-4 font-medium text-slate-700 focus:border-emerald-500/20 focus:bg-white outline-none resize-none transition-all"
+                  placeholder={`Resolução para "${chamado.assuntos_detalhes.find(a => a.id === res.assunto_id)?.titulo}"`}
+                />
+              </div>
+            ))}
           </div>
 
-          {/* UPLOAD - Melhoria Visual */}
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
               Comprovante / Ordem de Serviço {isAvulso && <span className="text-red-500">*</span>}
@@ -115,7 +133,6 @@ export default function ModalFinalizar({ isOpen, onClose, onConfirm, chamado }) 
             )}
           </div>
 
-          {/* FINANCEIRO AVULSO */}
           {isAvulso ? (
             <div className="bg-[#302464] p-6 rounded-[2rem] shadow-xl shadow-purple-900/20 animate-in slide-in-from-bottom-4">
               <div className="flex items-center gap-3 mb-4">
