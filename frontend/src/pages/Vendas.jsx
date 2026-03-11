@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShoppingCart, Plus, Search, DollarSign, CheckCircle, Clock, Building2, 
-  ChevronLeft, ChevronRight, Filter, X
+  ChevronLeft, ChevronRight, Filter, X, XCircle
 } from 'lucide-react';
 import clienteService from '../services/clienteService';
 import vendaService from '../services/vendaService';
@@ -13,7 +13,8 @@ const StatusBadge = ({ status }) => {
   const statusMap = {
     ORCAMENTO: { text: 'Orçamento', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
     CONCLUIDA: { text: 'Concluída', color: 'bg-green-100 text-green-800 border-green-200' },
-    REVOGADA: { text: 'Revogada', color: 'bg-red-100 text-red-800 border-red-200' },
+    VENCIDO: { text: 'Vencido', color: 'bg-red-100 text-red-800 border-red-200' },
+    CANCELADO: { text: 'Cancelado', color: 'bg-slate-200 text-slate-700 border-slate-300' },
   };
   const { text, color } = statusMap[status] || { text: status, color: 'bg-gray-100 text-gray-800' };
   return <span className={`px-3 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-full border ${color}`}>{text}</span>;
@@ -31,6 +32,12 @@ const KpiCard = ({ icon: Icon, title, value, color }) => (
     </div>
 );
 
+const getFutureDate = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+};
+
 export default function Vendas() {
   const navigate = useNavigate();
   const { empresas } = useEmpresas();
@@ -43,7 +50,7 @@ export default function Vendas() {
   
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ cliente: '', solicitante: '' });
+  const [formData, setFormData] = useState({ cliente: '', solicitante: '', validade_orcamento: getFutureDate(3) });
   const [contatos, setContatos] = useState([]);
   const [isCreatingContato, setIsCreatingContato] = useState(false);
   const [novoContato, setNovoContato] = useState({ nome: '', telefone: '' });
@@ -143,6 +150,7 @@ export default function Vendas() {
     const concluidas = historico.filter(v => v.status === 'CONCLUIDA');
     return {
         orcamentosPendentes: historico.filter(v => v.status === 'ORCAMENTO').length,
+        orcamentosVencidos: historico.filter(v => v.status === 'VENCIDO').length,
         vendasConcluidas: concluidas.length,
         receitaTotal: concluidas.reduce((acc, v) => acc + parseFloat(v.valor_total), 0)
     }
@@ -156,6 +164,7 @@ export default function Vendas() {
       empresa: filtroEmpresa, 
       vendedor: currentUser?.id,
       solicitante: formData.solicitante || null,
+      validade_orcamento: formData.validade_orcamento,
       itens: [] 
     };
     try {
@@ -183,7 +192,7 @@ export default function Vendas() {
 
   const openModal = () => {
     setModalOpen(true);
-    setFormData({ cliente: '', solicitante: '' });
+    setFormData({ cliente: '', solicitante: '', validade_orcamento: getFutureDate(3) });
     setIsCreatingContato(false);
     setContatos([]);
   };
@@ -218,8 +227,9 @@ export default function Vendas() {
       </div>
 
       {/* KPI Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <KpiCard icon={Clock} title="Orçamentos Pendentes" value={kpis.orcamentosPendentes} color="bg-yellow-400" />
+          <KpiCard icon={XCircle} title="Orçamentos Vencidos" value={kpis.orcamentosVencidos} color="bg-red-400" />
           <KpiCard icon={CheckCircle} title="Vendas Concluídas" value={kpis.vendasConcluidas} color="bg-emerald-500" />
           <KpiCard icon={DollarSign} title="Receita (Concluída)" value={`R$ ${kpis.receitaTotal.toFixed(2)}`} color="bg-blue-500" />
       </div>
@@ -236,7 +246,8 @@ export default function Vendas() {
               <option value="">Status: Todos</option>
               <option value="ORCAMENTO">Orçamento</option>
               <option value="CONCLUIDA">Concluída</option>
-              <option value="REVOGADA">Revogada</option>
+              <option value="VENCIDO">Vencido</option>
+              <option value="CANCELADO">Cancelado</option>
             </select>
             
             <div className="flex items-center gap-2">
@@ -312,6 +323,11 @@ export default function Vendas() {
                       <option value="">Pesquisar cliente...</option>
                       {clientes.map(c => <option key={c.id} value={c.id}>{c.razao_social}</option>)}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Validade do Orçamento</label>
+                    <input type="date" value={formData.validade_orcamento} onChange={e => setFormData({...formData, validade_orcamento: e.target.value})} className="w-full bg-slate-50 p-4 rounded-xl sm:rounded-2xl border border-slate-200 sm:border-none font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#7C69AF]/50" />
                   </div>
 
                   {formData.cliente && (

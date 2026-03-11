@@ -19,14 +19,22 @@ def atualizar_chamado(chamado_id, dados_atualizacao, usuario_responsavel, arquiv
     except Chamado.DoesNotExist:
         raise ValidationError("Chamado não encontrado.")
 
+    if hasattr(dados_atualizacao, 'copy'):
+        dados_atualizacao = dados_atualizacao.copy()
+
+    # 2. Safely pop the modular resolutions
     resolucoes_data = dados_atualizacao.pop('resolucoes_assuntos', None)
+    
+    # Handle list wrapper from DRF QueryDict (FormData)
     if isinstance(resolucoes_data, list) and len(resolucoes_data) > 0 and isinstance(resolucoes_data[0], str):
-        resolucoes_data = resolucoes_data[0] # Handle list wrapper from QueryDict
+        resolucoes_data = resolucoes_data[0]
+        
+    # 3. Parse JSON if it came as a string inside FormData
     if isinstance(resolucoes_data, str):
         try:
-            import json
             resolucoes_data = json.loads(resolucoes_data)
-        except:
+        except Exception as e:
+            print(f"Erro ao parsear resolucoes_assuntos: {e}")
             resolucoes_data = None
 
     if chamado.status == 'FINALIZADO':

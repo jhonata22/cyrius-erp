@@ -91,11 +91,15 @@ export default function Layout({ children }) {
     setIsMobileOpen(false);
   }, [location]);
 
-  const temPermissao = (cargosPermitidos) => {
+const temPermissao = (cargosPermitidos) => {
     if (!userCargo) return false;
-    return cargosPermitidos.includes(userCargo.toUpperCase());
+    return cargosPermitidos.includes(String(userCargo).trim().toUpperCase());
   };
 
+  // DETECTOR DE MENTIRAS (Apague depois que resolvermos)
+  console.log("🔥 CARGO ATUAL DO NAVEGADOR:", userCargo);
+  console.log("Liberar Serviços?", temPermissao(['SOCIO', 'TECNICO', 'GESTOR']));
+  console.log("Liberar Clientes/Vendas/Finanças?", temPermissao(['SOCIO', 'GESTOR']));
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden">
       <ReleaseNotesModal />
@@ -137,7 +141,7 @@ export default function Layout({ children }) {
             <SidebarItem icon={LayoutDashboard} text="Dashboard" to="/" isExpanded={isExpanded || isMobileOpen} />
             <SidebarItem icon={Ticket} text="Chamados" to="/chamados" isExpanded={isExpanded || isMobileOpen} />
             
-            {temPermissao(['SOCIO', 'TECNICO']) && (
+            {temPermissao(['SOCIO', 'TECNICO', 'GESTOR']) && (
                 <SidebarItem icon={Wrench} text="Serviços & Lab" to="/servicos" isExpanded={isExpanded || isMobileOpen} />
             )}
 

@@ -13,8 +13,9 @@ class Venda(models.Model):
     )
     STATUS_CHOICES = (
         ('ORCAMENTO', 'Orçamento'),
-        ('CONCLUIDA', 'Concluída'),
-        ('REVOGADA', 'Revogada'),
+        ('CONCLUIDA', 'Concluída (Aprovada)'),
+        ('CANCELADO', 'Cancelado'),
+        ('VENCIDO', 'Vencido'),
     )
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)

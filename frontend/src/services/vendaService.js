@@ -21,6 +21,14 @@ const vendaService = {
     return api.post(`/vendas/${id}/aprovar/`).then(response => response.data);
   },
 
+  cancelarVenda: (id) => {
+    return api.post(`/vendas/${id}/cancelar/`).then(response => response.data);
+  },
+
+  alterarValidade: (id, nova_validade) => {
+    return api.patch(`/vendas/${id}/alterar_validade/`, { nova_validade }).then(response => response.data);
+  },
+
   gerarPdf: (id) => {
     return api.get(`/vendas/${id}/gerar_pdf/`, { responseType: 'blob' }).then(response => {
       const url = window.URL.createObjectURL(new Blob([response.data]));

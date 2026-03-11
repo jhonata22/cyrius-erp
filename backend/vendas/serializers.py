@@ -18,8 +18,10 @@ class VendaSerializer(serializers.ModelSerializer):
         model = Venda
         fields = [
             'id', 'empresa', 'cliente', 'solicitante', 'vendedor', 'valor_total', 'desconto', 
-            'valor_entrada', 'parcelas', 'forma_pagamento', 'vincular_contrato', 'itens'
+            'valor_entrada', 'parcelas', 'forma_pagamento', 'vincular_contrato', 'itens',
+            'validade_orcamento', 'status'
         ]
+        read_only_fields = ['status', 'valor_total']
 
 class VendaDetailSerializer(serializers.ModelSerializer):
     itens = ItemVendaSerializer(many=True, read_only=True)
@@ -36,7 +38,7 @@ class VendaListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Venda
-        fields = ['id', 'cliente_nome', 'produtos_resumo', 'valor_total', 'status', 'data_venda']
+        fields = ['id', 'cliente_nome', 'produtos_resumo', 'valor_total', 'status', 'data_venda', 'validade_orcamento']
 
     def get_produtos_resumo(self, obj):
         primeiro_item = obj.itens.first()

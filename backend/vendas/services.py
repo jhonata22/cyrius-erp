@@ -17,7 +17,8 @@ def criar_orcamento_venda(venda_data):
     
     with transaction.atomic():
         venda_data['status'] = 'ORCAMENTO'
-        venda_data['validade_orcamento'] = timezone.now().date() + timedelta(days=2)
+        if 'validade_orcamento' not in venda_data or not venda_data['validade_orcamento']:
+            venda_data['validade_orcamento'] = timezone.now().date() + timedelta(days=3)
         
         # Se não houver itens, o valor total é 0
         valor_total_calculado = sum(Decimal(item['quantidade']) * Decimal(item['preco_unitario']) for item in itens_data) if itens_data else Decimal('0.00')
@@ -40,9 +41,9 @@ def aprovar_venda(venda: Venda):
         raise ValidationError(f"Esta venda não é um orçamento e não pode ser aprovada.")
 
     if timezone.now().date() > venda.validade_orcamento:
-        venda.status = 'REVOGADA'
+        venda.status = 'VENCIDO'
         venda.save()
-        raise ValidationError(f"Orçamento expirado em {venda.validade_orcamento.strftime('%d/%m/%Y')}. A venda foi revogada.")
+        raise ValidationError(f"Orçamento expirado em {venda.validade_orcamento.strftime('%d/%m/%Y')}. A venda foi marcada como vencida.")
 
     with transaction.atomic():
         # Valida o estoque de todos os itens ANTES de qualquer alteração

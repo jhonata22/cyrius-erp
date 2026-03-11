@@ -23,6 +23,17 @@ class VendaViewSet(viewsets.ModelViewSet):
             return VendaDetailSerializer
         return VendaSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Auto-update status if expired
+        if instance.status == 'ORCAMENTO' and instance.validade_orcamento < timezone.now().date():
+            instance.status = 'VENCIDO'
+            instance.save()
+            
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -112,3 +123,41 @@ class VendaViewSet(viewsets.ModelViewSet):
             return Response(VendaDetailSerializer(venda).data, status=status.HTTP_200_OK)
         except ItemVenda.DoesNotExist:
             return Response({'error': 'Item não encontrado nesta venda.'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'])
+    def cancelar(self, request, pk=None):
+        venda = self.get_object()
+        if venda.status == 'CONCLUIDA':
+            return Response({'error': 'Vendas concluídas não podem ser canceladas.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if venda.status == 'ORCAMENTO':
+            venda.status = 'CANCELADO'
+            venda.save()
+            serializer = VendaDetailSerializer(venda)
+            return Response(serializer.data)
+
+        return Response({'error': f'Não é possível cancelar uma venda com status "{venda.get_status_display()}".'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['patch'])
+    def alterar_validade(self, request, pk=None):
+        venda = self.get_object()
+        nova_validade_str = request.data.get('nova_validade')
+
+        if not nova_validade_str:
+            return Response({'error': 'O campo "nova_validade" (YYYY-MM-DD) é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from datetime import datetime
+            nova_validade = datetime.strptime(nova_validade_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Formato de data inválido. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        venda.validade_orcamento = nova_validade
+        
+        if venda.status == 'VENCIDO':
+            venda.status = 'ORCAMENTO'
+        
+        venda.save()
+        
+        serializer = VendaDetailSerializer(venda)
+        return Response(serializer.data)

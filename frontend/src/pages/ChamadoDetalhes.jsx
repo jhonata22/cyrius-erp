@@ -307,13 +307,21 @@ export default function ChamadoDetalhes() {
                     <div className="space-y-4">
                       {chamado.resolucoes_assuntos.map(res => (
                         <div key={res.assunto_id} className="pt-2">
-                          <p className="text-xs font-black text-emerald-900/60 uppercase tracking-wider">- {res.assunto_titulo} -</p>
-                          <p className="text-emerald-800 text-sm font-medium whitespace-pre-wrap pt-1">{res.texto_resolucao}</p>
+                          <p className="text-xs font-black text-emerald-900/60 uppercase tracking-wider mb-1">- {res.assunto_titulo} -</p>
+                          <ExpandableText 
+                            text={res.texto_resolucao} 
+                            textClassName="text-emerald-800 font-medium" 
+                            buttonClassName="text-emerald-700" 
+                          />
                         </div>
                       ))}
                     </div>
                   ) : (chamado.resolucao &&
-                    <p className="text-emerald-800 text-sm font-medium whitespace-pre-wrap">{chamado.resolucao}</p>
+                     <ExpandableText 
+                       text={chamado.resolucao} 
+                       textClassName="text-emerald-800 font-medium" 
+                       buttonClassName="text-emerald-700" 
+                     />
                   )}
                </div>
             )}

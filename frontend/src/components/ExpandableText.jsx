@@ -1,44 +1,32 @@
-import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
-const ExpandableText = ({ text, maxLength = 120 }) => {
+export default function ExpandableText({ text, maxLength = 100, buttonClassName }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-  const textRef = useRef(null);
-
-  useEffect(() => {
-    if (textRef.current) {
-      // Check if the text content is longer than the max length
-      setIsOverflowing(textRef.current.textContent.length > maxLength);
-    }
-  }, [text, maxLength]);
-
-  const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
-  };
 
   if (!text) {
-    return <p className="text-sm text-slate-500 italic">Resolução não detalhada.</p>;
+    return null;
   }
 
-  const truncatedText = isExpanded ? text : `${text.substring(0, maxLength)}${isOverflowing && !isExpanded ? '...' : ''}`;
+  const needsTruncation = text.length > maxLength;
 
   return (
     <div>
-      <p ref={textRef} className="text-emerald-800 text-sm font-medium whitespace-pre-wrap">
-        {truncatedText}
+      <p className={`text-sm ${!isExpanded ? `line-clamp-3` : ''}`}>
+        {text}
       </p>
-      {isOverflowing && (
-        <button 
-          onClick={toggleExpanded} 
-          className="mt-2 text-[#7C69AF] text-xs font-bold flex items-center gap-1 hover:underline"
+      {needsTruncation && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`mt-2 text-xs font-black flex items-center gap-1 hover:underline active:scale-95 transition-all ${buttonClassName || ''}`}
         >
-          {isExpanded ? 'Ver menos' : 'Ver mais'} 
-          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {isExpanded ? (
+            <>Menos detalhes <ChevronUp size={14} /></>
+          ) : (
+            <>Ver mais detalhes <ChevronDown size={14} /></>
+          )}
         </button>
       )}
     </div>
   );
-};
-
-export default ExpandableText;
+}

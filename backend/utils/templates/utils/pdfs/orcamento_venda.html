@@ -2,25 +2,24 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Orçamento</title>
+    <title>Orçamento {{ venda.id }}</title>
     <style>
         @page {
             size: a4 portrait;
             margin: 0;
-            margin-bottom: 110pt;
+            margin-bottom: 90pt;
             @bottom-center {
                 content: element(footer_content);
             }
         }
-
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
             color: #333;
-            font-size: 11pt;
+            font-size: 10pt;
             margin: 0;
         }
 
-        /* --- Brand Colors --- */
+        /* --- Brand --- */
         .brand-dark { color: #3a2a6d; }
         .brand-light { color: #8c64a8; }
 
@@ -28,153 +27,104 @@
         .header-bg {
             background: linear-gradient(to right, #3a2a6d, #8c64a8);
             color: white;
-            padding: 20pt 60pt;
+            padding: 20pt 50pt;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .header-bg h1 {
             color: white;
-            font-size: 24pt;
+            font-size: 20pt;
             margin: 0;
             font-weight: bold;
-            letter-spacing: 1px;
-            white-space: nowrap; /* Impede o texto de amassar */
         }
-        .header-bg .date {
-            font-size: 11pt;
-            border-bottom: 1px solid white;
-            padding-bottom: 4px;
-            white-space: nowrap; /* Mantém a data numa linha só */
-            margin-left: 30pt; /* Força uma distância segura do título */
-            text-align: right;
+        .validity-box {
+            border: 2px solid white;
+            padding: 5pt 10pt;
+            text-align: center;
         }
+        .validity-label { display: block; font-size: 8pt; text-transform: uppercase; }
+        .validity-date { display: block; font-size: 14pt; font-weight: bold; }
 
-        /* --- Main Content --- */
-        .page-content {
-            padding: 20pt 60pt 20pt 60pt;
-        }
+        /* --- Main --- */
+        .page-content { padding: 20pt 50pt; }
 
         /* --- Client Info --- */
         .client-info {
-            margin-bottom: 20pt;
+            margin-bottom: 25pt;
+            border-left: 3px solid #3a2a6d;
+            padding-left: 15pt;
         }
-        .info-row {
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid #eaeaea;
-            padding: 6pt 0;
-            margin-bottom: 0;
-        }
-        .info-row:last-child { border-bottom: none; }
-
-        .info-label {
-            font-weight: bold;
-            color: #3a2a6d;
-            width: 100px;
-            font-size: 11pt;
-        }
-        .info-value { font-size: 11pt; color: #444; }
+        .info-row { padding: 3pt 0; }
+        .info-label { font-weight: bold; color: #3a2a6d; width: 90px; display: inline-block; }
+        .info-value { color: #444; }
 
         /* --- Items Table --- */
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 0;
-            border: 2px solid #3a2a6d;
+            margin-bottom: 20pt;
         }
         .items-table thead {
-            background-color: #3a2a6d;
-            color: white;
+            background-color: #f2f2f2;
             font-size: 9pt;
             text-transform: uppercase;
         }
-        .items-table th { 
-            font-weight: bold; 
-            text-align: center; 
-            padding: 8pt; 
-            border: 1px solid #5b428f;
+        .items-table th {
+            font-weight: bold;
+            text-align: center;
+            padding: 8pt;
+            border-bottom: 2px solid #3a2a6d;
         }
         .items-table td {
-            border: 1px solid #ccc;
-            padding: 6pt 8pt;
+            border-bottom: 1px solid #ddd;
+            padding: 8pt;
             text-align: center;
-            font-size: 10pt;
             color: #444;
         }
-        .items-table .td-desc { text-align: left; font-weight: 500; }
-        
-        .empty-row td {
-            height: 20pt;
-        }
+        .items-table .td-desc { text-align: left; }
 
-        /* --- Totals Table --- */
-        .totals-wrapper {
-            margin-top: 15pt;
-            page-break-inside: avoid;
-        }
+        /* --- Totals --- */
+        .totals-wrapper { page-break-inside: avoid; }
         .totals-table {
-            border-collapse: collapse;
-            width: 320px;
+            width: 350px;
             margin-left: auto;
-            border: 2px solid #3a2a6d;
+            border-collapse: collapse;
         }
         .totals-table td {
-            border: 1px solid #ccc;
             padding: 8pt 12pt;
             font-size: 11pt;
-            color: #444;
+            border-bottom: 1px solid #eee;
         }
-        .totals-table .totals-label {
+        .totals-label { text-align: right; color: #555; }
+        .totals-value { text-align: right; font-weight: bold; }
+        .final-row .totals-label, .final-row .totals-value {
             font-weight: bold;
             color: #3a2a6d;
-            text-align: right;
-            background-color: #fcf9ff;
-            white-space: nowrap;
-            width: 45%;
-        }
-        .totals-table .totals-value {
-            text-align: right;
-            font-weight: bold;
-            width: 55%;
-        }
-        .totals-table .discount-value {
-            color: #e74c3c;
-        }
-        .totals-table .final-label {
-            background-color: #3a2a6d;
-            color: white;
             font-size: 12pt;
         }
-        .totals-table .final-value {
-            color: #3a2a6d;
-            font-size: 13pt;
-        }
-        
+
         /* --- Footer --- */
         .footer {
             position: running(footer_content);
             text-align: center;
             font-size: 9pt;
             color: #777;
+            padding-bottom: 20pt;
         }
-        
-        .img-container {
-            height: 55px;
-            margin-bottom: 8px;
-        }
-        
-        .img-container img {
-            max-height: 55px;
-            max-width: 250px;
-            object-fit: contain;
-        }
+        .footer img { max-height: 45px; margin-bottom: 10pt; }
     </style>
 </head>
 <body>
     <div class="header-bg">
-        <h1>ORÇAMENTO</h1>
-        <div class="date">VÁLIDO ATÉ: &nbsp;&nbsp;{{ venda.validade_orcamento|date:"d/m/Y" }}</div>
+        <div>
+            <h1>ORÇAMENTO</h1>
+            <span style="font-size: 10pt; opacity: 0.9;">Nº #{{ venda.id }} | Emissão: {{ venda.data_venda|date:"d/m/Y" }}</span>
+        </div>
+        <div class="validity-box">
+            <span class="validity-label">Válido até</span>
+            <span class="validity-date">{{ venda.validade_orcamento|date:"d/m/Y" }}</span>
+        </div>
     </div>
 
     <div class="page-content">
@@ -184,26 +134,22 @@
                 <div class="info-value">{{ venda.cliente.razao_social|default:venda.cliente.nome }}</div>
             </div>
             <div class="info-row">
-                <div class="info-label">CNPJ:</div>
-                <div class="info-value">{{ venda.cliente.cnpj|default:"--" }}</div>
+                <div class="info-label">CNPJ/CPF:</div>
+                <div class="info-value">{{ venda.cliente.cnpj|default:venda.cliente.cpf|default:"--" }}</div>
             </div>
             <div class="info-row">
-                <div class="info-label">Endereço:</div>
-                <div class="info-value">{{ venda.cliente.endereco|default:"--" }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Telefone:</div>
-                <div class="info-value">{{ venda.solicitante.telefone|default:"--" }}</div>
+                <div class="info-label">Solicitante:</div>
+                <div class="info-value">{{ venda.solicitante.nome|default:"--" }} - {{ venda.solicitante.telefone|default:"" }}</div>
             </div>
         </div>
 
         <table class="items-table">
             <thead>
                 <tr>
-                    <th width="45%">DESCRIÇÃO</th>
-                    <th width="20%">VALOR UNIT.</th>
-                    <th width="15%">QUANTIDADE</th>
-                    <th width="20%">VALOR TOTAL</th>
+                    <th width="50%">DESCRIÇÃO DO PRODUTO/SERVIÇO</th>
+                    <th width="15%">UNIT.</th>
+                    <th width="15%">QTD.</th>
+                    <th width="20%">TOTAL</th>
                 </tr>
             </thead>
             <tbody>
@@ -211,18 +157,12 @@
                 <tr>
                     <td class="td-desc">{{ item.produto.nome }}</td>
                     <td>R$ {{ item.preco_unitario|floatformat:2 }}</td>
-                    <td>{{ item.quantidade }}</td>
+                    <td>{{ item.quantidade|floatformat:0 }}</td>
                     <td class="brand-dark" style="font-weight: bold;">R$ {{ item.valor_total_item|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
-                
                 {% for _ in empty_rows %}
-                <tr class="empty-row">
-                    <td class="td-desc"></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
+                <tr style="height: 25pt;"><td></td><td></td><td></td><td></td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -235,32 +175,30 @@
                 </tr>
                 {% if venda.desconto > 0 %}
                 <tr>
-                    <td class="totals-label">Desconto:</td>
-                    <td class="totals-value discount-value">- R$ {{ venda.desconto|floatformat:2 }}</td>
+                    <td class="totals-label" style="color: #e74c3c;">Desconto:</td>
+                    <td class="totals-value" style="color: #e74c3c;">- R$ {{ venda.desconto|floatformat:2 }}</td>
                 </tr>
                 {% endif %}
                 {% if venda.valor_entrada > 0 %}
                 <tr>
                     <td class="totals-label">Entrada:</td>
-                    <td class="totals-value discount-value">- R$ {{ venda.valor_entrada|floatformat:2 }}</td>
+                    <td class="totals-value">- R$ {{ venda.valor_entrada|floatformat:2 }}</td>
                 </tr>
                 {% endif %}
-                <tr>
-                    <td class="totals-label final-label">Saldo a Pagar:</td>
-                    <td class="totals-value final-value">R$ {{ valor_final|floatformat:2 }}</td>
+                <tr class="final-row">
+                    <td class="totals-label" style="background: none; border: none;">SALDO TOTAL:</td>
+                    <td class="totals-value" style="border: none;">R$ {{ valor_final|floatformat:2 }}</td>
                 </tr>
             </table>
         </div>
     </div>
-    
+
     <div class="footer" id="footer_content">
-        <div class="img-container">
-            <img src="{{ logo_path }}" alt="CYRIUS Logo" />
-        </div>
-        <div style="line-height: 1.4;">
-            (77) 99136-4560<br/>
-            cyrius.com.br | @cyrius.inf<br/>
-            Rua Sifredo Pedral Sampaio, 448 - Sala 102 - Recreio - Vitória da Conquista - BA
+        <img src="{{ logo_path }}" alt="Logo" />
+        <div>
+            <strong>Cyrius Tecnologia</strong><br/>
+            Rua Sifredo Pedral Sampaio, 448 - Sala 102 - Recreio - Vitória da Conquista - BA<br/>
+            Contato: (77) 99136-4560 | cyrius.com.br
         </div>
     </div>
 </body>
