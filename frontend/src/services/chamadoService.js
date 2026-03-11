@@ -112,6 +112,42 @@ const chamadoService = {
     const response = await api.post(`/chamados/${chamadoId}/comentarios/`, { texto });
     return response.data;
   },
+
+  // --- MÉTODOS ADICIONADOS PARA SUPER CHAMADO ---
+
+  adicionarItem: async (chamadoId, dadosItem) => {
+    const response = await api.post(`/chamados/${chamadoId}/adicionar-item/`, dadosItem);
+    return response.data;
+  },
+
+  atualizarItem: async (itemId, dados) => {
+    const response = await api.patch(`/itens-chamado/${itemId}/`, dados);
+    return response.data;
+  },
+
+  removerItem: async (itemId) => {
+    const response = await api.delete(`/itens-chamado/${itemId}/`);
+    return response.data;
+  },
+
+  anexarArquivo: async (chamadoId, formData) => {
+    const response = await api.post(`/chamados/${chamadoId}/anexar/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  removerAnexo: async (anexoId) => {
+    const response = await api.delete(`/anexos-chamado/${anexoId}/`);
+    return response.data;
+  },
+
+  gerarOrcamentoPdf: async (chamadoId) => {
+    const response = await api.post(`/chamados/${chamadoId}/gerar-orcamento/`);
+    return response.data;
+  },
 };
 
 export default chamadoService;

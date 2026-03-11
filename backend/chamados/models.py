@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Sum, F
+
 
 class AssuntoChamado(models.Model):
     titulo = models.CharField(max_length=100, unique=True)
@@ -16,26 +18,32 @@ class AssuntoChamado(models.Model):
     def __str__(self):
         return self.titulo
 
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         abstract = True
+
 
 class Chamado(TimeStampedModel):
     class Status(models.TextChoices):
         ABERTO = 'ABERTO', 'Aberto'
-        EM_ANDAMENTO = 'EM_ANDAMENTO', 'Em Andamento'
-        FINALIZADO = 'FINALIZADO', 'Finalizado'
-        CANCELADO = 'CANCELADO', 'Cancelado'
+        ORCAMENTO = 'ORCAMENTO', 'Orçamento'
+        APROVADO = 'APROVADO', 'Aprovado'
         AGENDADO = 'AGENDADO', 'Agendado (Visita)'
+        EM_ANDAMENTO = 'EM_ANDAMENTO', 'Em Andamento / Execução'
+        AGUARDANDO_PECA = 'AGUARDANDO_PECA', 'Aguardando Peça'
+        FINALIZADO = 'FINALIZADO', 'Finalizado / Concluído'
+        CANCELADO = 'CANCELADO', 'Cancelado'
 
     class Prioridade(models.TextChoices):
         BAIXA = 'BAIXA', 'Baixa'
         MEDIA = 'MEDIA', 'Média'
         ALTA = 'ALTA', 'Alta'
         CRITICA = 'CRITICA', 'Crítica'
-    
+
     class TipoAtendimento(models.TextChoices):
         REMOTO = 'REMOTO', 'Acesso Remoto'
         VISITA = 'VISITA', 'Visita Técnica'
@@ -51,8 +59,8 @@ class Chamado(TimeStampedModel):
     # === MULTI-EMPRESAS (Ajustado para CORE) ===
     empresa = models.ForeignKey(
         'core.Empresa',  # <--- APONTANDO PARA O APP CORE
-        on_delete=models.CASCADE, 
-        null=True, 
+        on_delete=models.CASCADE,
+        null=True,
         blank=True,
         related_name='chamados',
         verbose_name="Filial/Empresa"
@@ -61,22 +69,22 @@ class Chamado(TimeStampedModel):
 
     # RELACIONAMENTOS
     cliente = models.ForeignKey('clientes.Cliente', on_delete=models.PROTECT)
-    
+
     assuntos = models.ManyToManyField(AssuntoChamado, blank=True, related_name='chamados')
 
     ativo = models.ForeignKey(
-        'infra.Ativo', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        'infra.Ativo',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='historico_servicos',
         help_text="Equipamento que recebeu o serviço"
     )
-    
+
     tecnico = models.ForeignKey(
-        'equipe.Equipe', 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        'equipe.Equipe',
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         related_name='chamados_responsavel',
         verbose_name="Técnico Responsável"
@@ -93,16 +101,18 @@ class Chamado(TimeStampedModel):
     titulo = models.CharField(max_length=100, blank=True, null=True)
     descricao_detalhada = models.TextField(max_length=500)
     origem = models.CharField(max_length=50, choices=CanalComunicacao.choices, default=CanalComunicacao.WHATSAPP)
-    
+
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EM_ANDAMENTO)
     prioridade = models.CharField(max_length=20, choices=Prioridade.choices, default=Prioridade.MEDIA)
-    tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices, default=TipoAtendimento.REMOTO) 
-    
+    tipo_atendimento = models.CharField(max_length=20, choices=TipoAtendimento.choices,
+                                        default=TipoAtendimento.REMOTO)
+
     resolucao = models.TextField(null=True, blank=True, verbose_name="Resolução Técnica")
-    
-    valor_servico = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Valor do Serviço (Avulso)")
+
+    valor_servico = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+                                        verbose_name="Valor do Serviço (Avulso)")
     financeiro_gerado = models.BooleanField(default=False, help_text="Indica se a cobrança automática foi gerada")
-    
+
     # Arquivos
     arquivo_conclusao = models.FileField(upload_to='chamados/conclusao/%Y/%m/', null=True, blank=True)
     arquivo_1 = models.FileField(upload_to='chamados/docs/', null=True, blank=True)
@@ -111,20 +121,28 @@ class Chamado(TimeStampedModel):
     foto_depois = models.ImageField(upload_to='chamados/fotos/', null=True, blank=True)
 
     data_agendamento = models.DateTimeField(null=True, blank=True)
-    
+
     # Custos
     custo_ida = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_volta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_transporte = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     protocolo = models.CharField(max_length=30, unique=True, blank=True)
-    
+
     data_abertura = models.DateTimeField(default=timezone.now)
     data_fechamento = models.DateTimeField(null=True, blank=True)
-    
+
     tecnicos = models.ManyToManyField('equipe.Equipe', through='ChamadoTecnico')
 
-    class Meta: 
+    # Fields from OrdemServico
+    data_previsao = models.DateTimeField(null=True, blank=True)
+    data_conclusao = models.DateTimeField(null=True, blank=True)
+    valor_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    custo_terceiros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    relatorio_tecnico = models.TextField(null=True, blank=True)
+
+    class Meta:
         db_table = 'TB_CHAMADO'
         ordering = ['-created_at']
 
@@ -139,14 +157,14 @@ class Chamado(TimeStampedModel):
         if not self.protocolo:
             hoje = timezone.now().strftime('%Y%m%d')
             ultimo = Chamado.objects.filter(protocolo__startswith=hoje).order_by('-protocolo').first()
-            
+
             sequencia = 1
             if ultimo and ultimo.protocolo:
                 try:
                     sequencia = int(ultimo.protocolo[-3:]) + 1
                 except ValueError:
                     sequencia = 1
-            
+
             self.protocolo = f"{hoje}{str(sequencia).zfill(3)}"
 
         super().save(*args, **kwargs)
@@ -154,23 +172,74 @@ class Chamado(TimeStampedModel):
         if self.tecnico:
             ChamadoTecnico.objects.get_or_create(chamado=self, tecnico=self.tecnico)
 
+    @property
+    def total_pecas(self):
+        return self.itens.aggregate(total=Sum(F('quantidade') * F('preco_venda')))['total'] or 0
+
+    @property
+    def valor_total_geral(self):
+        pecas = self.total_pecas
+        mo = self.valor_mao_de_obra
+        servico = self.valor_servico
+        desc = self.desconto
+        return (float(pecas) + float(mo) + float(servico)) - float(desc)
+
+
+class ItemChamado(models.Model):
+    chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey('estoque.Produto', on_delete=models.PROTECT)
+    quantidade = models.PositiveIntegerField(default=1)
+    preco_venda = models.DecimalField(max_digits=10, decimal_places=2, help_text="Preço cobrado no momento do Chamado")
+
+    class Meta:
+        db_table = 'TB_ITEM_CHAMADO'
+        verbose_name = 'Peça Utilizada (Chamado)'
+
+    def __str__(self):
+        return f"{self.quantidade}x Item no Chamado #{self.chamado.pk}"
+
+    @property
+    def valor_total(self):
+        return self.quantidade * self.preco_venda
+
+
+class AnexoChamado(models.Model):
+    class TipoArquivo(models.TextChoices):
+        NOTA_FISCAL = 'NF', 'Nota Fiscal'
+        ORCAMENTO = 'ORCAMENTO', 'Orçamento PDF'
+        LAUDO = 'LAUDO', 'Laudo Técnico'
+        FOTO = 'FOTO', 'Foto / Evidência'
+        OUTRO = 'OUTRO', 'Outro'
+
+    chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE, related_name='anexos_os')
+    arquivo = models.FileField(upload_to='chamados_docs/%Y/%m/')
+    tipo = models.CharField(max_length=20, choices=TipoArquivo.choices, default=TipoArquivo.OUTRO)
+    descricao = models.CharField(max_length=100, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'TB_ANEXO_CHAMADO'
+
+
 class ChamadoTecnico(models.Model):
     chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE)
     tecnico = models.ForeignKey('equipe.Equipe', on_delete=models.PROTECT)
     horas_trabalhadas = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    
+
     class Meta:
         db_table = 'TB_CHAMADO_TECNICO'
         unique_together = ('chamado', 'tecnico')
+
 
 class ApontamentoHoras(models.Model):
     chamado_tecnico = models.ForeignKey(ChamadoTecnico, on_delete=models.CASCADE, related_name='apontamentos')
     horas_gastas = models.DecimalField(max_digits=5, decimal_places=2)
     descricao_tecnica = models.CharField(max_length=255)
     data_apontamento = models.DateTimeField(default=timezone.now)
-    
-    class Meta: 
+
+    class Meta:
         db_table = 'TB_APONTAMENTO_HORAS'
+
 
 class EquipamentoEntrada(models.Model):
     chamado = models.OneToOneField(Chamado, on_delete=models.CASCADE, related_name='equipamento_laboratorio')
@@ -179,9 +248,10 @@ class EquipamentoEntrada(models.Model):
     defeito_relatado = models.TextField(max_length=500)
     data_entrada = models.DateField(default=timezone.now)
     data_prevista_entrega = models.DateField()
-    
-    class Meta: 
+
+    class Meta:
         db_table = 'TB_EQUIPAMENTO_ENTRADA'
+
 
 class ResolucaoAssunto(models.Model):
     chamado = models.ForeignKey(Chamado, on_delete=models.CASCADE, related_name='resolucoes_assuntos')
@@ -193,6 +263,7 @@ class ResolucaoAssunto(models.Model):
     class Meta:
         db_table = 'TB_RESOLUCAO_ASSUNTO'
         unique_together = ('chamado', 'assunto')
+
 
 class ComentarioChamado(models.Model):
     chamado = models.ForeignKey(Chamado, related_name='comentarios', on_delete=models.CASCADE)

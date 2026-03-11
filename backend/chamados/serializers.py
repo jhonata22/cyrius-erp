@@ -1,10 +1,33 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado, ResolucaoAssunto
+from .models import Chamado, ChamadoTecnico, AssuntoChamado, ComentarioChamado, ResolucaoAssunto, ItemChamado, AnexoChamado
 from clientes.models import Cliente, ContatoCliente
 from infra.models import Ativo
 from equipe.models import Equipe
 from core.models import Empresa
+
+
+class ItemChamadoSerializer(serializers.ModelSerializer):
+    nome_produto = serializers.CharField(source='produto.nome', read_only=True)
+    valor_total = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ItemChamado
+        fields = ['id', 'produto', 'nome_produto', 'quantidade', 'preco_venda', 'valor_total']
+
+
+class AnexoChamadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnexoChamado
+        fields = '__all__'
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.arquivo:
+            request = self.context.get('request')
+            if request:
+                representation['arquivo'] = request.build_absolute_uri(instance.arquivo.url)
+        return representation
 
 
 class ChamadoRelacionadoSerializer(serializers.ModelSerializer):
@@ -22,7 +45,7 @@ class ChamadoRelacionadoSerializer(serializers.ModelSerializer):
             resolucao_obj = obj.resolucoes_assuntos.filter(assunto_id=assunto_id).first()
             if resolucao_obj and resolucao_obj.texto_resolucao:
                 return resolucao_obj.texto_resolucao
-        return None # Frontend will fallback to the general 'resolucao' if this is None
+        return None  # Frontend will fallback to the general 'resolucao' if this is None
 
 
 class AssuntoChamadoSerializer(serializers.ModelSerializer):
@@ -51,10 +74,11 @@ class ComentarioChamadoSerializer(serializers.ModelSerializer):
 
 class ChamadoTecnicoSerializer(serializers.ModelSerializer):
     nome_tecnico = serializers.CharField(source='tecnico.nome', read_only=True)
-    
+
     class Meta:
         model = ChamadoTecnico
         fields = '__all__'
+
 
 class ChamadoSerializer(serializers.ModelSerializer):
     # IDs no POST
@@ -89,7 +113,13 @@ class ChamadoSerializer(serializers.ModelSerializer):
     titulo = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     resolucoes_assuntos = ResolucaoAssuntoSerializer(many=True, read_only=True)
 
+    # Nested serializers for read-only representation
+    itens = ItemChamadoSerializer(many=True, read_only=True)
+    anexos_os = AnexoChamadoSerializer(many=True, read_only=True)
 
+    # Calculated properties
+    total_pecas = serializers.ReadOnlyField()
+    valor_total_geral = serializers.ReadOnlyField()
 
     # Write-only fields for new solicitante
     novo_solicitante_nome = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -112,13 +142,18 @@ class ChamadoSerializer(serializers.ModelSerializer):
             'custo_transporte', 'protocolo', 'data_abertura',
             'data_fechamento', 'tecnicos', 'tecnicos_nomes',
             'resolucao', 'resolucoes_assuntos', 'valor_servico',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            # New fields from OrdemServico
+            'data_previsao', 'data_conclusao', 'valor_mao_de_obra', 'custo_terceiros',
+            'desconto', 'relatorio_tecnico',
+            # Nested and calculated fields
+            'itens', 'anexos_os', 'total_pecas', 'valor_total_geral'
         ]
-        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes', 'nome_tecnico', 'assuntos_detalhes']
+        read_only_fields = ['protocolo', 'custo_transporte', 'created_at', 'updated_at', 'tecnicos_nomes',
+                            'nome_tecnico', 'assuntos_detalhes', 'total_pecas', 'valor_total_geral']
 
     def get_assuntos_detalhes(self, obj):
         return [{'id': assunto.id, 'titulo': assunto.titulo} for assunto in obj.assuntos.all()]
-
 
     def get_tecnicos_nomes(self, obj):
         return [t.nome for t in obj.tecnicos.all()]
@@ -149,10 +184,10 @@ class ChamadoSerializer(serializers.ModelSerializer):
             }
 
         if instance.tecnico:
-            representation['tecnico'] = { "id": instance.tecnico.id, "nome": instance.tecnico.nome }
+            representation['tecnico'] = {"id": instance.tecnico.id, "nome": instance.tecnico.nome}
 
         if instance.tecnicos.exists():
-            representation['tecnicos'] = [ {"id": t.id, "nome": t.nome} for t in instance.tecnicos.all() ]
+            representation['tecnicos'] = [{"id": t.id, "nome": t.nome} for t in instance.tecnicos.all()]
 
         if instance.solicitante:
             representation['solicitante'] = {
@@ -201,7 +236,7 @@ class ChamadoSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        validated_data.pop('tecnicos', None) # Handled by service
+        validated_data.pop('tecnicos', None)  # Handled by service
         assuntos_data = validated_data.pop('assuntos', None)
 
         if assuntos_data is not None:
