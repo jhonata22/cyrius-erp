@@ -12,8 +12,8 @@ from django.conf import settings
 from utils.pdf_service import gerar_pdf_from_html
 
 from utils.permissions import IsFuncionario
-from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
-from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, NotificacaoSerializer, ComentarioOrdemServicoSerializer
+from .models import OrdemServico, ItemServico, AnexoServico, ComentarioOrdemServico
+from .serializers import OrdemServicoSerializer, ItemServicoSerializer, AnexoServicoSerializer, ComentarioOrdemServicoSerializer
 
 # Importa a lógica de negócio
 from .services import finalizar_ordem_servico, adicionar_peca_os, atualizar_ordem_servico
@@ -205,22 +205,3 @@ class AnexoServicoViewSet(viewsets.ModelViewSet):
         if instance.os.status in [OrdemServico.Status.CONCLUIDO, OrdemServico.Status.FINALIZADO]:
             raise ValidationError("Operação bloqueada: A Ordem de Serviço já foi concluída.")
         instance.delete()
-
-class NotificacaoViewSet(viewsets.ModelViewSet):
-    serializer_class = NotificacaoSerializer
-    permission_classes = [IsFuncionario]
-
-    def get_queryset(self):
-        return Notificacao.objects.filter(destinatario=self.request.user)
-
-    @action(detail=True, methods=['patch'])
-    def marcar_como_lida(self, request, pk=None):
-        notificacao = self.get_object()
-        notificacao.lida = True
-        notificacao.save()
-        return Response({'status': 'ok'})
-        
-    @action(detail=False, methods=['patch'])
-    def marcar_todas_lidas(self, request):
-        self.get_queryset().update(lida=True)
-        return Response({'status': 'ok'})

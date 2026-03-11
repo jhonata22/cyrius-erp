@@ -4,9 +4,9 @@ from datetime import timedelta
 from vendas.models import Venda
 from clientes.models import Cliente
 from chamados.models import Chamado
-from .models import Notificacao
+from core.models import Notificacao
 from equipe.models import Equipe
-from .signals import send_ws_notification
+from core.services import criar_notificacao
 
 @shared_task
 def verificar_orcamentos_vencendo():
@@ -28,13 +28,13 @@ def verificar_orcamentos_vencendo():
         mensagem = f"O orçamento #{orcamento.id} para {orcamento.cliente} vence em {orcamento.validade_orcamento.strftime('%d/%m/%Y')}."
         
         for member in recipients:
-            notificacao = Notificacao.objects.create(
+            criar_notificacao(
                 destinatario=member.usuario,
                 titulo=titulo,
                 mensagem=mensagem,
-                link=f"/vendas/{orcamento.id}" # Ajuste o link conforme sua estrutura de URL
+                tipo='SISTEMA',
+                link=f"/vendas/{orcamento.id}"
             )
-            send_ws_notification(member.usuario.id, notificacao)
 
 @shared_task
 def verificar_clientes_inativos():
@@ -58,14 +58,13 @@ def verificar_clientes_inativos():
         for member in recipients:
             # Evitar duplicar a notificação de churn para o mesmo cliente
             if not Notificacao.objects.filter(titulo=titulo, mensagem=mensagem, destinatario=member.usuario).exists():
-                notificacao = Notificacao.objects.create(
+                criar_notificacao(
                     destinatario=member.usuario,
                     titulo=titulo,
                     mensagem=mensagem,
                     tipo='CHURN',
-                    link=f"/clientes/{cliente.id}" # Ajuste o link
+                    link=f"/clientes/{cliente.id}"
                 )
-                send_ws_notification(member.usuario.id, notificacao)
 
 @shared_task
 def verificar_visitas_proximas():
@@ -86,11 +85,10 @@ def verificar_visitas_proximas():
         titulo = "Alerta de Visita Técnica"
         mensagem = f"Visita para o cliente {chamado.cliente} agendada para as {chamado.data_agendamento.strftime('%H:%M')}."
         
-        notificacao = Notificacao.objects.create(
+        criar_notificacao(
             destinatario=tecnico_user,
             titulo=titulo,
             mensagem=mensagem,
             tipo='VISITA',
             link=f"/chamados/{chamado.id}"
         )
-        send_ws_notification(tecnico_user.id, notificacao)

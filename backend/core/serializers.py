@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Empresa
+from .models import Empresa, Notificacao
 
 class EmpresaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,3 +10,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
             'cor_primaria', 'logo', 'eh_matriz',
             'banco_nome', 'chave_pix'
         ]
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notificacao
+        fields = '__all__'

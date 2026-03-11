@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Empresa
+from .models import Empresa, Notificacao
 
 
 @admin.register(Empresa)
@@ -62,3 +62,10 @@ class EmpresaAdmin(admin.ModelAdmin):
             'fields': ('created_at',),
         }),
     )
+
+@admin.register(Notificacao)
+class NotificacaoAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'destinatario', 'tipo', 'lida', 'data_criacao')
+    list_filter = ('tipo', 'lida', 'data_criacao')
+    search_fields = ('titulo', 'mensagem', 'destinatario__username')
+    readonly_fields = ('data_criacao',)

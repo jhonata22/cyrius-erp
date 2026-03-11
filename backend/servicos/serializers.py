@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
+from .models import OrdemServico, ItemServico, AnexoServico, ComentarioOrdemServico
 from clientes.models import ContatoCliente
 from equipe.models import Equipe
 from infra.models import Ativo
@@ -133,9 +133,3 @@ class ComentarioOrdemServicoSerializer(serializers.ModelSerializer):
         model = ComentarioOrdemServico
         fields = ['id', 'texto', 'autor', 'autor_nome', 'created_at', 'ordem_servico']
         read_only_fields = ['autor', 'ordem_servico', 'created_at', 'autor_nome']
-
-
-class NotificacaoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notificacao
-        fields = '__all__'

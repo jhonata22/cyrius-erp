@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OrdemServico, ItemServico, AnexoServico, Notificacao, ComentarioOrdemServico
+from .models import OrdemServico, ItemServico, AnexoServico, ComentarioOrdemServico
 
 # --- INLINES (Tabelas dentro da OS) ---
 
@@ -90,10 +90,3 @@ class OrdemServicoAdmin(admin.ModelAdmin):
     get_valor_total.short_description = 'Total Geral'
 
 # --- OUTROS ---
-
-@admin.register(Notificacao)
-class NotificacaoAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'destinatario', 'tipo', 'lida', 'data_criacao')
-    list_filter = ('tipo', 'lida', 'data_criacao')
-    search_fields = ('titulo', 'mensagem', 'destinatario__username')
-    readonly_fields = ('data_criacao',)

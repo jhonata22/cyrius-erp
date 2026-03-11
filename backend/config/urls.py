@@ -28,14 +28,13 @@ from estoque.views import (
 from servicos.views import (
     OrdemServicoViewSet, 
     ItemServicoViewSet, 
-    AnexoServicoViewSet,
-    NotificacaoViewSet
+    AnexoServicoViewSet
 )
 from chamados.views import ChamadoViewSet, AssuntoChamadoViewSet
 from financeiro.views import LancamentoFinanceiroViewSet
 
 # [NOVO] Importação do Core (Empresas)
-from core.views import EmpresaViewSet 
+from core.views import EmpresaViewSet, NotificacaoViewSet 
 
 # Autenticação JWT
 from rest_framework_simplejwt.views import (
