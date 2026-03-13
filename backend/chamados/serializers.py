@@ -17,17 +17,12 @@ class ItemChamadoSerializer(serializers.ModelSerializer):
 
 
 class AnexoChamadoSerializer(serializers.ModelSerializer):
+    arquivo = serializers.FileField(max_length=None, use_url=True)
+
     class Meta:
         model = AnexoChamado
-        fields = '__all__'
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        if instance.arquivo:
-            request = self.context.get('request')
-            if request:
-                representation['arquivo'] = request.build_absolute_uri(instance.arquivo.url)
-        return representation
+        fields = ['id', 'arquivo', 'tipo', 'descricao', 'uploaded_at']
+        read_only_fields = ['uploaded_at']
 
 
 class ChamadoRelacionadoSerializer(serializers.ModelSerializer):

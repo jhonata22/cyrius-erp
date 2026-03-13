@@ -30,7 +30,12 @@ from servicos.views import (
     ItemServicoViewSet, 
     AnexoServicoViewSet
 )
-from chamados.views import ChamadoViewSet, AssuntoChamadoViewSet
+from chamados.views import (
+    ChamadoViewSet, 
+    AssuntoChamadoViewSet,
+    ItemChamadoViewSet,
+    AnexoChamadoViewSet
+)
 from financeiro.views import LancamentoFinanceiroViewSet
 
 # [NOVO] Importação do Core (Empresas)
@@ -48,7 +53,6 @@ from rest_framework_simplejwt.views import (
 router = DefaultRouter()
 
 # --- CORE (Multi-Empresa) ---
-# Isso gera a rota: /api/core/empresas/
 router.register(r'core/empresas', EmpresaViewSet, basename='empresa')
 
 # --- Clientes e Equipe ---
@@ -63,16 +67,17 @@ router.register(r'documentacao', DocumentacaoTecnicaViewSet)
 router.register(r'chamados', ChamadoViewSet, basename='chamado')
 router.register(r'assuntos', AssuntoChamadoViewSet, basename='assuntochamado')
 router.register(r'ativos', AtivoViewSet)
+# ROTAS ADICIONADAS PARA O BUGFIX
+router.register(r'itens-chamado', ItemChamadoViewSet)
+router.register(r'anexos-chamado', AnexoChamadoViewSet)
 
-# --- Serviços (OS) ---
+# --- Serviços (OS) - [A ser depreciado] ---
 router.register(r'servicos', OrdemServicoViewSet, basename='servicos')
 router.register(r'itens-servico', ItemServicoViewSet)
 router.register(r'anexos-servico', AnexoServicoViewSet)
 router.register(r'notificacoes', NotificacaoViewSet, basename='notificacao')
 
 # --- Financeiro ---
-# Ajustei para 'lancamentos' para bater com o padrão REST e com o Service que criamos
-# Rota final: /api/lancamentos/
 router.register(r'lancamentos', LancamentoFinanceiroViewSet, basename='lancamento-financeiro')
 
 # --- Estoque e Contratos ---

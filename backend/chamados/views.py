@@ -130,20 +130,21 @@ class ChamadoViewSet(viewsets.ModelViewSet):
         }
         
         try:
-            pdf_file = gerar_pdf_from_html('utils/pdfs/orcamento.html', context)
-            file_name = f"Orcamento_{chamado.protocolo}_{timezone.now().strftime('%Y%m%d')}.pdf"
+            file_name = f"Orcamento_{chamado.protocolo}_{timezone.now().strftime('%Y%m%d%H%M')}.pdf"
+            pdf_file = gerar_pdf_from_html('utils/pdfs/orcamento.html', context, filename=file_name)
             
-            anexo, _ = AnexoChamado.objects.update_or_create(
+            anexo, created = AnexoChamado.objects.get_or_create(
                 chamado=chamado,
                 tipo='ORCAMENTO',
-                defaults={
-                    'descricao': f'Orçamento gerado em {timezone.now().strftime("%d/%m/%Y")}',
-                    'arquivo': pdf_file
-                }
+                defaults={'descricao': f'Orçamento gerado em {timezone.now().strftime("%d/%m/%Y %H:%M")}'}
             )
+            
+            # This explicitly saves the file to the anexo's path, overwriting if it exists.
             anexo.arquivo.save(file_name, pdf_file, save=True)
+
             serializer = AnexoChamadoSerializer(anexo, context={'request': request})
             return Response({"mensagem": "Orçamento gerado com sucesso", "anexo": serializer.data})
+        
         except Exception as e:
             traceback.print_exc()
             return Response({"erro": f"Erro ao gerar PDF: {str(e)}"}, status=500)
